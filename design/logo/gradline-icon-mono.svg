@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Gradline monochrome mark (v2 - bolder). Single color, transparent
+       background — for favicons, dark mode, avatars. Swap the fill/stroke
+       color as needed. -->
+
+  <!-- Mortarboard diamond -->
+  <path d="M28,16 L50,34 L28,52 L6,34 Z" fill="#1B2A4A"/>
+
+  <!-- Cap head-band -->
+  <rect x="10" y="52" width="36" height="14" rx="7" fill="#1B2A4A"/>
+
+  <!-- Heavy cord into the timeline -->
+  <path d="M50,34 L58.5,68" fill="none" stroke="#1B2A4A" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Ascending staircase bars -->
+  <rect x="52" y="68" width="13" height="16" rx="2" fill="#1B2A4A"/>
+  <rect x="67" y="54" width="13" height="30" rx="2" fill="#1B2A4A"/>
+  <rect x="82" y="38" width="13" height="46" rx="2" fill="#1B2A4A"/>
+
+  <!-- Checkpoint line and growing milestone dots -->
+  <path d="M58.5,68 L73.5,54 L88.5,38" fill="none" stroke="#1B2A4A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="58.5" cy="68" r="5" fill="#1B2A4A"/>
+  <circle cx="73.5" cy="54" r="5.5" fill="#1B2A4A"/>
+  <circle cx="88.5" cy="38" r="6.5" fill="#1B2A4A"/>
+</svg>
