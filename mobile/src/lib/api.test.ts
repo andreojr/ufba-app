@@ -32,6 +32,7 @@ describe("postGoogleLogin", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken: "id-token" }),
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -45,5 +46,11 @@ describe("postGoogleLogin", () => {
     delete process.env.EXPO_PUBLIC_API_URL;
 
     await expect(postGoogleLogin("id-token")).rejects.toThrow(ApiError);
+  });
+
+  it("propagates a network failure", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("Network request failed"));
+
+    await expect(postGoogleLogin("id-token")).rejects.toThrow();
   });
 });

@@ -4,14 +4,25 @@ import type { Session } from "./types";
 
 const SESSION_KEY = "gradline.session";
 
-export async function getSession(): Promise<Session | null> {
-  const raw = await SecureStore.getItemAsync(SESSION_KEY);
-  if (!raw) {
-    return null;
-  }
+function isSession(value: unknown): value is Session {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Session).accessToken === "string" &&
+    typeof (value as Session).user === "object" &&
+    (value as Session).user !== null
+  );
+}
 
+export async function getSession(): Promise<Session | null> {
   try {
-    return JSON.parse(raw) as Session;
+    const raw = await SecureStore.getItemAsync(SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+    return isSession(parsed) ? parsed : null;
   } catch {
     return null;
   }

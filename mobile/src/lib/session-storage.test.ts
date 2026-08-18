@@ -39,6 +39,24 @@ describe("session-storage", () => {
     await expect(getSession()).resolves.toBeNull();
   });
 
+  it("returns null when SecureStore.getItemAsync rejects", async () => {
+    mockedSecureStore.getItemAsync.mockRejectedValue(new Error("Keystore decryption failed"));
+
+    await expect(getSession()).resolves.toBeNull();
+  });
+
+  it("returns null when the stored value is valid JSON but not session-shaped (number)", async () => {
+    mockedSecureStore.getItemAsync.mockResolvedValue("5");
+
+    await expect(getSession()).resolves.toBeNull();
+  });
+
+  it("returns null when the stored value is valid JSON but not session-shaped (empty object)", async () => {
+    mockedSecureStore.getItemAsync.mockResolvedValue("{}");
+
+    await expect(getSession()).resolves.toBeNull();
+  });
+
   it("saves the session as JSON under the session key", async () => {
     await saveSession(SESSION);
 

@@ -33,6 +33,7 @@ export default function LoginScreen(): JSX.Element {
     } catch (error) {
       const wasCancelled = isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED;
       if (!wasCancelled) {
+        console.warn("Google sign-in failed", error);
         toast.show("Não foi possível entrar, tente de novo.");
       }
     } finally {

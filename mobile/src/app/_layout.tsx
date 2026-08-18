@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import { useEffect, type JSX } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
@@ -8,8 +8,6 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { configureGoogleSignin } from "@/lib/google-signin";
 
 import "../global.css";
-
-configureGoogleSignin();
 
 function RootNavigator(): JSX.Element | null {
   const auth = useAuth();
@@ -31,6 +29,10 @@ function RootNavigator(): JSX.Element | null {
 }
 
 export default function RootLayout(): JSX.Element {
+  useEffect(() => {
+    configureGoogleSignin();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <HeroUINativeProvider>

@@ -12,6 +12,7 @@ export async function postGoogleLogin(idToken: string): Promise<Session> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {

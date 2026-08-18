@@ -34,6 +34,23 @@ describe("AuthProvider / useAuth", () => {
     await waitFor(() => expect(result.current.status).toBe("signedOut"));
   });
 
+  it("starts in loading before the stored session resolves", async () => {
+    let resolveSession: (value: Session | null) => void;
+    mockedSessionStorage.getSession.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSession = resolve;
+      })
+    );
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+    expect(result.current.status).toBe("loading");
+
+    await act(async () => {
+      resolveSession(null);
+    });
+    await waitFor(() => expect(result.current.status).toBe("signedOut"));
+  });
+
   it("restores a signedIn state from a stored session", async () => {
     mockedSessionStorage.getSession.mockResolvedValue(SESSION);
 
