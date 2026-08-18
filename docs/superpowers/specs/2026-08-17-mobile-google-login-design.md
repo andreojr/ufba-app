@@ -124,15 +124,16 @@ Exposed via a `useAuth()` hook.
 ### Routing gate (`app/_layout.tsx`)
 
 Wraps the existing `Stack` in `AuthProvider`. While `status === 'loading'`,
-renders nothing (or the existing splash, if trivial to keep mounted).
-Once resolved:
-- `signedOut` → `Stack` renders `login`, `(tabs)` is unreachable (redirect
-  away if the user is deep-linked into it).
-- `signedIn` → `Stack` renders `(tabs)`, `login` is unreachable the same
-  way.
+renders nothing. Once resolved, uses Expo Router's built-in
+`<Stack.Protected guard={...}>` (the current idiomatic pattern, replacing
+the older manual-redirect approach) to show exactly one of the two
+screens:
+- `signedOut` → `Stack.Protected guard={status === 'signedOut'}` renders
+  `login`; `(tabs)` is unreachable.
+- `signedIn` → `Stack.Protected guard={status === 'signedIn'}` renders
+  `(tabs)`; `login` is unreachable.
 
-This follows Expo Router's documented redirect-based protected-routes
-pattern; no third-party navigation guard library.
+No third-party navigation guard library needed.
 
 ### `login.tsx`
 
@@ -145,15 +146,16 @@ gate above handles navigation — the screen itself doesn't call
 
 ## Configuration
 
-New env var, mobile side (`mobile/.env`, consumed by Expo's built-in
+New env vars, mobile side (`mobile/.env`, consumed by Expo's built-in
 `EXPO_PUBLIC_*` support — no extra config library needed):
 
 - `EXPO_PUBLIC_API_URL` — backend base URL reachable from the physical
   device (LAN IP, e.g. `http://192.168.x.x:3000`), not `localhost`.
-
-`GoogleSignin.configure({ webClientId })` is called with the existing
-`GOOGLE_CLIENT_ID` value directly (hardcoded is fine — it's not a secret,
-it's a public OAuth client identifier), no new env var needed for it.
+- `EXPO_PUBLIC_GOOGLE_CLIENT_ID` — same value as backend's `GOOGLE_CLIENT_ID`
+  (a Web OAuth client ID; not a secret, but still lives in an env var
+  rather than hardcoded since it has to be copied from `backend/.env`
+  manually either way). Passed straight into
+  `GoogleSignin.configure({ webClientId })`.
 
 Manual step (user, in Google Cloud Console, on the project that already
 has the Web client): create an **Android** OAuth client ID and register the
