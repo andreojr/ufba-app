@@ -25,19 +25,38 @@ to the backend.
 
 ## Approach
 
-Use `expo-auth-session` for the Google OAuth flow — it runs inside Expo Go
-(no custom dev client / EAS build needed), which matches how this app is
-currently tested (physical device over LAN, per recent commits). The
-alternative, `@react-native-google-signin/google-signin`, gives a more
-native-feeling bottom sheet but requires a custom dev client and was
-rejected to avoid that friction at this stage.
+**Revision note:** the original approach picked `expo-auth-session`
+specifically to avoid a custom dev client / native build. That premise
+turned out to be wrong — Expo's own docs are explicit that "Expo Go cannot
+be used for local development and testing of OAuth or OpenID Connect-enabled
+apps due to the inability to customize your app scheme," and recommend a
+Development Build for any OAuth flow. Since a dev client is required either
+way, we use `@react-native-google-signin/google-signin` instead — it's
+Expo's own recommended library for Google specifically, uses the native
+Google SDK (better UX, no hand-rolled OAuth endpoint wiring), and needs no
+more native setup than the generic `expo-auth-session` route would have.
 
-The existing `GOOGLE_CLIENT_ID` (Web application type) already configured
-in `backend/.env` is reused as the `expoClientId` for the mobile OAuth
-request. This requires adding the Expo Go proxy redirect URI
-(`https://auth.expo.io/@<expo-username>/mobile`) to that same OAuth client's
-authorized redirect URIs in Google Cloud Console — a manual step for the
-user, not automated here.
+This means the app moves from "Continuous Native Generation, run via Expo
+Go" to "Continuous Native Generation, run via a local dev client" — `ios/`
+and `android/` stay generated (not committed; already gitignored) via
+`npx expo prebuild`, but day-to-day running uses `npx expo run:android` /
+`npx expo run:ios` (or an EAS dev build) instead of scanning a QR code in
+Expo Go.
+
+**Platform note:** the primary dev machine is Linux, so local native builds
+are Android-only (`npx expo run:android`, requires Android SDK/emulator or
+a USB-connected device). iOS needs either a Mac or an EAS cloud build — out
+of scope for this pass; see "Explicitly out of scope."
+
+`GoogleSignin.configure({ webClientId })` uses the existing Web
+`GOOGLE_CLIENT_ID` (already in `backend/.env`) to request an `idToken` whose
+audience matches what the backend validates — no separate Android client ID
+is required to make the token verifiable server-side. Android does require
+registering the app's SHA-1 fingerprint against an Android-type OAuth client
+in Google Cloud Console for `GoogleSignin` to work at all (a manual Console
+step, not automated here); the plan calls this out at the point it's
+needed. iOS additionally needs its own OAuth client ID and an
+`iosUrlScheme` plugin config — deferred along with iOS support generally.
 
 Session state is handled via a React Context (`AuthProvider`), following
 Expo Router's standard "protect routes with a root layout gate" pattern.
@@ -117,34 +136,43 @@ pattern; no third-party navigation guard library.
 
 ### `login.tsx`
 
-Single screen: Gradline logo (`design/logo/gradline-icon.svg`), a HeroUI
-Native `Button` labeled "Entrar com Google", and a `Spinner`/disabled state
-while the OAuth + backend round-trip is in flight. On success, the routing
+Single screen: the existing Gradline app icon asset
+(`assets/images/icon.png`), a HeroUI Native `Button` labeled "Entrar com
+Google" (swapped for a `Spinner` while signing in, via `isIconOnly` +
+`isDisabled`), and a `useToast()` call on failure. On success, the routing
 gate above handles navigation — the screen itself doesn't call
 `router.replace`.
 
 ## Configuration
 
-New env vars, mobile side (`mobile/.env` consumed by Expo's built-in
+New env var, mobile side (`mobile/.env`, consumed by Expo's built-in
 `EXPO_PUBLIC_*` support — no extra config library needed):
 
-- `EXPO_PUBLIC_GOOGLE_CLIENT_ID` — same value as backend's `GOOGLE_CLIENT_ID`.
 - `EXPO_PUBLIC_API_URL` — backend base URL reachable from the physical
   device (LAN IP, e.g. `http://192.168.x.x:3000`), not `localhost`.
 
-Manual step (user, in Google Cloud Console, on the existing Web OAuth
-client): add `https://auth.expo.io/@<expo-username>/mobile` as an
-authorized redirect URI.
+`GoogleSignin.configure({ webClientId })` is called with the existing
+`GOOGLE_CLIENT_ID` value directly (hardcoded is fine — it's not a secret,
+it's a public OAuth client identifier), no new env var needed for it.
+
+Manual step (user, in Google Cloud Console, on the project that already
+has the Web client): create an **Android** OAuth client ID and register the
+dev build's package name + debug SHA-1 fingerprint against it — required
+for `GoogleSignin` to work on Android at all (`DEVELOPER_ERROR` / code 10
+otherwise). The plan's manual-verification task walks through getting the
+SHA-1 and where to paste it.
 
 ## Error Handling
 
-- User cancels/dismisses the Google OAuth prompt: return to the login
-  screen's default state, no error toast.
-- Backend rejects the token, or the network request fails: show a generic
-  HeroUI Native `Toast` ("Não foi possível entrar, tente de novo") and
-  return to the default button state. No need to distinguish causes yet —
-  the backend doesn't return machine-readable error codes for this path
-  today.
+- User cancels/dismisses the Google sign-in sheet
+  (`response.type !== 'success'` from `GoogleSignin.signIn()`, or
+  `statusCodes.SIGN_IN_CANCELLED`): return to the login screen's default
+  state, no error toast.
+- Backend rejects the token, the network request fails, or any other
+  `GoogleSignin` error: show a generic HeroUI Native toast
+  (`toast.show('Não foi possível entrar, tente de novo.')`) and return to
+  the default button state. No need to distinguish causes yet — the
+  backend doesn't return machine-readable error codes for this path today.
 - Any authenticated request elsewhere in the app that gets a `401`: clear
   the session and let the routing gate send the user back to `login`. No
   refresh-token flow exists to attempt first.
@@ -155,12 +183,14 @@ authorized redirect URI.
   `auth-context.tsx` (mocking `api.ts` and `session-storage.ts`) covering:
   restoring an existing session on mount, successful sign-in, sign-in
   failure, sign-out.
-- No E2E/integration test in this pass — verification is manual, running
-  the app in Expo Go over LAN, matching current project practice.
+- No automated test for `login.tsx` itself or the native `GoogleSignin`
+  call — verification is manual, running the dev client build on an
+  Android device/emulator over LAN.
 
 ## Explicitly out of scope
 
 - Any screen between login success and `(tabs)`.
 - Refresh tokens / silent re-auth.
-- `@react-native-google-signin/google-signin` / native dev client build.
+- iOS support (iOS OAuth client, `iosUrlScheme`, EAS/Mac build) — Android
+  only for this pass.
 - Any backend change.
