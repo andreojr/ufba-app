@@ -3,7 +3,7 @@ import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 import { useAuth } from "@/lib/auth-context";
 
-import LoginScreen from "./login";
+import LoginScreen from "@/app/login";
 
 jest.mock("@/lib/auth-context");
 
