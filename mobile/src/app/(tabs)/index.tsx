@@ -38,7 +38,7 @@ export default function HomeTab(): JSX.Element {
       <Card className="items-center gap-8">
         <HeroUILogo tintColor={themeColorForeground} />
         <Typography.Paragraph className="text-center">
-          A modern starter for React Native, preconfigured with HeroUI Native, Uniwind, and Expo
+          A modern BAGUI for React Native, preconfigured with HeroUI Native, Uniwind, and Expo
           Router. Edit{" "}
           <Typography.Paragraph className="font-semibold">
             app/(tabs)/index.tsx
