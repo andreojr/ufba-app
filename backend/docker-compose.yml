@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gradline-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gradline
+      POSTGRES_USER: gradline
+      POSTGRES_PASSWORD: gradline
+    ports:
+      - '5436:5432'
+    volumes:
+      - gradline-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  gradline-postgres-data:

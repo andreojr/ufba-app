@@ -1,0 +1,2 @@
+export const SIGAA_SESSION_FACTORY = Symbol('SIGAA_SESSION_FACTORY');
+export const CREDENTIAL_VAULT = Symbol('CREDENTIAL_VAULT');
