@@ -1,9 +1,9 @@
-import { ApiError, postGoogleLogin } from "./api";
+import { ApiError, getMe, postAvatar, postGoogleLogin, postSigaaAtestado, postSigaaHistorico } from "./api";
 import type { Session } from "./types";
 
 const LOGIN_RESPONSE: Session = {
   accessToken: "token",
-  user: { googleId: "1", email: "a@b.com", name: "A" },
+  user: { id: "1", email: "a@b.com", name: "A", avatarUrl: null },
 };
 
 describe("postGoogleLogin", () => {
@@ -52,5 +52,200 @@ describe("postGoogleLogin", () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error("Network request failed"));
 
     await expect(postGoogleLogin("id-token")).rejects.toThrow();
+  });
+});
+
+describe("postSigaaHistorico", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts the credentials and returns the PDF bytes", async () => {
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => pdfBytes.buffer,
+    });
+
+    const result = await postSigaaHistorico("token", { login: "123", senha: "segredo" });
+
+    expect(result).toEqual(pdfBytes);
+    expect(global.fetch).toHaveBeenCalledWith("http://192.168.1.10:3000/sigaa/historico", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+      body: JSON.stringify({ login: "123", senha: "segredo" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("throws ApiError when the backend responds with a non-2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401 });
+
+    await expect(postSigaaHistorico("token", { login: "123", senha: "wrong" })).rejects.toThrow(ApiError);
+  });
+
+  it("throws ApiError when EXPO_PUBLIC_API_URL is not configured", async () => {
+    delete process.env.EXPO_PUBLIC_API_URL;
+
+    await expect(postSigaaHistorico("token", { login: "123", senha: "segredo" })).rejects.toThrow(ApiError);
+  });
+
+  it("throws ApiError when the response body is empty despite a 2xx status (e.g. an aborted fetch resolving instead of rejecting)", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+
+    await expect(postSigaaHistorico("token", { login: "123", senha: "segredo" })).rejects.toThrow(ApiError);
+  });
+});
+
+describe("postSigaaAtestado", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts the credentials and returns the self-contained HTML", async () => {
+    const html = "<html><body>MATRICULADO</body></html>";
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => html,
+    });
+
+    const result = await postSigaaAtestado("token", { login: "123", senha: "segredo" });
+
+    expect(result).toBe(html);
+    expect(global.fetch).toHaveBeenCalledWith("http://192.168.1.10:3000/sigaa/atestado", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+      body: JSON.stringify({ login: "123", senha: "segredo" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("throws ApiError when the backend responds with a non-2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401 });
+
+    await expect(postSigaaAtestado("token", { login: "123", senha: "wrong" })).rejects.toThrow(ApiError);
+  });
+
+  it("throws ApiError when EXPO_PUBLIC_API_URL is not configured", async () => {
+    delete process.env.EXPO_PUBLIC_API_URL;
+
+    await expect(postSigaaAtestado("token", { login: "123", senha: "segredo" })).rejects.toThrow(ApiError);
+  });
+
+  it("throws ApiError when the response body is empty despite a 2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => "",
+    });
+
+    await expect(postSigaaAtestado("token", { login: "123", senha: "segredo" })).rejects.toThrow(ApiError);
+  });
+});
+
+describe("postAvatar", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts the avatar URL and returns it back", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" }),
+    });
+
+    await expect(
+      postAvatar("token", "https://api.dicebear.com/9.x/open-peeps/png?seed=abc"),
+    ).resolves.toEqual({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" });
+
+    expect(global.fetch).toHaveBeenCalledWith("http://192.168.1.10:3000/users/me/avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+      body: JSON.stringify({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" }),
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("throws ApiError when the backend responds with a non-2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
+
+    await expect(postAvatar("token", "https://evil.example.com/x.png")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("getMe", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("fetches the current user record with the access token", async () => {
+    const me = {
+      id: "1",
+      email: "a@b.com",
+      name: "A",
+      avatarUrl: null,
+      matricula: "223116037",
+      curso: "ENGENHARIA DE COMPUTAÇÃO",
+      periodoIngresso: "2022.1",
+    };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => me,
+    });
+
+    await expect(getMe("token")).resolves.toEqual(me);
+
+    expect(global.fetch).toHaveBeenCalledWith("http://192.168.1.10:3000/users/me", {
+      method: "GET",
+      headers: { Authorization: "Bearer token" },
+      body: undefined,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("throws ApiError when the backend responds with a non-2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+
+    await expect(getMe("token")).rejects.toThrow(ApiError);
   });
 });

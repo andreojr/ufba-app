@@ -9,7 +9,7 @@ import {
   type PropsWithChildren,
 } from "react";
 
-import { postGoogleLogin } from "./api";
+import { getMe, postAvatar, postGoogleLogin } from "./api";
 import { clearSession, getSession, saveSession } from "./session-storage";
 import type { GoogleUserInfo } from "./types";
 
@@ -21,6 +21,8 @@ type AuthState =
 type AuthContextValue = AuthState & {
   signIn: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateAvatarUrl: (avatarUrl: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -54,9 +56,42 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
     setState({ status: "signedOut" });
   }, []);
 
+  const updateAvatarUrl = useCallback(
+    async (avatarUrl: string) => {
+      if (state.status !== "signedIn") {
+        return;
+      }
+
+      await postAvatar(state.accessToken, avatarUrl);
+      const session = { accessToken: state.accessToken, user: { ...state.user, avatarUrl } };
+      await saveSession(session);
+      setState({ status: "signedIn", ...session });
+    },
+    [state]
+  );
+
+  // The user record stored at login predates anything the backend captures
+  // later (matrícula/curso/período de ingresso arrive on schedule fetches),
+  // so screens showing those fields call this to sync up. Best-effort: a
+  // failure (offline, backend down) just keeps whatever is already stored.
+  const refreshUser = useCallback(async () => {
+    if (state.status !== "signedIn") {
+      return;
+    }
+
+    try {
+      const user = await getMe(state.accessToken);
+      const session = { accessToken: state.accessToken, user };
+      await saveSession(session);
+      setState({ status: "signedIn", ...session });
+    } catch (error) {
+      console.warn("Failed to refresh the user profile", error);
+    }
+  }, [state]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, signIn, signOut }),
-    [state, signIn, signOut]
+    () => ({ ...state, signIn, signOut, updateAvatarUrl, refreshUser }),
+    [state, signIn, signOut, updateAvatarUrl, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

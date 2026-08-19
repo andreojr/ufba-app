@@ -67,6 +67,8 @@ describe("LoginScreen", () => {
       status: "signedOut",
       signIn,
       signOut: jest.fn(),
+      updateAvatarUrl: jest.fn(),
+      refreshUser: jest.fn(),
     });
     mockedGoogleSignin.hasPlayServices.mockResolvedValue(true);
   });

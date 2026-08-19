@@ -14,7 +14,7 @@ const mockedSessionStorage = jest.mocked(sessionStorage);
 
 const SESSION: Session = {
   accessToken: "token",
-  user: { googleId: "1", email: "a@b.com", name: "A" },
+  user: { id: "1", email: "a@b.com", name: "A", avatarUrl: null },
 };
 
 function wrapper({ children }: PropsWithChildren) {
@@ -88,6 +88,67 @@ describe("AuthProvider / useAuth", () => {
 
     expect(mockedSessionStorage.clearSession).toHaveBeenCalled();
     expect(result.current.status).toBe("signedOut");
+  });
+
+  it("updateAvatarUrl saves the new avatar via the API, persists the session, and updates state", async () => {
+    mockedSessionStorage.getSession.mockResolvedValue(SESSION);
+    mockedApi.postAvatar.mockResolvedValue({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" });
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("signedIn"));
+
+    await act(async () => {
+      await result.current.updateAvatarUrl("https://api.dicebear.com/9.x/open-peeps/png?seed=abc");
+    });
+
+    expect(mockedApi.postAvatar).toHaveBeenCalledWith(
+      "token",
+      "https://api.dicebear.com/9.x/open-peeps/png?seed=abc"
+    );
+    const updatedSession: Session = {
+      ...SESSION,
+      user: { ...SESSION.user, avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" },
+    };
+    expect(mockedSessionStorage.saveSession).toHaveBeenCalledWith(updatedSession);
+    expect(result.current).toMatchObject(updatedSession);
+  });
+
+  it("refreshUser fetches the latest user record, persists it, and updates state", async () => {
+    mockedSessionStorage.getSession.mockResolvedValue(SESSION);
+    const refreshedUser = {
+      ...SESSION.user,
+      matricula: "223116037",
+      curso: "ENGENHARIA DE COMPUTAÇÃO",
+      periodoIngresso: "2022.1",
+    };
+    mockedApi.getMe.mockResolvedValue(refreshedUser);
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("signedIn"));
+
+    await act(async () => {
+      await result.current.refreshUser();
+    });
+
+    expect(mockedApi.getMe).toHaveBeenCalledWith("token");
+    const updatedSession: Session = { accessToken: "token", user: refreshedUser };
+    expect(mockedSessionStorage.saveSession).toHaveBeenCalledWith(updatedSession);
+    expect(result.current).toMatchObject(updatedSession);
+  });
+
+  it("refreshUser swallows API failures and keeps the current state", async () => {
+    mockedSessionStorage.getSession.mockResolvedValue(SESSION);
+    mockedApi.getMe.mockRejectedValue(new Error("offline"));
+
+    const { result } = await renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("signedIn"));
+
+    await act(async () => {
+      await result.current.refreshUser();
+    });
+
+    expect(mockedSessionStorage.saveSession).not.toHaveBeenCalled();
+    expect(result.current).toMatchObject(SESSION);
   });
 
   it("throws when useAuth is called outside AuthProvider", async () => {

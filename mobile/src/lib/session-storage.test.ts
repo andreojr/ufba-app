@@ -13,7 +13,7 @@ const mockedSecureStore = jest.mocked(SecureStore);
 
 const SESSION: Session = {
   accessToken: "token",
-  user: { googleId: "1", email: "a@b.com", name: "A" },
+  user: { id: "1", email: "a@b.com", name: "A", avatarUrl: null },
 };
 
 describe("session-storage", () => {

@@ -22,9 +22,13 @@ const ICON_MAP = {
   IconWarningCircle: "alert-circle-outline",
   IconErrorCircle: "close-circle",
   IconCaretRight: "chevron-forward",
+  IconCaretLeft: "chevron-back",
   IconArrowSquareOut: "open-outline",
   IconDownloadSimple: "download-outline",
   IconIdentificationCard: "id-card-outline",
+  IconGraduationCap: "school-outline",
+  IconCalendarBlank: "calendar-outline",
+  IconHourglass: "hourglass-outline",
   IconLockKey: "lock-closed-outline",
   IconChartLineUp: "trending-up-outline",
   IconCheck: "checkmark",
@@ -32,6 +36,7 @@ const ICON_MAP = {
   IconGear: "settings-outline",
   IconArrowsClockwise: "sync-outline",
   IconInfo: "information-circle-outline",
+  IconX: "close",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;
