@@ -27,6 +27,8 @@ model User {
   auditLogEntries AuditLog[]
   cachedGrades    CachedGrade[]
   cachedSchedules CachedSchedule[]
+  historico       Historico?
+  planoItens      PlanoItem[]
 
   @@map("users")
 }
@@ -89,4 +91,107 @@ model CachedSchedule {
 
   @@index([userId])
   @@map("cached_schedule")
+}
+
+// Parsed snapshot of the student's Histórico Escolar PDF. Replaced wholesale on
+// every sync: the PDF is the complete state, so upserting row by row would leave
+// behind components an enrolment change removed.
+model Historico {
+  userId             String   @id @map("user_id")
+  emitidoEm          DateTime @map("emitido_em")
+  curriculo          String
+  periodoLetivoAtual Int      @map("periodo_letivo_atual")
+  prazoPadrao        String   @map("prazo_padrao")
+  prazoMaximo        String   @map("prazo_maximo")
+  cr                 Decimal? @db.Decimal(6, 4)
+  iap                Decimal? @db.Decimal(6, 4)
+
+  // The workload matrix, flattened. `total` is derivable from the other three,
+  // but persisting what the document asserts is what makes a future mismatch
+  // detectable rather than invisible.
+  chObrigatoriaExigida        Int @map("ch_obrigatoria_exigida")
+  chObrigatoriaIntegralizada  Int @map("ch_obrigatoria_integralizada")
+  chObrigatoriaPendente       Int @map("ch_obrigatoria_pendente")
+  chOptativaExigida           Int @map("ch_optativa_exigida")
+  chOptativaIntegralizada     Int @map("ch_optativa_integralizada")
+  chOptativaPendente          Int @map("ch_optativa_pendente")
+  chComplementarExigida       Int @map("ch_complementar_exigida")
+  chComplementarIntegralizada Int @map("ch_complementar_integralizada")
+  chComplementarPendente      Int @map("ch_complementar_pendente")
+  chTotalExigida              Int @map("ch_total_exigida")
+  chTotalIntegralizada        Int @map("ch_total_integralizada")
+  chTotalPendente             Int @map("ch_total_pendente")
+
+  equivalencias String[]
+  observacoes   String[]
+
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  componentes HistoricoComponente[]
+  pendentes   HistoricoPendente[]
+
+  @@map("historico")
+}
+
+model HistoricoComponente {
+  id           String   @id @default(uuid())
+  historicoId  String   @map("historico_id")
+  semestre     String
+  // Null on trancamento rows: the transcript's natureza column emits nothing.
+  natureza     String?
+  codigo       String
+  nome         String
+  cargaHoraria Int      @map("carga_horaria")
+  // Null when the document prints "--" (trancado, matriculado).
+  nota         Decimal? @db.Decimal(3, 1)
+  situacao     String
+  docente      String?
+
+  historico Historico @relation(fields: [historicoId], references: [userId], onDelete: Cascade)
+
+  // The semestre belongs in the key: the same code legitimately recurs across
+  // terms (trancado in one, reprovado or aprovado in the next).
+  @@unique([historicoId, semestre, codigo])
+  @@index([historicoId, semestre])
+  @@map("historico_componente")
+}
+
+model HistoricoPendente {
+  id           String  @id @default(uuid())
+  historicoId  String  @map("historico_id")
+  codigo       String
+  nome         String
+  cargaHoraria Int     @map("carga_horaria")
+  matriculado  Boolean
+
+  historico Historico @relation(fields: [historicoId], references: [userId], onDelete: Cascade)
+
+  // nome is in the key because ENADE appears twice under different names.
+  @@unique([historicoId, codigo, nome])
+  @@map("historico_pendente")
+}
+
+// The student's own planning: which pending component they intend to take in
+// which term. Authored data, not scraped — so unlike the three tables above it
+// must survive a sync.
+model PlanoItem {
+  id           String  @id @default(uuid())
+  userId       String  @map("user_id")
+  codigo       String
+  // Denormalised from the pending row so a plan item stays renderable across a
+  // snapshot replacement — and so a future user-chosen optativa, which has no
+  // pending row at all, can carry its own name and workload.
+  nome         String
+  cargaHoraria Int     @map("carga_horaria")
+  // Null means the unplanned pool.
+  semestre     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Deliberately NOT a foreign key onto HistoricoPendente: that relation would
+  // cascade the student's planning away every time the snapshot is replaced.
+  // HistoricoService.sync reconciles by codigo instead.
+  @@unique([userId, codigo])
+  @@map("plano_item")
 }
