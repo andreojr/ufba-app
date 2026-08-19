@@ -80,3 +80,59 @@ export interface ScheduleResponse {
   turmas: Turma[];
   periodoLetivo: PeriodoLetivo | null;
 }
+
+/** Mirrors the backend's parser output — see backend/src/sigaa-engine/parsers/historico.ts. */
+export interface ComponenteCursado {
+  semestre: string;
+  natureza: string | null;
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  /** Null when the transcript printed "--": trancado or matriculado. */
+  nota: number | null;
+  situacao: string;
+  docente: string | null;
+}
+
+export interface ComponentePendente {
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  matriculado: boolean;
+}
+
+export interface ResumoCargaHoraria {
+  exigida: number;
+  integralizada: number;
+  pendente: number;
+}
+
+export interface Historico {
+  emitidoEm: string;
+  curriculo: string;
+  periodoLetivoAtual: number;
+  prazoConclusaoPadrao: string;
+  prazoConclusaoMaximo: string;
+  indices: { cr: number | null; iap: number | null };
+  cursados: ComponenteCursado[];
+  pendentesObrigatorios: ComponentePendente[];
+  cargaHoraria: {
+    obrigatorias: ResumoCargaHoraria;
+    optativas: ResumoCargaHoraria;
+    complementares: ResumoCargaHoraria;
+    total: ResumoCargaHoraria;
+  };
+  equivalencias: string[];
+  observacoes: string[];
+}
+
+export interface ItemPlano {
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  semestre: string | null;
+}
+
+export type TrajetoriaResponse =
+  | { sincronizado: false }
+  | { historico: Historico; fetchedAt: string; plano: ItemPlano[] };

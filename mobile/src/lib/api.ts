@@ -4,6 +4,7 @@ import type {
   SigaaCredentials,
   SigaaWebSession,
   Session,
+  TrajetoriaResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -29,6 +30,8 @@ interface RequestOptions {
   method: "GET" | "POST";
   body?: unknown;
   accessToken?: string;
+  /** Overrides the default timeout; the SIGAA scrape endpoints need far longer. */
+  timeoutMs?: number;
 }
 
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
@@ -38,7 +41,10 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
 
   const headers: Record<string, string> = {};
   if (options.body !== undefined) {
@@ -247,4 +253,30 @@ export async function postSigaaAtestado(
     throw new ApiError("Received an empty response from /sigaa/atestado");
   }
   return html;
+}
+
+/** Reads the stored trajectory. Cheap — this hits our own database, not SIGAA. */
+export async function getTrajetoria(accessToken: string): Promise<TrajetoriaResponse> {
+  return request<TrajetoriaResponse>("/trajetoria", { method: "GET", accessToken });
+}
+
+/**
+ * Re-scrapes and re-parses the transcript server-side, then returns the fresh
+ * aggregate — so the screen renders without a second round trip after a wait
+ * long enough to need a progress indicator.
+ *
+ * This stays the primary path forever, not just until a background job exists:
+ * a user on `syncMode: "device"` keeps their credential off our servers, so no
+ * server-side job can ever refresh their trajectory.
+ */
+export async function postTrajetoriaSync(
+  accessToken: string,
+  credentials: Pick<SigaaCredentials, "login" | "senha">,
+): Promise<TrajetoriaResponse> {
+  return request<TrajetoriaResponse>("/trajetoria/sync", {
+    method: "POST",
+    accessToken,
+    body: credentials,
+    timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
+  });
 }

@@ -1,4 +1,13 @@
-import { ApiError, getMe, postAvatar, postGoogleLogin, postSigaaAtestado, postSigaaHistorico } from "./api";
+import {
+  ApiError,
+  getMe,
+  getTrajetoria,
+  postAvatar,
+  postGoogleLogin,
+  postSigaaAtestado,
+  postSigaaHistorico,
+  postTrajetoriaSync,
+} from "./api";
 import type { Session } from "./types";
 
 const LOGIN_RESPONSE: Session = {
@@ -247,5 +256,55 @@ describe("getMe", () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
 
     await expect(getMe("token")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("trajetória endpoints", () => {
+  // Same boilerplate every other block in this file has. Without it the URL is
+  // unset by the time this block runs (the preceding block's afterEach restores
+  // it to the unset value it had at load time), so `request()` throws before
+  // reaching fetch — the first test would reject and the second would crash
+  // reading `fetchMock.mock.calls[0]` on a fetch that never happened.
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  it("reports the unsynced state without throwing", async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ sincronizado: false }),
+    })) as unknown as typeof fetch;
+
+    await expect(getTrajetoria("token")).resolves.toEqual({ sincronizado: false });
+  });
+
+  it("gives the sync the long document timeout, not the default", async () => {
+    // The sync makes ~7 sequential SIGAA requests server-side. The 10s default
+    // aborts mid-scrape, and the fetch polyfill resolves that abort as an empty
+    // response — which used to look like a successful-but-empty download.
+    jest.useFakeTimers();
+    const fetchMock = jest.fn(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const promessa = postTrajetoriaSync("token", { login: "1", senha: "2" });
+    const assertion = expect(promessa).rejects.toThrow();
+
+    jest.advanceTimersByTime(20_000);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
+
+    jest.advanceTimersByTime(30_000);
+    await assertion;
+    jest.useRealTimers();
   });
 });
