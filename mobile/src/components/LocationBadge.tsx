@@ -23,7 +23,7 @@ export function LocationBadge({ predio, sala, localOriginal }: LocationBadgeProp
     return (
       <Typography.Paragraph type="body-xs" color="muted">
         {predio}
-        {sala ? ` · sala ${sala}` : ""}
+        {sala ? ` · ${sala}` : ""}
       </Typography.Paragraph>
     );
   }

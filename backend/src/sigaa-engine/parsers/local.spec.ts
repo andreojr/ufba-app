@@ -46,7 +46,7 @@ describe('parseLocal', () => {
   });
 
   it('recognizes a Smart Class room from the fixed predio/sala pattern too, not just per-day', () => {
-    const local = 'Smart Class II - Segunda Horários 10:00 às 11:00';
+    const local = 'Smart Class II - 101 - Segunda Horários 10:00 às 11:00';
 
     const result = parseLocal(local, ['Segunda']);
 

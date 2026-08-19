@@ -95,8 +95,8 @@ describe('parseTurmasHorario', () => {
         dia: 'Quinta',
         inicioMin: 1220,
         fimMin: 1330,
-        predio: 'Smart Class III',
-        sala: null,
+        predio: 'PAF II',
+        sala: 'Smart Class III',
         localOriginal: 'Ter PAF I/Qui Smart Class III',
       },
     ]);

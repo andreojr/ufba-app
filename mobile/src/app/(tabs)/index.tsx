@@ -226,7 +226,7 @@ export default function HomeTab(): JSX.Element {
                     <Typography.Paragraph type="body-sm" className="text-white/80">
                       {nextClass.block.codigo ?? "—"}
                       {nextClass.block.predio ? ` · ${nextClass.block.predio}` : ""}
-                      {nextClass.block.sala ? ` · sala ${nextClass.block.sala}` : ""}
+                      {nextClass.block.sala ? ` · ${nextClass.block.sala}` : ""}
                     </Typography.Paragraph>
                   </View>
                 </>
