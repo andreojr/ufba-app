@@ -39,7 +39,19 @@ describe('parseLocal', () => {
 
     expect(result).toEqual({
       Terça: { predio: 'PAF I', sala: null, localOriginal: local },
-      Quinta: { predio: 'Smart Class III', sala: null, localOriginal: local },
+      // "Smart Class III" is a room name, not a predio — the Smart Classes
+      // all live in PAF II (campus-layout knowledge, not in the text itself).
+      Quinta: { predio: 'PAF II', sala: 'Smart Class III', localOriginal: local },
+    });
+  });
+
+  it('recognizes a Smart Class room from the fixed predio/sala pattern too, not just per-day', () => {
+    const local = 'Smart Class II - Segunda Horários 10:00 às 11:00';
+
+    const result = parseLocal(local, ['Segunda']);
+
+    expect(result).toEqual({
+      Segunda: { predio: 'PAF II', sala: 'Smart Class II', localOriginal: local },
     });
   });
 
