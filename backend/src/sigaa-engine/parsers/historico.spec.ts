@@ -203,6 +203,82 @@ describe('parseHistorico', () => {
     expect(equivalencias).toHaveLength(1);
     expect(equivalencias[0]).toContain('através de');
     expect(observacoes.length).toBeGreaterThanOrEqual(3);
+    // Pins the leading-dash strip: the document prints each line as "- Semestre...".
+    expect(observacoes[0]).toMatch(/^Semestre 2024\.1/);
+  });
+
+  it('throws when a component carries a situação not in the legend', () => {
+    // Every "APR" in the situação column band; mutate one row's cell rather
+    // than a name that recurs elsewhere in the document.
+    const alvo = itens.find((item) => item.texto === 'APR' && item.x >= 532 && item.x < 580);
+    const adulterado = itens.map((item) => (item === alvo ? { ...item, texto: 'ZZZ' } : item));
+
+    expect(() => parseHistorico(adulterado)).toThrow(/situação/i);
+  });
+
+  it('throws when the pendentes section anchor is entirely absent', () => {
+    // This is the whole rationale for parsePendentes throwing instead of
+    // returning []: an unread section must never masquerade as an empty one.
+    const semTitulo = itens.filter((item) => !TITULO_PENDENTES_TEXTO.test(item.texto));
+
+    expect(() => parseHistorico(semTitulo)).toThrow(/pendentes/i);
+  });
+
+  it('throws when a row label of the workload matrix is missing', () => {
+    const semExigido = itens.filter((item) => item.texto !== 'Exigido');
+
+    expect(() => parseHistorico(semExigido)).toThrow(/quadro de carga horária/i);
+  });
+
+  it('throws when a workload matrix row does not have exactly four values', () => {
+    // "3610 h" is the obrigatórias/total column of the Exigido row and appears
+    // nowhere else in the document.
+    const semValor = itens.filter((item) => item.texto !== '3610 h');
+
+    expect(() => parseHistorico(semValor)).toThrow(/esperava 4/i);
+  });
+
+  it('throws when the observações section does not have a lower boundary anchor', () => {
+    // Rewording the footer's "Para verificar" sentence removes the only anchor
+    // that bounds observações — the parser must refuse rather than fall back
+    // to a fixed y that would pull the footer (and its token) in.
+    const semAncora = itens.map((item) =>
+      item.texto.startsWith('Para verificar')
+        ? { ...item, texto: 'Este documento pode ser conferido no site oficial.' }
+        : item,
+    );
+
+    expect(() => parseHistorico(semAncora)).toThrow(/limite inferior/i);
+  });
+
+  it('refuses an observações line shaped like the verification token, regardless of discovery', () => {
+    // A discovery-independent net: even with the section boundary intact, a
+    // token-shaped string inside it must not survive to the parsed object.
+    const alvo = itens.find((item) => item.texto.startsWith('- Semestre 2024.1'));
+    const adulterado = itens.map((item) =>
+      item === alvo ? { ...item, texto: `${item.texto} aaaa1111bb` } : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/verificação/i);
+  });
+
+  it('refuses a document whose declared integralizada does not match summed cursados', () => {
+    // "2100 h" is the obrigatórias/total Integralizado value; nudging it off
+    // the sum the APR rows actually carry must not pass quietly.
+    const adulterado = itens.map((item) =>
+      item.texto === '2100 h' ? { ...item, texto: '2101 h' } : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/integralizada/i);
+  });
+
+  it('refuses a document with graded components but no parseable CR', () => {
+    // Dropping the CR value entirely (not just doctoring it) must not resolve
+    // to a silently-null CR when graded components exist — that null is only
+    // legitimate for a transcript with nothing graded yet.
+    const semCr = itens.filter((item) => item.texto !== '8.1597');
+
+    expect(() => parseHistorico(semCr)).toThrow(/não achei o CR/i);
   });
 
   it('accepts the real document, whose invariants all hold', () => {

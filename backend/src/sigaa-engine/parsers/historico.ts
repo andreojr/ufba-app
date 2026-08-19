@@ -205,6 +205,39 @@ function exigirSituacao(bruta: string, codigo: string): SituacaoComponente {
   return bruta as SituacaoComponente;
 }
 
+/**
+ * Empty is a legitimate null — trancamento rows genuinely print no item in
+ * this column at all — but a non-empty value outside the known set is the
+ * same shape of bug `exigirSituacao` next to it already refuses. Silently
+ * nulling it would hide a wrong-column read behind a plausible-looking gap.
+ */
+function exigirNatureza(bruta: string, codigo: string): NaturezaComponente | null {
+  if (bruta === '') {
+    return null;
+  }
+  if (!NATUREZAS.includes(bruta)) {
+    throw new Error(
+      `Histórico não reconhecido: natureza "${bruta}" no componente ${codigo} ` +
+        'não está na lista conhecida.',
+    );
+  }
+  return bruta as NaturezaComponente;
+}
+
+/**
+ * `Number(x)` alone treats an empty cell as 0 — the same gap `exigirNumero`
+ * closes for header labels, closed here for the component table's own cells.
+ */
+function exigirNumeroCelula(bruto: string, codigo: string): number {
+  if (bruto.trim() === '' || !Number.isFinite(Number(bruto))) {
+    throw new Error(
+      `Histórico não reconhecido: carga horária "${bruto}" no componente ` +
+        `${codigo} não é um número.`,
+    );
+  }
+  return Number(bruto);
+}
+
 function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
   const cursados: ComponenteCursado[] = [];
 
@@ -270,12 +303,13 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
 
       cursados.push({
         semestre: ancora.texto,
-        natureza: NATUREZAS.includes(natureza)
-          ? (natureza as NaturezaComponente)
-          : null,
+        natureza: exigirNatureza(natureza, codigo),
         codigo,
         nome,
-        cargaHoraria: Number(celula(naSecao, COLUNAS.cargaHoraria, ancora.y)),
+        cargaHoraria: exigirNumeroCelula(
+          celula(naSecao, COLUNAS.cargaHoraria, ancora.y),
+          codigo,
+        ),
         nota: /^\d/.test(nota) ? Number(nota) : null,
         situacao: exigirSituacao(celula(naSecao, COLUNAS.situacao, ancora.y), codigo),
         docente: ehDocente ? textoAbaixo : null,
@@ -297,10 +331,26 @@ const COLUNAS_PENDENTES = {
   cargaHoraria: [500, 580],
 } as const;
 
-/** "60 h" and "0h" both appear — the space is not reliable. */
-function horas(bruto: string): number {
+/**
+ * "60 h" and "0h" both appear — the space is not reliable. Null when the cell
+ * carries no parseable workload at all, which is not the same as it printing
+ * a genuine "0 h" (the ENADE pendente rows do).
+ */
+function horas(bruto: string): number | null {
   const match = /(\d+)\s*h/i.exec(bruto);
-  return match ? Number(match[1]) : 0;
+  return match ? Number(match[1]) : null;
+}
+
+/** `horas()` returning null here means an unparseable cell, not a genuine 0. */
+function exigirHoras(bruto: string, contexto: string): number {
+  const valor = horas(bruto);
+  if (valor === null) {
+    throw new Error(
+      `Histórico não reconhecido: não consegui ler a carga horária de "${contexto}" ` +
+        `a partir de "${bruto}".`,
+    );
+  }
+  return valor;
 }
 
 function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
@@ -340,7 +390,10 @@ function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
     pendentes.push({
       codigo,
       nome,
-      cargaHoraria: horas(celula(naSecao, COLUNAS_PENDENTES.cargaHoraria, y)),
+      cargaHoraria: exigirHoras(
+        celula(naSecao, COLUNAS_PENDENTES.cargaHoraria, y),
+        codigo,
+      ),
       matriculado: /matriculado/i.test(celula(naSecao, COLUNAS_PENDENTES.anotacao, y)),
     });
   }
@@ -374,7 +427,7 @@ function parseCargaHoraria(itens: ItemTexto[]): Historico['cargaHoraria'] {
           /\d+\s*h/i.test(i.texto),
       )
       .sort((a, b) => a.x - b.x)
-      .map((i) => horas(i.texto));
+      .map((i) => exigirHoras(i.texto, rotulo));
 
     if (valores[rotulo].length !== 4) {
       throw new Error(
@@ -413,9 +466,19 @@ function linhasDaSecao(itens: ItemTexto[], tituloPattern: RegExp): string[] {
     )
     .sort((a, b) => b.y - a.y)[0];
 
-  const naSecao = daPagina.filter(
-    (i) => i.y < titulo.y - 2 && i.y > (proxima ? proxima.y : 45),
-  );
+  if (!proxima) {
+    // No magic fallback y here: on the observações section this is the only
+    // thing standing between the section and the footer below it, which
+    // carries the verification token. A layout the anchor regex stops
+    // matching must fail loud, not silently widen the section down to the
+    // footer.
+    throw new Error(
+      'Histórico não reconhecido: não achei o limite inferior de uma seção de ' +
+        'texto livre (equivalências/observações). O layout do documento pode ter mudado.',
+    );
+  }
+
+  const naSecao = daPagina.filter((i) => i.y < titulo.y - 2 && i.y > proxima.y);
 
   const porLinha = new Map<number, ItemTexto[]>();
   for (const item of naSecao) {
@@ -434,6 +497,33 @@ function linhasDaSecao(itens: ItemTexto[], tituloPattern: RegExp): string[] {
         .trim(),
     )
     .filter((linha) => linha !== '');
+}
+
+/**
+ * The footer's authenticity code, by shape rather than by the label around it:
+ * ten lowercase alphanumerics carrying at least one digit and at least one
+ * letter. Same pattern `scripts/dump-historico-fixture.ts` uses to find the
+ * real token when redacting the fixture.
+ */
+const CODIGO_VERIFICACAO_PATTERN =
+  /\b(?=[0-9a-z]{10}\b)(?=[0-9a-z]*\d)(?=[0-9a-z]*[a-z])[0-9a-z]{10}\b/;
+
+/**
+ * A discovery-independent net on top of `linhasDaSecao`'s own boundary check:
+ * this rescans the lines it actually produced, by shape, regardless of why the
+ * boundary matched what it matched. Observações sits directly above the
+ * footer that carries the verification token, so this is the check that
+ * would have caught the leak even if the boundary anchor above had matched
+ * the wrong line instead of failing outright.
+ */
+function semTokenDeVerificacao(linhas: string[]): string[] {
+  if (linhas.some((linha) => CODIGO_VERIFICACAO_PATTERN.test(linha))) {
+    throw new Error(
+      'Histórico inconsistente: uma linha de observações carrega uma string com ' +
+        'a forma do código de verificação do rodapé. Não persistido.',
+    );
+  }
+  return linhas;
 }
 
 const EMITIDO_EM_PATTERN = /Emitido em:\s*(\d{2}\/\d{2}\/\d{4})/;
@@ -538,7 +628,7 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
     pendentesObrigatorios: parsePendentes(itens),
     cargaHoraria: parseCargaHoraria(itens),
     equivalencias: linhasDaSecao(itens, /^Equival[êe]ncias/),
-    observacoes: linhasDaSecao(itens, /^Observa[çc][õo]es/),
+    observacoes: semTokenDeVerificacao(linhasDaSecao(itens, /^Observa[çc][õo]es/)),
   };
 
   const tituloPendentes = itens.find((i) => TITULO_PENDENTES_PATTERN.test(i.texto));

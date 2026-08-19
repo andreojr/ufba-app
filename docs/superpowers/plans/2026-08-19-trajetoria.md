@@ -1157,7 +1157,7 @@ Then in `parseHistorico`, replace `cursados: []` with:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.spec`
-Expected: PASS, 11 tests.
+Expected: PASS, 15 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1417,7 +1417,7 @@ Then in `parseHistorico`, replace the four placeholder values:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.spec`
-Expected: PASS, 16 tests.
+Expected: PASS, 24 tests.
 
 The x-bands in `COLUNAS_PENDENTES` and the section-title regexes are the likely
 failure points, since the spike documented the cursados bands precisely but not
@@ -1581,7 +1581,7 @@ Then in `parseHistorico`, replace the `return { ... }` with a named object, vali
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.spec`
-Expected: PASS, 19 tests.
+Expected: PASS, 30 tests.
 
 - [ ] **Step 5: Commit**
 
