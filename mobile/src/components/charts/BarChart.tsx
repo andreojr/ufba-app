@@ -45,7 +45,16 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="bar-chart-scroll">
-      <View testID="bar-chart" style={{ width: largura, paddingHorizontal: MARGEM_X }}>
+      {/* The outer box's own width has to be `largura` PLUS both margins: its
+          horizontal padding eats into that width for its children, and the
+          bar/rótulo rows below have no width of their own — they stretch to
+          fill whatever's left. Setting this to `largura` (forgetting the
+          padding is additive) shorted every row by 2×MARGEM_X, so the last
+          column overflowed off the end of the scrollable area entirely. */}
+      <View
+        testID="bar-chart"
+        style={{ width: largura + MARGEM_X * 2, paddingHorizontal: MARGEM_X }}
+      >
         <View className="flex-row items-end" style={{ height: altura }}>
           {barras.map((barra, indice) => (
             <View key={indice} className="items-center justify-end" style={{ width: larguraColuna }}>
@@ -57,7 +66,7 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
                   fontSize: 10,
                   fontWeight: "600",
                   color: COR_VALOR,
-                  marginBottom: 4,
+                  marginBottom: 10,
                   transform: [{ rotate: "-90deg" }],
                 }}
               >
@@ -73,7 +82,11 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
             </View>
           ))}
         </View>
-        <View className="flex-row border-t border-white/10 mt-1.5 pt-1.5">
+        {/* No margin-top here: the bars' row is exactly `altura` tall and
+            bottom-aligned, so its own bottom edge already sits right where
+            the tallest bar ends — this line has to sit flush against that
+            edge, not floating below it. */}
+        <View className="flex-row border-t border-white/10 pt-1.5">
           {barras.map((barra, indice) => (
             <View key={indice} className="items-center" style={{ width: larguraColuna }}>
               <Typography.Paragraph type="body-xs" color="muted">
