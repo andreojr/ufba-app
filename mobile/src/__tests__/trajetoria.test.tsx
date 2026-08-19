@@ -39,8 +39,9 @@ jest.mock("@expo/vector-icons", () => {
 
 // heroui-native has to be mocked by hand — see home.test.tsx, which does the
 // same for the components the home screen uses. This screen needs Typography,
-// Menu, Button and useThemeColor.
+// Menu, Button, Tabs and useThemeColor.
 jest.mock("heroui-native", () => {
+  const { createContext, useContext } = jest.requireActual("react");
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
   const Menu = Object.assign(({ children }: any) => <View>{children}</View>, {
@@ -55,8 +56,39 @@ jest.mock("heroui-native", () => {
     ItemTitle: ({ children }: any) => <Text>{children}</Text>,
   });
 
+  // A minimal stand-in for the real compound component: just enough context
+  // to let a Trigger press flip which Content is shown, which is all the
+  // screen's tab-switching tests need.
+  const TabsContext = createContext({
+    value: "",
+    onValueChange: (_v: string) => {},
+  });
+  const Tabs = Object.assign(
+    ({ children, value, onValueChange }: any) => (
+      <TabsContext.Provider value={{ value, onValueChange }}>
+        <View>{children}</View>
+      </TabsContext.Provider>
+    ),
+    {
+      List: ({ children }: any) => <View>{children}</View>,
+      Indicator: () => null,
+      Trigger: ({ value, children }: any) => {
+        const ctx = useContext(TabsContext);
+        return (
+          <TouchableOpacity onPress={() => ctx.onValueChange(value)}>{children}</TouchableOpacity>
+        );
+      },
+      Label: ({ children }: any) => <Text>{children}</Text>,
+      Content: ({ value, children }: any) => {
+        const ctx = useContext(TabsContext);
+        return ctx.value === value ? <View>{children}</View> : null;
+      },
+    },
+  );
+
   return {
     Menu,
+    Tabs,
     Button: ({ children, onPress }: any) => (
       <TouchableOpacity onPress={onPress}>
         <Text>{children}</Text>
@@ -428,6 +460,91 @@ describe("Trajetória", () => {
 
     expect(screen.getByText("1 matéria")).toBeTruthy();
     expect(screen.getByText("Tudo planejado.")).toBeTruthy();
+  });
+
+  it("groups the periods by year and shows each matéria's impact on the CR", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        indices: { cr: 7, iap: null },
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA40",
+            nome: "CÁLCULO A",
+            cargaHoraria: 60,
+            nota: 6,
+            situacao: "APR",
+            docente: null,
+          },
+          MATRICULADO,
+        ],
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    // Year header groups 2025.1 and 2025.2 together — MATRICULADO is 2026.1,
+    // its own year.
+    expect(await screen.findByText("2025")).toBeTruthy();
+    expect(screen.getByText("2026")).toBeTruthy();
+
+    // MATA37's 8 sits above the CR computed without it (6): a positive pull.
+    expect(screen.getByText("↑ 1,00")).toBeTruthy();
+    // MATA40's 6 sits below the CR computed without it (8): a negative pull.
+    expect(screen.getByText("↓ 1,00")).toBeTruthy();
+  });
+
+  it("shows a carga horária bar chart with no grades once that tab is selected", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+        ],
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("INTRODUÇÃO À LÓGICA");
+
+    // CR tab (the default) shows the grade.
+    expect(screen.getByText("8,0")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Carga Horária"));
+    });
+
+    // The grade is gone from the switched tab; only the hours remain.
+    expect(screen.queryByText("8,0")).toBeNull();
+    expect(screen.getByTestId("bar-chart")).toBeTruthy();
+    expect(screen.queryByTestId("line-chart")).toBeNull();
+  });
+
+  it("ends the trajectory with a linha de chegada card", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText(/linha de chegada/i)).toBeTruthy();
   });
 
   it("still calls the term in progress while it is genuinely running", async () => {

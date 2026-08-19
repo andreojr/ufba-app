@@ -37,6 +37,7 @@ const ICON_MAP = {
   IconArrowsClockwise: "sync-outline",
   IconInfo: "information-circle-outline",
   IconX: "close",
+  IconFlag: "flag-outline",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;

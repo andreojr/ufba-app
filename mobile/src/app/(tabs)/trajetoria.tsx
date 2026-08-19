@@ -1,9 +1,11 @@
-import { Button, Menu, Typography, useThemeColor } from "heroui-native";
+import { Button, Menu, Tabs, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
+import { BarChart } from "@/components/charts/BarChart";
+import { LineChart } from "@/components/charts/LineChart";
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
 import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
@@ -14,16 +16,25 @@ import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import {
+  agruparPorAno,
   agruparPorSemestre,
+  calcularCrAcumulado,
   formatarCoeficiente,
+  formatarImpacto,
   formatarNota,
   historicoDesatualizado,
+  impactoNoCr,
   percentualConcluido,
   poolPlanejavel,
   rotuloSituacao,
+  somarCargaHoraria,
   zonasDePlanejamento,
+  type AnoTrajetoria,
 } from "@/lib/trajetoria";
-import type { Historico, ItemPlano, TrajetoriaResponse } from "@/lib/types";
+import type { ComponenteCursado, Historico, ItemPlano, TrajetoriaResponse } from "@/lib/types";
+
+/** Which insight the tabs at the top of the trajectory focus on. */
+type Insight = "cr" | "cargaHoraria";
 
 type LoadState =
   | { status: "loading" }
@@ -318,11 +329,20 @@ function ReadyTrajetoria({
   erro: JSX.Element | null;
   mutedColor: string;
 }): JSX.Element {
+  const [insight, setInsight] = useState<Insight>("cr");
   const { total } = historico.cargaHoraria;
   const percentual = percentualConcluido(total);
   const periodos = agruparPorSemestre(historico.cursados);
+  const anos = agruparPorAno(periodos);
   const pendentes = poolPlanejavel(historico.pendentesObrigatorios);
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
+
+  const semestresOrdenados = periodos.map((periodo) => periodo.semestre);
+  const crPorPeriodo = calcularCrAcumulado(historico.cursados, semestresOrdenados);
+  const cargaHorariaPorPeriodo = periodos.map((periodo) => ({
+    rotulo: periodo.semestre,
+    valor: somarCargaHoraria(periodo.componentes),
+  }));
 
   // The term in progress, or — on a transcript with nothing enrolled — the last
   // one on it, so the planner still has somewhere to count forward from.
@@ -391,54 +411,43 @@ function ReadyTrajetoria({
         {erro}
       </View>
 
-      {periodos.map((periodo) => (
-        <View key={periodo.semestre} className="gap-2.5">
-          <View className="flex-row items-center gap-2.5">
-            <Typography.Paragraph weight="medium">{periodo.semestre}</Typography.Paragraph>
-            <View
-              className={`rounded-full px-2 py-1 ${
-                periodo.emCurso ? "bg-accent-soft" : "bg-white/5"
-              }`}
-            >
-              <Typography.Paragraph
-                type="body-xs"
-                className={periodo.emCurso ? "text-accent" : undefined}
-                color={periodo.emCurso ? undefined : "muted"}
-              >
-                {rotuloPeriodo(periodo.emCurso, desatualizado)}
-              </Typography.Paragraph>
-            </View>
-            <View className="flex-1 h-px bg-white/10" />
+      <Tabs value={insight} onValueChange={(valor) => setInsight(valor as Insight)} variant="secondary">
+        <Tabs.List>
+          <Tabs.Indicator />
+          <Tabs.Trigger value="cr">
+            <Tabs.Label>CR</Tabs.Label>
+          </Tabs.Trigger>
+          <Tabs.Trigger value="cargaHoraria">
+            <Tabs.Label>Carga Horária</Tabs.Label>
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <Tabs.Content value="cr">
+          <View className="gap-4 pt-4">
+            <LineChart
+              pontos={crPorPeriodo.map((ponto) => ({ rotulo: ponto.semestre, valor: ponto.cr }))}
+            />
+            <LinhaDoTempo
+              anos={anos}
+              desatualizado={desatualizado}
+              insight="cr"
+              cursados={historico.cursados}
+            />
           </View>
-          {periodo.componentes.map((componente) => {
-            const rotulo = rotuloSituacao(componente.situacao);
-            const nota = formatarNota(componente.nota);
-            return (
-              <View
-                key={`${componente.semestre}-${componente.codigo}`}
-                className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-3"
-              >
-                <View className="flex-1 gap-0.5">
-                  <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
-                  <Typography.Paragraph type="body-xs" color="muted">
-                    {componente.codigo} · {componente.cargaHoraria} h
-                  </Typography.Paragraph>
-                </View>
-                {rotulo ? (
-                  <View className="rounded-full bg-white/5 px-2 py-1">
-                    <Typography.Paragraph type="body-xs" color="muted">
-                      {rotulo}
-                    </Typography.Paragraph>
-                  </View>
-                ) : null}
-                <Typography.Heading type="h6" style={{ color: gradeColor(nota) }}>
-                  {nota}
-                </Typography.Heading>
-              </View>
-            );
-          })}
-        </View>
-      ))}
+        </Tabs.Content>
+
+        <Tabs.Content value="cargaHoraria">
+          <View className="gap-4 pt-4">
+            <BarChart barras={cargaHorariaPorPeriodo} />
+            <LinhaDoTempo
+              anos={anos}
+              desatualizado={desatualizado}
+              insight="cargaHoraria"
+              cursados={historico.cursados}
+            />
+          </View>
+        </Tabs.Content>
+      </Tabs>
 
       <View className="gap-5">
         {/* Everything around the planner now reads as the student's real
@@ -531,5 +540,131 @@ function ReadyTrajetoria({
         })}
       </View>
     </>
+  );
+}
+
+/**
+ * The trajectory grid itself: one row per year, its periods side by side,
+ * connected top to bottom by the accent dots and line down the left edge —
+ * chronological order top to bottom, ending in the linha de chegada card.
+ */
+function LinhaDoTempo({
+  anos,
+  desatualizado,
+  insight,
+  cursados,
+}: {
+  anos: AnoTrajetoria[];
+  desatualizado: boolean;
+  insight: Insight;
+  cursados: ComponenteCursado[];
+}): JSX.Element {
+  return (
+    <View>
+      {anos.map((anoBloco) => (
+        <View key={anoBloco.ano} className="flex-row gap-3">
+          <View className="w-3 items-center">
+            <View className="w-2.5 h-2.5 rounded-full bg-accent mt-1" />
+            <View className="flex-1 w-px bg-white/15" />
+          </View>
+          <View className="flex-1 gap-2.5 pb-5">
+            <Typography.Paragraph weight="medium">{anoBloco.ano}</Typography.Paragraph>
+            <View className="flex-row flex-wrap gap-2.5">
+              {anoBloco.periodos.map((periodo) => (
+                <View key={periodo.semestre} className="flex-1 gap-2" style={{ minWidth: 150 }}>
+                  <View className="flex-row items-center gap-2">
+                    <Typography.Paragraph type="body-sm" weight="medium">
+                      {periodo.semestre}
+                    </Typography.Paragraph>
+                    <View
+                      className={`rounded-full px-2 py-0.5 ${
+                        periodo.emCurso ? "bg-accent-soft" : "bg-white/5"
+                      }`}
+                    >
+                      <Typography.Paragraph
+                        type="body-xs"
+                        className={periodo.emCurso ? "text-accent" : undefined}
+                        color={periodo.emCurso ? undefined : "muted"}
+                      >
+                        {rotuloPeriodo(periodo.emCurso, desatualizado)}
+                      </Typography.Paragraph>
+                    </View>
+                  </View>
+                  {periodo.componentes.map((componente) => (
+                    <MateriaCard
+                      key={`${componente.semestre}-${componente.codigo}`}
+                      componente={componente}
+                      insight={insight}
+                      cursados={cursados}
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      ))}
+
+      <View className="flex-row gap-3">
+        <View className="w-3 items-center">
+          <View className="w-2.5 h-2.5 rounded-full bg-accent mt-1" />
+        </View>
+        <View className="flex-1 rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-2.5">
+          <AppIcon name="IconFlag" size={20} />
+          <Typography.Paragraph weight="medium">Linha de chegada</Typography.Paragraph>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A matéria card in the grid. What sits on its right depends on the selected
+ * tab: the CR tab pairs the grade with how much that grade pulls the overall
+ * CR up or down; the carga horária tab shows only the hours, no grade at all.
+ */
+function MateriaCard({
+  componente,
+  insight,
+  cursados,
+}: {
+  componente: ComponenteCursado;
+  insight: Insight;
+  cursados: ComponenteCursado[];
+}): JSX.Element {
+  const rotulo = rotuloSituacao(componente.situacao);
+  const nota = formatarNota(componente.nota);
+  const impacto = insight === "cr" && componente.nota !== null ? impactoNoCr(cursados, componente.codigo) : null;
+
+  return (
+    <View className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-3">
+      <View className="flex-1 gap-0.5">
+        <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+        <Typography.Paragraph type="body-xs" color="muted">
+          {componente.codigo} · {componente.cargaHoraria} h
+        </Typography.Paragraph>
+      </View>
+      {rotulo ? (
+        <View className="rounded-full bg-white/5 px-2 py-1">
+          <Typography.Paragraph type="body-xs" color="muted">
+            {rotulo}
+          </Typography.Paragraph>
+        </View>
+      ) : null}
+      {insight === "cargaHoraria" ? (
+        <Typography.Heading type="h6">{componente.cargaHoraria} h</Typography.Heading>
+      ) : (
+        <View className="items-end gap-0.5">
+          <Typography.Heading type="h6" style={{ color: gradeColor(nota) }}>
+            {nota}
+          </Typography.Heading>
+          {impacto !== null ? (
+            <Typography.Paragraph type="body-xs" color="muted">
+              {formatarImpacto(impacto)}
+            </Typography.Paragraph>
+          ) : null}
+        </View>
+      )}
+    </View>
   );
 }
