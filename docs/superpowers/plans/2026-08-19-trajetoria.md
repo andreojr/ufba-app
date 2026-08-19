@@ -2933,6 +2933,8 @@ type LoadState =
 
   Note the copy names both sides. A bare "não guardamos nada sensível" would be false by omission — grades and workload *are* stored, which is the entire point of the screen.
 
+  Keep it in the student's vocabulary. "Descartados na leitura" is deliberate; an earlier draft said "nunca chegam ao banco", which is accurate and means nothing to a reader who does not picture their data as living in a database.
+
 ```tsx
 <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
   <Typography.Heading type="h6">Sua trajetória ainda não foi montada</Typography.Heading>
@@ -2953,7 +2955,7 @@ type LoadState =
         O que não fica:{" "}
       </Typography.Paragraph>
       CPF, RG e data de nascimento. Eles estão no documento, mas são
-      descartados na leitura e nunca chegam ao banco.
+      descartados na leitura.
     </Typography.Paragraph>
   </View>
 

@@ -315,7 +315,14 @@ saying is the asymmetry:
 > **O que fica guardado:** suas matérias, notas e carga horária — é o
 > que monta esta tela.
 > **O que não fica:** CPF, RG e data de nascimento. Eles estão no
-> documento, mas são descartados na leitura e nunca chegam ao banco.
+> documento, mas são descartados na leitura.
+
+Note what the second line does *not* say. An earlier draft ended with
+"e nunca chegam ao banco" — accurate, and useless to a reader who does
+not think of their data as living in a database. "Descartados na
+leitura" carries the same guarantee in words that need no technical
+vocabulary to land. Copy in this app explains itself to a student, not
+to an engineer.
 
 This is a claim the parser has to keep true, which is why Task 3's spec
 asserts the parsed object carries no CPF-shaped string. The disclosure
