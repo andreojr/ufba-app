@@ -7,9 +7,11 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins";
 import { SourceCodePro_400Regular } from "@expo-google-fonts/source-code-pro";
+import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
+import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
-import { HeroUINativeProvider } from "heroui-native";
+import { HeroUINativeProvider, useThemeColor } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -23,6 +25,14 @@ import "../global.css";
 function RootNavigator(): JSX.Element | null {
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
+  const [backgroundColor] = useThemeColor(["background"]);
+
+  // Android's root window background (behind every React view) defaults to
+  // white regardless of app theme — paint it to match, so it doesn't peek
+  // through gaps like the tab bar's rounded corners.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(backgroundColor);
+  }, [backgroundColor]);
 
   if (auth.status === "loading") {
     return null;
@@ -32,16 +42,29 @@ function RootNavigator(): JSX.Element | null {
     return null;
   }
 
+  // React Navigation paints its own screen/tab-bar containers using this
+  // theme's `colors.background`, independent of anything we set via app
+  // styles — it defaults to a light gray (rgb(242,242,242)) that peeks
+  // through gaps like the tab bar's rounded corners. Override it to match.
+  const navigationTheme = {
+    ...DefaultTheme,
+    colors: { ...DefaultTheme.colors, background: backgroundColor },
+  };
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={auth.status === "signedIn"}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
-      </Stack.Protected>
-      <Stack.Protected guard={auth.status === "signedOut"}>
-        <Stack.Screen name="login" />
-      </Stack.Protected>
-    </Stack>
+    <ThemeProvider value={navigationTheme}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={auth.status === "signedIn"}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
+          <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
+          <Stack.Screen name="sigaa-webview" options={{ presentation: "modal" }} />
+        </Stack.Protected>
+        <Stack.Protected guard={auth.status === "signedOut"}>
+          <Stack.Screen name="login" />
+        </Stack.Protected>
+      </Stack>
+    </ThemeProvider>
   );
 }
 

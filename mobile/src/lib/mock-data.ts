@@ -168,11 +168,6 @@ export const DOCUMENT_DEFS: Record<
   },
 };
 
-export const DOWNLOADED_FILES = [
-  { title: "atestado-matricula.pdf", description: "12/06/2026 · 128 KB" },
-  { title: "historico-escolar.pdf", description: "02/05/2026 · 312 KB" },
-];
-
 /** Formats an hour (0-23) as "0Xh00" the way the design does. */
 export function formatHour(hour: number): string {
   return `${hour < 10 ? "0" + hour : hour}h00`;

@@ -17,6 +17,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#18181B"
       },
+      "backgroundColor": "#18181B",
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
@@ -31,7 +32,13 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-system-ui",
+        {
+          "userInterfaceStyle": "automatic"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

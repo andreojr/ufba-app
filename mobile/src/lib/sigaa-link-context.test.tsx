@@ -17,9 +17,11 @@ const mockedSigaaStorage = jest.mocked(sigaaStorage);
 const SIGNED_IN = {
   status: "signedIn" as const,
   accessToken: "token",
-  user: { googleId: "1", email: "a@b.com", name: "A" },
+  user: { id: "1", email: "a@b.com", name: "A", avatarUrl: null },
   signIn: jest.fn(),
   signOut: jest.fn(),
+  updateAvatarUrl: jest.fn(),
+  refreshUser: jest.fn(),
 };
 
 function wrapper({ children }: PropsWithChildren) {
@@ -32,7 +34,13 @@ describe("SigaaLinkProvider / useSigaaLink", () => {
   });
 
   it("stays loading while the user is signed out", async () => {
-    mockedUseAuth.mockReturnValue({ status: "signedOut", signIn: jest.fn(), signOut: jest.fn() });
+    mockedUseAuth.mockReturnValue({
+      status: "signedOut",
+      signIn: jest.fn(),
+      signOut: jest.fn(),
+      updateAvatarUrl: jest.fn(),
+      refreshUser: jest.fn(),
+    });
 
     const { result } = await renderHook(() => useSigaaLink(), { wrapper });
 

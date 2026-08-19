@@ -146,34 +146,38 @@ describe("postSchedule", () => {
     process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
   });
 
-  it("POSTs the credentials with the bearer token and returns the parsed turmas", async () => {
-    const turmas = [
-      {
-        codigo: "MATA37",
-        nome: "SISTEMAS OPERACIONAIS",
-        slots: [
-          {
-            dia: "Terça",
-            inicioMin: 1110,
-            fimMin: 1220,
-            predio: "PAF 1",
-            sala: "208",
-            localOriginal: "PAF 1 - 208 - Terça Horários 18:30 às 19:25",
-          },
-        ],
-        vigencia: { inicio: "19/08/2026", fim: "19/12/2026" },
-        semestre: "2026.2",
-      },
-    ];
+  it("POSTs the credentials with the bearer token and returns the turmas plus the periodo letivo", async () => {
+    const schedule = {
+      turmas: [
+        {
+          codigo: "MATA37",
+          nome: "SISTEMAS OPERACIONAIS",
+          docente: "BEATRIZ NUNES CAMPELO",
+          slots: [
+            {
+              dia: "Terça",
+              inicioMin: 1110,
+              fimMin: 1220,
+              predio: "PAF 1",
+              sala: "208",
+              localOriginal: "PAF 1 - 208 - Terça Horários 18:30 às 19:25",
+            },
+          ],
+          vigencia: { inicio: "19/08/2026", fim: "19/12/2026" },
+          semestre: "2026.2",
+        },
+      ],
+      periodoLetivo: { semestre: "2026.2", inicio: "2026-08-19", fim: "2026-12-19" },
+    };
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => turmas,
+      json: async () => schedule,
     }) as unknown as typeof fetch;
 
     await expect(
       postSchedule("access-token", { login: "12345678900", senha: "segredo" }),
-    ).resolves.toEqual(turmas);
+    ).resolves.toEqual(schedule);
 
     expect(global.fetch).toHaveBeenCalledWith("https://api.example.com/schedule", {
       method: "POST",

@@ -12,11 +12,12 @@ function TabIcon({ name, color }: { name: AppIconName; color: string }): JSX.Ele
 export default function TabsLayout(): JSX.Element {
   const router = useRouter();
   const sigaaLink = useSigaaLink();
-  const [activeColor, inactiveColor, surfaceColor, borderColor] = useThemeColor([
+  const [activeColor, inactiveColor, surfaceColor, borderColor, backgroundColor] = useThemeColor([
     "accent",
     "muted",
     "surface",
     "border",
+    "background",
   ]);
 
   // Onboarding gate: send the user to link their SIGAA account before they can use
@@ -34,7 +35,18 @@ export default function TabsLayout(): JSX.Element {
         headerShown: false,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
-        tabBarStyle: { backgroundColor: surfaceColor, borderTopColor: borderColor },
+        tabBarStyle: {
+          backgroundColor: surfaceColor,
+          borderTopColor: borderColor,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          // Android's default elevation shadow renders behind the bar using its
+          // un-rounded rectangular bounds, so it peeks out past the rounded
+          // corners as a light gray patch. Disable it since we already draw a
+          // hairline border above for separation.
+          elevation: 0,
+        },
+        sceneStyle: { backgroundColor },
         tabBarLabelStyle: { fontFamily: "Poppins", fontSize: 11, fontWeight: "500" },
       }}
     >

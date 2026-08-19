@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { cpf as cpfValidator } from "cpf-cnpj-validator";
 import {
   Button,
-  Chip,
   Description,
   FieldError,
   Input,
@@ -20,6 +19,7 @@ import { useCSSVariable } from "uniwind";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
+import { isSyncModeSelectable, SyncModeSelector } from "@/components/SyncModeSelector";
 import { describeApiError } from "@/lib/api-errors";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import type { SyncMode } from "@/lib/types";
@@ -38,30 +38,6 @@ function formatCpf(raw: string): string {
   return out;
 }
 
-type SyncOption = {
-  mode: SyncMode;
-  icon: "IconDeviceMobile" | "IconCloudCheck";
-  title: string;
-  description: string;
-};
-
-const SYNC_OPTIONS: SyncOption[] = [
-  {
-    mode: "device",
-    icon: "IconDeviceMobile",
-    title: "Somente neste aparelho",
-    description:
-      "Os documentos que você já baixou aparecem em qualquer aparelho onde você entrar com o Google. Para buscar informação nova, é preciso estar com este celular em mãos.",
-  },
-  {
-    mode: "cloud",
-    icon: "IconCloudCheck",
-    title: "Sincronizar na nuvem",
-    description:
-      "Seu acesso fica sempre atualizado em qualquer aparelho, e o app avisa assim que o professor lança uma nota.",
-  },
-];
-
 export default function LinkAccountScreen(): JSX.Element {
   const router = useRouter();
   const sigaaLink = useSigaaLink();
@@ -70,18 +46,17 @@ export default function LinkAccountScreen(): JSX.Element {
   const [cpf, setCpf] = useState("");
   const [senha, setSenha] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  // Um vínculo antigo pode ter sido salvo num modo que hoje está indisponível —
+  // nesse caso a edição volta para o único modo que o seletor deixa escolher.
   const [syncMode, setSyncMode] = useState<SyncMode>(
-    sigaaLink.status === "linked" ? sigaaLink.syncMode : "device"
+    sigaaLink.status === "linked" && isSyncModeSelectable(sigaaLink.syncMode) ? sigaaLink.syncMode : "device"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accentSoftForeground, successSoftForeground, warningSoftForeground, mutedColor, dangerSoftForeground] =
-    useThemeColor([
-      "accent-soft-foreground",
-      "success-soft-foreground",
-      "warning-soft-foreground",
-      "muted",
-      "danger-soft-foreground",
-    ]);
+  const [accentSoftForeground, successSoftForeground, dangerSoftForeground] = useThemeColor([
+    "accent-soft-foreground",
+    "success-soft-foreground",
+    "danger-soft-foreground",
+  ]);
   const insets = useSafeAreaInsets();
   // Not a HeroUI semantic token (useThemeColor only knows its fixed list), so this
   // one's read straight off the CSS custom property registered in global.css.
@@ -185,62 +160,7 @@ export default function LinkAccountScreen(): JSX.Element {
           </Pressable>
         </View>
 
-        <Typography.Paragraph weight="medium" className="pt-1">
-          Onde guardar esses dados
-        </Typography.Paragraph>
-
-        {SYNC_OPTIONS.map((option) => {
-          const isSelected = syncMode === option.mode;
-          return (
-            <Pressable
-              key={option.mode}
-              testID={`sync-option-${option.mode}`}
-              onPress={() => setSyncMode(option.mode)}
-              className={`gap-3 rounded-3xl p-4 border-2 ${
-                isSelected ? "bg-accent-soft border-accent" : "bg-surface-secondary border-transparent"
-              }`}
-            >
-              <View className="flex-row items-center gap-2.5">
-                <AppIcon name={option.icon} size={24} color={isSelected ? accentSoftForeground : mutedColor} />
-                <Typography.Paragraph weight="medium" className="flex-1">
-                  {option.title}
-                </Typography.Paragraph>
-                {isSelected ? <AppIcon name="IconCheckCircle" size={20} color={accentSoftForeground} /> : null}
-              </View>
-              <Typography.Paragraph type="body-xs" color="muted">
-                {option.description}
-              </Typography.Paragraph>
-              {option.mode === "device" ? (
-                <View className="gap-1.5">
-                  <View className="flex-row items-center gap-2">
-                    <AppIcon name="IconWarningCircle" size={16} color={warningSoftForeground} />
-                    <Typography.Paragraph type="body-xs" className="text-warning-soft-foreground">
-                      Sem aviso de nota lançada
-                    </Typography.Paragraph>
-                  </View>
-                  <View className="flex-row items-center gap-2">
-                    <AppIcon name="IconWarningCircle" size={16} color={warningSoftForeground} />
-                    <Typography.Paragraph type="body-xs" className="text-warning-soft-foreground">
-                      Sem atualização em segundo plano
-                    </Typography.Paragraph>
-                  </View>
-                </View>
-              ) : (
-                <View className="flex-row flex-wrap gap-2">
-                  <Chip variant="soft" color="accent" size="sm">
-                    Criptografado
-                  </Chip>
-                  <Chip variant="soft" color="success" size="sm">
-                    Avisos de nota
-                  </Chip>
-                  <Chip variant="secondary" size="sm">
-                    Qualquer aparelho
-                  </Chip>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
+        <SyncModeSelector value={syncMode} onChange={setSyncMode} />
       </ScrollView>
 
       <View

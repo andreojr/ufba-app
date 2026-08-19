@@ -32,7 +32,8 @@ jest.mock("heroui-native", () => {
 
   return {
     useToast: () => ({ toast: { show: mockToastShow } }),
-    useThemeColor: (tokens: string[]) => tokens.map(() => "#000000"),
+    useThemeColor: (tokens: string | string[]) =>
+      Array.isArray(tokens) ? tokens.map(() => "#000000") : "#000000",
     Button: Object.assign(
       ({ children, onPress, isDisabled, testID }: any) => (
         <TouchableOpacity onPress={onPress} disabled={isDisabled} testID={testID} accessibilityRole="button">
@@ -103,20 +104,33 @@ describe("LinkAccountScreen", () => {
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
   });
 
-  it("submits with syncMode cloud when the cloud sync card is selected", async () => {
+  it("submits the mode chosen in the selector", async () => {
     link.mockResolvedValue(undefined);
     const { getByTestId, getByPlaceholderText } = await render(<LinkAccountScreen />);
 
     await fillForm(getByPlaceholderText, VALID_CPF, "segredo");
     await act(async () => {
-      fireEvent.press(getByTestId("sync-option-cloud"));
+      fireEvent.press(getByTestId("sync-option-device"));
     });
 
     await act(async () => {
       fireEvent.press(getByTestId("link-submit-button"));
     });
 
-    expect(link).toHaveBeenCalledWith(VALID_CPF_DIGITS, "segredo", "cloud");
+    expect(link).toHaveBeenCalledWith(VALID_CPF_DIGITS, "segredo", "device");
+  });
+
+  it("falls back to device when editing a link saved in a mode the selector no longer offers", async () => {
+    link.mockResolvedValue(undefined);
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "cloud", link, unlink });
+    const { getByTestId, getByPlaceholderText } = await render(<LinkAccountScreen />);
+
+    await fillForm(getByPlaceholderText, VALID_CPF, "segredo");
+    await act(async () => {
+      fireEvent.press(getByTestId("link-submit-button"));
+    });
+
+    expect(link).toHaveBeenCalledWith(VALID_CPF_DIGITS, "segredo", "device");
   });
 
   it("shows 'Credenciais inválidas' when the backend responds 401", async () => {
