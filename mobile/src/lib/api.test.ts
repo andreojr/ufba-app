@@ -273,15 +273,28 @@ describe("trajetória endpoints", () => {
 
   afterEach(() => {
     process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    // Leaked fake timers break every later test in this file (each render
+    // stays pending in the mocked scheduler), which is a hard-to-diagnose
+    // cascade — a bare call at the end of one test only protects the tests
+    // after it if nothing throws first. Unconditional in afterEach instead.
+    jest.useRealTimers();
   });
 
   it("reports the unsynced state without throwing", async () => {
-    global.fetch = jest.fn(async () => ({
+    const fetchMock = jest.fn(async () => ({
       ok: true,
       json: async () => ({ sincronizado: false }),
-    })) as unknown as typeof fetch;
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     await expect(getTrajetoria("token")).resolves.toEqual({ sincronizado: false });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://192.168.1.10:3000/trajetoria", {
+      method: "GET",
+      headers: { Authorization: "Bearer token" },
+      body: undefined,
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("gives the sync the long document timeout, not the default", async () => {
@@ -300,11 +313,17 @@ describe("trajetória endpoints", () => {
     const promessa = postTrajetoriaSync("token", { login: "1", senha: "2" });
     const assertion = expect(promessa).rejects.toThrow();
 
+    expect(fetchMock.mock.calls[0][0]).toBe("http://192.168.1.10:3000/trajetoria/sync");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+      body: JSON.stringify({ login: "1", senha: "2" }),
+    });
+
     jest.advanceTimersByTime(20_000);
     expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
 
     jest.advanceTimersByTime(30_000);
     await assertion;
-    jest.useRealTimers();
   });
 });

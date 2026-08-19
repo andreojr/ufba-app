@@ -1,4 +1,4 @@
-import { parseIsoDate } from "./periodo-letivo";
+import { parseIsoDate, startOfDay } from "./periodo-letivo";
 import type { ComponenteCursado, ComponentePendente, ResumoCargaHoraria } from "./types";
 
 export interface PeriodoTrajetoria {
@@ -139,11 +139,14 @@ export function historicoDesatualizado(
     return false;
   }
   // parseIsoDate, never `new Date(string)`: the latter reads a bare YYYY-MM-DD
-  // as UTC midnight, which lands on the previous day in Brazil. types.ts
-  // documents this trap on PeriodoLetivo, and periodo-letivo.ts exists to avoid
-  // it. The tests here would not catch the difference — both sides of their
-  // comparisons are built the same way — but a real `fetchedAt` carries a real
-  // time of day and would not cancel out.
+  // as UTC midnight, which lands on the previous day in Brazil.
   const fim = parseIsoDate(fimDoPeriodo);
-  return agora > fim;
+  // periodo-letivo.ts documents both term boundaries as inclusive — the last
+  // day still counts as "curso", not "encerrado" — so `agora` must be
+  // day-normalised before the comparison. Comparing raw timestamps would flag
+  // the term stale from midnight on its own last day, hours before it ends by
+  // this project's own definition. `startOfDay` is shared with periodo-letivo
+  // rather than redefined here, so the two files cannot drift on what a day
+  // boundary means.
+  return startOfDay(agora) > fim;
 }

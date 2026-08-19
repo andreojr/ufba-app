@@ -44,7 +44,7 @@ export function parseIsoDate(iso: string): Date {
 }
 
 /** Strips the time of day so two dates can be compared as calendar days. */
-function startOfDay(date: Date): Date {
+export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 

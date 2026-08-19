@@ -48,7 +48,10 @@ describe("percentualConcluido", () => {
   it("divides integralised by required hours, both totals", () => {
     // Optativa and complementary hours are in the denominator: that is exactly
     // how those 360h "count" while no optativa is listed individually.
-    expect(percentualConcluido({ exigida: 3610, integralizada: 2100, pendente: 1510 })).toBe(58);
+    // 586/1000 = 58.6%, chosen so floor/trunc (58) and round (59) disagree —
+    // 3610/2100 would pass under any of the three, so it did not actually pin
+    // which one percentualConcluido uses.
+    expect(percentualConcluido({ exigida: 1000, integralizada: 586, pendente: 414 })).toBe(59);
   });
 
   it("reports zero rather than NaN when nothing is required yet", () => {
@@ -160,5 +163,23 @@ describe("historicoDesatualizado", () => {
     // No cached date, or a portal that reported a term without one: say nothing
     // rather than guess.
     expect(historicoDesatualizado(emCurso, null, new Date("2026-08-19"))).toBe(false);
+  });
+
+  // Both boundaries chosen so a bare `new Date(fimDoPeriodo)` — reading the
+  // ISO string as UTC midnight — would flip the answer on at least one of
+  // them, unlike the cases above, which sit a month from the boundary and
+  // pass identically whichever way `fim` is built. Built with the explicit
+  // Date constructor (year, month, day, hour, minute), never a datetime
+  // string, so the test itself isn't the thing silently depending on the
+  // runner's timezone.
+  it("stays quiet up to the last moment of the term's final day", () => {
+    // 23:00 on 2026-07-15: the term's own last day, per periodo-letivo's
+    // "both boundaries inclusive" rule — still "curso", not yet stale.
+    expect(historicoDesatualizado(emCurso, fim, new Date(2026, 6, 15, 23, 0))).toBe(false);
+  });
+
+  it("flags the term stale from the first moment after it ends", () => {
+    // 00:30 on 2026-07-16: one calendar day past `fim`.
+    expect(historicoDesatualizado(emCurso, fim, new Date(2026, 6, 16, 0, 30))).toBe(true);
   });
 });
