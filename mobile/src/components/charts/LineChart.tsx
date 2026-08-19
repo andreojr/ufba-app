@@ -29,11 +29,12 @@ const ESPACO_POR_PONTO = 56;
 // matters — against the chart's own top edge.
 const MARGEM_X = 8;
 const MARGEM_Y = 28;
-// Tight on purpose: the CR series already moves in small steps, and a
-// generous domain padding buries that movement in dead space above and below
-// the line instead of letting it fill the chart — the opposite of the
-// contrast auto-scaling this domain is meant to expose.
-const MARGEM_DOMINIO = 0.06;
+// As tight as the domain math allows without pinning the line to the very
+// edges: the CR series already moves in small steps, and any padding beyond
+// this buries that movement in dead space instead of letting it fill the
+// chart — the opposite of the contrast auto-scaling this domain is meant to
+// expose.
+const MARGEM_DOMINIO = 0.02;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the point, not another line of body text competing with it.
 const COR_VALOR = "rgba(124, 58, 237, 0.55)";

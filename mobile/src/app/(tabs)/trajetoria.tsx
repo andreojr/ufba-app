@@ -389,7 +389,7 @@ function ReadyTrajetoria({
             <>
               <View className="gap-0.5">
                 <Typography.Paragraph type="body-xs" color="muted">
-                  Coeficiente
+                  Coeficiente de Rendimento
                 </Typography.Paragraph>
                 <Typography.Heading type="h5">
                   {formatarCoeficiente(historico.indices.cr)}

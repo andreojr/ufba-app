@@ -37,17 +37,17 @@ describe("BarChart", () => {
     expect(screen.getByTestId("bar-chart-scroll")).toBeTruthy();
   });
 
-  it("widens the container by its own horizontal padding, so the last bar isn't shorted off the scrollable area", async () => {
+  it("sizes the container to exactly its columns' width — no x margin to eat into it", async () => {
     await render(
       <BarChart barras={Array.from({ length: 12 }, (_, i) => ({ rotulo: `202${i}`, valor: 60 }))} />,
     );
 
-    // 12 bars × 56px of point spacing = 672px of columns. The container has
-    // to add both 8px margins on top of that — sizing it to exactly 672 lets
-    // its own horizontal padding eat into the columns' space instead, which
-    // pushed the last bar past the end of the scrollable area entirely.
+    // 12 bars × 56px of point spacing = 672px of columns, with nothing else
+    // added: unlike the line chart's points, a bar reads as its own shape
+    // right up to the edge, so no x margin should be shorting these columns
+    // (that's exactly the overflow bug this width once had).
     const container = screen.getByTestId("bar-chart");
-    expect(container.props.style.width).toBe(672 + 16);
+    expect(container.props.style.width).toBe(672);
   });
 
   it("renders nothing for an empty series rather than crashing on the scale math", async () => {

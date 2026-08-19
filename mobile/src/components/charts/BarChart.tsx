@@ -16,11 +16,10 @@ const ALTURA_PADRAO = 120;
 const LARGURA_MINIMA = 280;
 const ESPACO_POR_BARRA = 56;
 const LARGURA_MINIMA_BARRA = 4;
-// Light on x: a little breathing room so the first and last bar don't sit
-// flush against the chart's edge. Generous on y: room above the tallest bar
-// for its value label, rotated vertical — margem 0 would clip that label
-// against the chart's own top edge.
-const MARGEM_X = 8;
+// No x margin: unlike the line chart's points, a bar already reads as its
+// own distinct shape right up to the chart's edge — nothing gets crowded.
+// Generous on y: room above the tallest bar for its value label, rotated
+// vertical — margem 0 would clip that label against the chart's own top edge.
 const MARGEM_Y = 28;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the bar, not another line of body text competing with it.
@@ -45,16 +44,7 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="bar-chart-scroll">
-      {/* The outer box's own width has to be `largura` PLUS both margins: its
-          horizontal padding eats into that width for its children, and the
-          bar/rótulo rows below have no width of their own — they stretch to
-          fill whatever's left. Setting this to `largura` (forgetting the
-          padding is additive) shorted every row by 2×MARGEM_X, so the last
-          column overflowed off the end of the scrollable area entirely. */}
-      <View
-        testID="bar-chart"
-        style={{ width: largura + MARGEM_X * 2, paddingHorizontal: MARGEM_X }}
-      >
+      <View testID="bar-chart" style={{ width: largura }}>
         <View className="flex-row items-end" style={{ height: altura }}>
           {barras.map((barra, indice) => (
             <View key={indice} className="items-center justify-end" style={{ width: larguraColuna }}>
