@@ -20,7 +20,7 @@ const LARGURA_MINIMA_BARRA = 4;
 // label — same fix the line chart needed: sharing this space with the bars
 // themselves (a fixed MARGEM_Y taken out of a short chart) left too little
 // height for the bars to show real contrast between close values.
-const ESPACO_LABEL = 34;
+const ESPACO_LABEL = 44;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the bar, not another line of body text competing with it.
 const COR_VALOR = "rgba(124, 58, 237, 0.55)";
