@@ -2,10 +2,18 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../db/database.module';
-import { AUDIT_LOGGER, SIGAA_LINK_REPOSITORY } from '../db/tokens';
+import {
+  AUDIT_LOGGER,
+  HISTORICO_REPOSITORY,
+  SIGAA_LINK_REPOSITORY,
+} from '../db/tokens';
 import { AuditLogger } from './credential-vault';
 import { CredentialVault, parseEncryptionKey } from './credential-vault';
+import { HistoricoRepository } from './historico.repository';
+import { HistoricoService } from './historico.service';
 import { createSigaaHttpClient } from './http-client';
+import { extrairItensHistorico } from './parsers/historico-texto';
+import { parseHistorico } from './parsers/historico';
 import { SigaaSession } from './session';
 import {
   SigaaEngineService,
@@ -13,11 +21,12 @@ import {
 } from './sigaa-engine.service';
 import { SigaaLinkRepository, SigaaLinkService } from './sigaa-link.service';
 import { SigaaController } from './sigaa.controller';
+import { TrajetoriaController } from './trajetoria.controller';
 import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
 
 @Module({
   imports: [ConfigModule, AuthModule, DatabaseModule],
-  controllers: [SigaaController],
+  controllers: [SigaaController, TrajetoriaController],
   providers: [
     {
       provide: SIGAA_SESSION_FACTORY,
@@ -49,6 +58,20 @@ import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
         vault: CredentialVault,
         repository: SigaaLinkRepository,
       ) => new SigaaLinkService(sessionFactory, vault, repository),
+    },
+    {
+      provide: HistoricoService,
+      inject: [SigaaEngineService, HISTORICO_REPOSITORY],
+      useFactory: (
+        engine: SigaaEngineService,
+        repository: HistoricoRepository,
+      ) =>
+        new HistoricoService(
+          engine,
+          extrairItensHistorico,
+          parseHistorico,
+          repository,
+        ),
     },
   ],
 })
