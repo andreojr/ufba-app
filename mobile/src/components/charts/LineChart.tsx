@@ -30,7 +30,7 @@ const ESPACO_POR_PONTO = 56;
 // chart this short (~70px), every pixel spent here is a pixel the line
 // itself doesn't get to move in — the real reason the line was reading flat.
 const MARGEM_X = 20;
-const MARGEM_Y = 14;
+const MARGEM_Y = 18;
 // As tight as the domain math allows without pinning the line to the very
 // edges: the CR series already moves in small steps, and any padding beyond
 // this buries that movement in dead space instead of letting it fill the
@@ -97,7 +97,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
               style={{
                 position: "absolute",
                 left: coordenada.x - 12,
-                top: coordenada.y - 15,
+                top: coordenada.y - 21,
                 fontSize: 10,
                 fontWeight: "600",
                 color: COR_VALOR,
