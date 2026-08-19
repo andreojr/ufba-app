@@ -86,6 +86,16 @@ export function poolPlanejavel(pendentes: ComponentePendente[]): ComponentePende
 }
 
 /**
+ * How many obligatory components are still missing — unlike `poolPlanejavel`,
+ * this counts a component the student is already taking too: the planner
+ * shouldn't offer to move something already placed, but "how many left" isn't
+ * done just because it's enrolled and waiting on a grade.
+ */
+export function contarFaltantes(pendentes: ComponentePendente[]): number {
+  return pendentes.filter((p) => p.codigo !== CODIGO_ENADE).length;
+}
+
+/**
  * The terms the planner offers as drop zones: the ones after the current term,
  * capped at `limite` and never past the conclusion deadline the transcript
  * states. SIGAA terms run `.1` then `.2` within a year.

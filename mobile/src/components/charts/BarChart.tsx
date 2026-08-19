@@ -20,7 +20,7 @@ const LARGURA_MINIMA_BARRA = 4;
 // flush against the chart's edge. Generous on y: room above the tallest bar
 // for its value label, rotated vertical — margem 0 would clip that label
 // against the chart's own top edge.
-const MARGEM_X = 16;
+const MARGEM_X = 8;
 const MARGEM_Y = 28;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the bar, not another line of body text competing with it.

@@ -43,11 +43,11 @@ describe("BarChart", () => {
     );
 
     // 12 bars × 56px of point spacing = 672px of columns. The container has
-    // to add both 16px margins on top of that — sizing it to exactly 672 lets
+    // to add both 8px margins on top of that — sizing it to exactly 672 lets
     // its own horizontal padding eat into the columns' space instead, which
     // pushed the last bar past the end of the scrollable area entirely.
     const container = screen.getByTestId("bar-chart");
-    expect(container.props.style.width).toBe(672 + 32);
+    expect(container.props.style.width).toBe(672 + 16);
   });
 
   it("renders nothing for an empty series rather than crashing on the scale math", async () => {

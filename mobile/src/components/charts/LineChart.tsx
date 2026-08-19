@@ -27,11 +27,13 @@ const ESPACO_POR_PONTO = 56;
 // diagonally just above each point (see COR_VALOR below), and margem 0 would
 // clip that label — right at the highest point, exactly where its value most
 // matters — against the chart's own top edge.
-const MARGEM_X = 16;
+const MARGEM_X = 8;
 const MARGEM_Y = 28;
-// A CR series moves in hundredths — padding by a fraction of a near-zero
-// range would barely widen it, so the line would still look flat.
-const MARGEM_DOMINIO = 0.2;
+// Tight on purpose: the CR series already moves in small steps, and a
+// generous domain padding buries that movement in dead space above and below
+// the line instead of letting it fill the chart — the opposite of the
+// contrast auto-scaling this domain is meant to expose.
+const MARGEM_DOMINIO = 0.06;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the point, not another line of body text competing with it.
 const COR_VALOR = "rgba(124, 58, 237, 0.55)";

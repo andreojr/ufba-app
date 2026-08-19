@@ -2,6 +2,7 @@ import {
   agruparPorAno,
   agruparPorSemestre,
   calcularCrAcumulado,
+  contarFaltantes,
   formatarCoeficiente,
   formatarImpacto,
   formatarNota,
@@ -119,6 +120,25 @@ describe("poolPlanejavel", () => {
     // ENADE is not a curricular component, and something already enrolled is
     // not something to plan.
     expect(poolPlanejavel(pendentes).map((p) => p.codigo)).toEqual(["MATA60"]);
+  });
+});
+
+describe("contarFaltantes", () => {
+  const pendentes: ComponentePendente[] = [
+    { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 60, matriculado: false },
+    { codigo: "MATA59", nome: "REDES", cargaHoraria: 60, matriculado: true },
+    { codigo: "ENADE", nome: "ENADE", cargaHoraria: 0, matriculado: false },
+  ];
+
+  it("counts a component the student is already taking as still missing", () => {
+    // Unlike poolPlanejavel — the planner shouldn't offer to move something
+    // already placed — this is "how many left", and enrolled-but-ungraded
+    // is still not done.
+    expect(contarFaltantes(pendentes)).toBe(2);
+  });
+
+  it("excludes ENADE, which isn't a curricular component", () => {
+    expect(contarFaltantes([pendentes[2]])).toBe(0);
   });
 });
 

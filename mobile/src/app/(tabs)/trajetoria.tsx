@@ -19,6 +19,7 @@ import {
   agruparPorAno,
   agruparPorSemestre,
   calcularCrAcumulado,
+  contarFaltantes,
   formatarCoeficiente,
   formatarImpacto,
   formatarNota,
@@ -336,6 +337,10 @@ function ReadyTrajetoria({
   const periodos = agruparPorSemestre(historico.cursados);
   const anos = agruparPorAno(periodos);
   const pendentes = poolPlanejavel(historico.pendentesObrigatorios);
+  // Unlike `pendentes` above (what the planner may still place), this also
+  // counts a component the student is already taking: enrolled-but-ungraded
+  // is still not done.
+  const faltantes = contarFaltantes(historico.pendentesObrigatorios);
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
 
   const semestresOrdenados = periodos.map((periodo) => periodo.semestre);
@@ -374,44 +379,54 @@ function ReadyTrajetoria({
         </Tabs.List>
       </Tabs>
 
-      <View className="rounded-3xl bg-surface-secondary p-4 gap-3.5">
-        {insight === "cr" ? (
-          <View className="gap-2">
-            <View className="gap-0.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                Coeficiente
-              </Typography.Paragraph>
-              <Typography.Heading type="h5">
-                {formatarCoeficiente(historico.indices.cr)}
-              </Typography.Heading>
-            </View>
-            <LineChart pontos={pontosCr} altura={70} />
-          </View>
-        ) : (
-          <View className="gap-2">
-            <View className="gap-0.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                Carga horária
-              </Typography.Paragraph>
-              {/* Four-digit hour counts are the normal case, and a pt-BR reader
-                  expects the thousands dot the design printed: "2.100/3.610 h". */}
-              <Typography.Heading type="h5">
-                {total.integralizada.toLocaleString("pt-BR")}/
-                {total.exigida.toLocaleString("pt-BR")} h
-              </Typography.Heading>
-            </View>
-            <BarChart barras={barrasCargaHoraria} altura={70} />
-          </View>
-        )}
-        <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
-          <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
+      {/* The insight (CR or carga horária) and the course-wide progress render
+          as one visually connected group: a hairline gap and matching soft
+          inner corners join the two cards — same treatment ajustes.tsx gives
+          the profile + academic info cards. */}
+      <View className="gap-0.5">
+        <View className="rounded-t-3xl rounded-b-md bg-surface-secondary p-4 gap-2">
+          {insight === "cr" ? (
+            <>
+              <View className="gap-0.5">
+                <Typography.Paragraph type="body-xs" color="muted">
+                  Coeficiente
+                </Typography.Paragraph>
+                <Typography.Heading type="h5">
+                  {formatarCoeficiente(historico.indices.cr)}
+                </Typography.Heading>
+              </View>
+              <LineChart pontos={pontosCr} altura={70} />
+            </>
+          ) : (
+            <>
+              <View className="gap-0.5">
+                <Typography.Paragraph type="body-xs" color="muted">
+                  Carga horária
+                </Typography.Paragraph>
+                {/* Four-digit hour counts are the normal case, and a pt-BR reader
+                    expects the thousands dot the design printed: "2.100/3.610 h". */}
+                <Typography.Heading type="h5">
+                  {total.integralizada.toLocaleString("pt-BR")}/
+                  {total.exigida.toLocaleString("pt-BR")} h
+                </Typography.Heading>
+              </View>
+              <BarChart barras={barrasCargaHoraria} altura={70} />
+            </>
+          )}
         </View>
-        <View className="flex-row items-center justify-between">
-          <Typography.Paragraph type="body-xs" color="muted">
+
+        <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-2.5">
+          {/* The percentage is the one number on this card meant to be read at
+              a glance — a heading, not body text, is what makes it the thing
+              the eye lands on first. */}
+          <Typography.Heading type="h4" className="text-accent">
             {percentual}% do curso concluído
-          </Typography.Paragraph>
+          </Typography.Heading>
+          <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+            <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
+          </View>
           <Typography.Paragraph type="body-xs" color="muted">
-            {pendentes.length === 1 ? "falta 1 matéria" : `faltam ${pendentes.length} matérias`}
+            {faltantes === 1 ? "falta 1 matéria" : `faltam ${faltantes} matérias`}
           </Typography.Paragraph>
         </View>
       </View>
