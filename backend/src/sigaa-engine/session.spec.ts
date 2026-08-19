@@ -60,12 +60,26 @@ function redirect(location: string, setCookie?: string): SigaaHttpResponse {
   };
 }
 
+/**
+ * Canned responses for a full successful login sequence, matching the 4
+ * requests `SigaaSession.login` makes: root (seeds the session), the login
+ * form page, the credentials POST (redirects to paginaInicial.do), and
+ * actually following that redirect (SIGAA tracks server-side navigation
+ * state, so a client that never lands on paginaInicial.do gets rejected as
+ * an "invalid address" on the next portal page it requests).
+ */
+function loginResponses(cookie = 'JSESSIONID=abc123; Path=/; Secure') {
+  return [
+    ok(''), // GET /
+    ok('', cookie), // GET /sigaa/verTelaLogin.do
+    redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'), // POST logar.do
+    ok(''), // GET /sigaa/paginaInicial.do (following the redirect)
+  ];
+}
+
 describe('SigaaSession login', () => {
   it('succeeds on 302 redirect to paginaInicial.do', async () => {
-    const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
-    ]);
+    const http = new FakeHttpClient(loginResponses());
     const session = new SigaaSession(http);
 
     await expect(
@@ -74,15 +88,12 @@ describe('SigaaSession login', () => {
   });
 
   it('sends the exact form fields documented in the spike', async () => {
-    const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
-    ]);
+    const http = new FakeHttpClient(loginResponses());
     const session = new SigaaSession(http);
 
     await session.login({ login: 'joaosilva', senha: 'segredo' });
 
-    expect(http.requests[1]).toMatchObject({
+    expect(http.requests[2]).toMatchObject({
       method: 'POST',
       path: '/sigaa/logar.do?dispatch=logOn',
       body: {
@@ -98,8 +109,22 @@ describe('SigaaSession login', () => {
     });
   });
 
+  it('follows the redirect to paginaInicial.do after a successful login', async () => {
+    const http = new FakeHttpClient(loginResponses());
+    const session = new SigaaSession(http);
+
+    await session.login({ login: 'user', senha: 'pass' });
+
+    expect(http.requests[3]).toMatchObject({
+      method: 'GET',
+      path: '/sigaa/paginaInicial.do',
+      cookie: 'JSESSIONID=abc123',
+    });
+  });
+
   it('throws SigaaInvalidCredentialsError on 200 + loginForm', async () => {
     const http = new FakeHttpClient([
+      ok(''),
       ok('', 'JSESSIONID=abc123; Path=/; Secure'),
       ok(LOGIN_FORM_HTML),
     ]);
@@ -112,6 +137,7 @@ describe('SigaaSession login', () => {
 
   it('throws a generic error on an unexpected response shape', async () => {
     const http = new FakeHttpClient([
+      ok(''),
       ok('', 'JSESSIONID=abc123; Path=/; Secure'),
       { status: 500, headers: {}, body: '' },
     ]);
@@ -125,11 +151,7 @@ describe('SigaaSession login', () => {
 
 describe('SigaaSession authenticated navigation', () => {
   async function loggedInSession(extraResponses: SigaaHttpResponse[] = []) {
-    const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
-      ...extraResponses,
-    ]);
+    const http = new FakeHttpClient([...loginResponses(), ...extraResponses]);
     const session = new SigaaSession(http);
     await session.login({ login: 'user', senha: 'pass' });
     return { session, http };
@@ -140,7 +162,7 @@ describe('SigaaSession authenticated navigation', () => {
 
     await session.get('/sigaa/portais/discente/discente.jsf');
 
-    expect(http.requests[2]).toMatchObject({
+    expect(http.requests[4]).toMatchObject({
       method: 'GET',
       path: '/sigaa/portais/discente/discente.jsf',
       cookie: 'JSESSIONID=abc123',
@@ -158,18 +180,14 @@ describe('SigaaSession authenticated navigation', () => {
       frontEndIdTurma: 'ABC',
     });
 
-    expect(http.requests[3].body).toMatchObject({
+    expect(http.requests[5].body).toMatchObject({
       frontEndIdTurma: 'ABC',
       'javax.faces.ViewState': 'j_id1',
     });
   });
 
   it('throws SigaaCredentialsRequiredError when the session expires and no credentials are stored', async () => {
-    const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
-      ok(LOGIN_FORM_HTML),
-    ]);
+    const http = new FakeHttpClient([...loginResponses(), ok(LOGIN_FORM_HTML)]);
     const session = new SigaaSession(http, { rememberCredentials: false });
     await session.login({ login: 'user', senha: 'pass' });
 
@@ -180,11 +198,9 @@ describe('SigaaSession authenticated navigation', () => {
 
   it('automatically re-logs in once and retries when credentials are remembered', async () => {
     const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
+      ...loginResponses(),
       ok(LOGIN_FORM_HTML), // session expired mid-navigation
-      ok('', 'JSESSIONID=newsession456; Path=/; Secure'), // re-login GET
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'), // re-login POST succeeds
+      ...loginResponses('JSESSIONID=newsession456; Path=/; Secure'), // re-login
       ok(PORTAL_HTML), // retried request succeeds
     ]);
     const session = new SigaaSession(http, { rememberCredentials: true });
@@ -193,18 +209,16 @@ describe('SigaaSession authenticated navigation', () => {
     const result = await session.get('/sigaa/portais/discente/discente.jsf');
 
     expect(result).toBe(PORTAL_HTML);
-    expect(http.requests[5]).toMatchObject({
+    expect(http.requests[9]).toMatchObject({
       cookie: 'JSESSIONID=newsession456',
     });
   });
 
   it('throws SigaaSessionExpiredError if the retried request still shows the login form', async () => {
     const http = new FakeHttpClient([
-      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
+      ...loginResponses(),
       ok(LOGIN_FORM_HTML),
-      ok('', 'JSESSIONID=newsession456; Path=/; Secure'),
-      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
+      ...loginResponses('JSESSIONID=newsession456; Path=/; Secure'),
       ok(LOGIN_FORM_HTML),
     ]);
     const session = new SigaaSession(http, { rememberCredentials: true });

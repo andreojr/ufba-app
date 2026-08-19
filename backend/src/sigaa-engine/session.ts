@@ -81,9 +81,17 @@ export class SigaaSession {
   }
 
   async login(credentials: SigaaCredentials): Promise<void> {
+    // The session must originate from the site root (which 302s to
+    // /sigaa/public/home.jsf and seeds the first JSESSIONID) — jumping
+    // straight to an internal .do endpoint from a cold client trips SIGAA's
+    // "invalid address, use the links offered by the system" guard.
+    const root = await this.http.request({ method: 'GET', path: '/' });
+    this.captureCookie(root);
+
     const initial = await this.http.request({
       method: 'GET',
       path: '/sigaa/verTelaLogin.do',
+      cookie: this.jsessionId,
     });
     this.captureCookie(initial);
 
@@ -108,6 +116,18 @@ export class SigaaSession {
       response.status === 302 &&
       (response.headers.location ?? '').includes('paginaInicial.do')
     ) {
+      // Actually follow the redirect (fetch is configured with redirect:
+      // 'manual', so this doesn't happen automatically). SIGAA's JSF layer
+      // tracks server-side navigation state; jumping straight to a portal
+      // subpage without ever landing on paginaInicial.do first trips its
+      // "invalid address, use the links offered by the system" guard.
+      const landing = await this.http.request({
+        method: 'GET',
+        path: '/sigaa/paginaInicial.do',
+        cookie: this.jsessionId,
+      });
+      this.captureCookie(landing);
+
       if (this.rememberCredentials) {
         this.credentials = credentials;
       }

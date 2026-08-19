@@ -115,3 +115,67 @@ describe('SigaaLinkService.link', () => {
     expect(repository.delete).toHaveBeenCalledWith('user-1');
   });
 });
+
+describe('SigaaLinkService.getLinkedCredentials', () => {
+  it('returns linked: false when no record exists for the user', async () => {
+    const repository = fakeRepository();
+    repository.findByUserId.mockResolvedValue(null);
+    const service = new SigaaLinkService(
+      () => fakeSession() as unknown as SigaaSession,
+      fakeVault() as any,
+      repository,
+    );
+
+    await expect(service.getLinkedCredentials('user-1')).resolves.toEqual({
+      linked: false,
+    });
+  });
+
+  it('decrypts and returns the stored credential when a record exists', async () => {
+    const repository = fakeRepository();
+    repository.findByUserId.mockResolvedValue({
+      userId: 'user-1',
+      sigaaLogin: 'joao',
+      encryptedSenha: { iv: 'iv', authTag: 'tag', ciphertext: 'cipher' },
+      linkedAt: new Date('2026-01-01'),
+    });
+    const vault = fakeVault();
+    vault.decrypt.mockResolvedValue('segredo');
+    const service = new SigaaLinkService(
+      () => fakeSession() as unknown as SigaaSession,
+      vault as any,
+      repository,
+    );
+
+    await expect(service.getLinkedCredentials('user-1')).resolves.toEqual({
+      linked: true,
+      login: 'joao',
+      senha: 'segredo',
+    });
+    expect(vault.decrypt).toHaveBeenCalledWith(
+      { iv: 'iv', authTag: 'tag', ciphertext: 'cipher' },
+      { userId: 'user-1', reason: 'mobile-restore' },
+    );
+  });
+
+  it('propagates a decryption failure without returning partial data', async () => {
+    const repository = fakeRepository();
+    repository.findByUserId.mockResolvedValue({
+      userId: 'user-1',
+      sigaaLogin: 'joao',
+      encryptedSenha: { iv: 'iv', authTag: 'tag', ciphertext: 'cipher' },
+      linkedAt: new Date('2026-01-01'),
+    });
+    const vault = fakeVault();
+    vault.decrypt.mockRejectedValue(new Error('bad key'));
+    const service = new SigaaLinkService(
+      () => fakeSession() as unknown as SigaaSession,
+      vault as any,
+      repository,
+    );
+
+    await expect(service.getLinkedCredentials('user-1')).rejects.toThrow(
+      'bad key',
+    );
+  });
+});

@@ -2,7 +2,10 @@ import { NotImplementedException } from '@nestjs/common';
 import { SigaaController } from './sigaa.controller';
 
 function fakeLinkService() {
-  return { link: jest.fn().mockResolvedValue(undefined) };
+  return {
+    link: jest.fn().mockResolvedValue(undefined),
+    getLinkedCredentials: jest.fn().mockResolvedValue({ linked: false }),
+  };
 }
 
 function fakeEngineService() {
@@ -49,7 +52,7 @@ describe('SigaaController', () => {
     );
   });
 
-  it('GET schedule delegates to SigaaEngineService and returns its result', async () => {
+  it('POST schedule delegates to SigaaEngineService and returns its result', async () => {
     const engineService = fakeEngineService();
     const controller = new SigaaController(
       fakeLinkService() as any,
@@ -75,5 +78,37 @@ describe('SigaaController', () => {
     );
 
     expect(() => controller.grades()).toThrow(NotImplementedException);
+  });
+
+  it('GET sigaa/link returns linked: false when the service reports no link', async () => {
+    const linkService = fakeLinkService();
+    const controller = new SigaaController(
+      linkService as any,
+      fakeEngineService() as any,
+    );
+
+    await expect(controller.getLink(user)).resolves.toEqual({
+      linked: false,
+    });
+    expect(linkService.getLinkedCredentials).toHaveBeenCalledWith('user-1');
+  });
+
+  it('GET sigaa/link returns the restored credential when the service finds one', async () => {
+    const linkService = fakeLinkService();
+    linkService.getLinkedCredentials.mockResolvedValue({
+      linked: true,
+      login: 'joao',
+      senha: 'segredo',
+    });
+    const controller = new SigaaController(
+      linkService as any,
+      fakeEngineService() as any,
+    );
+
+    await expect(controller.getLink(user)).resolves.toEqual({
+      linked: true,
+      login: 'joao',
+      senha: 'segredo',
+    });
   });
 });

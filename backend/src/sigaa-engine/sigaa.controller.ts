@@ -35,10 +35,19 @@ export class SigaaController {
     return { linked: true };
   }
 
+  @Get('sigaa/link')
+  async getLink(
+    @CurrentUser() user: RequestUser,
+  ): Promise<
+    { linked: false } | { linked: true; login: string; senha: string }
+  > {
+    return this.linkService.getLinkedCredentials(user.userId);
+  }
+
   // Credentials travel per-request in the body (never persisted by default —
-  // see architecture notes); this is a deliberate deviation from strict REST
-  // GET-has-no-body convention, not an architecture change.
-  @Get('schedule')
+  // see architecture notes). POST (not GET) because a spec-compliant fetch
+  // client cannot send a body on a GET request.
+  @Post('schedule')
   async schedule(@Body() dto: SigaaCredentialsDto): Promise<Turma[]> {
     return this.engineService.fetchSchedule({
       login: dto.login,

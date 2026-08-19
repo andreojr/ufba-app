@@ -10,7 +10,9 @@ describe('parseSigaaScheduleCode', () => {
     expect(result).toEqual({
       days: ['Segunda'],
       shift: 'Noite',
-      timeRanges: ['20h20 - 22h10'],
+      timeRanges: [
+        { startMinutes: 1220, endMinutes: 1330, label: '20h20 - 22h10' },
+      ],
       label: 'Segunda - Noite (20h20 - 22h10)',
       invalidSlots: [],
     });
@@ -22,7 +24,9 @@ describe('parseSigaaScheduleCode', () => {
     expect(result).toEqual({
       days: ['Terça', 'Quinta'],
       shift: 'Noite',
-      timeRanges: ['18h30 - 20h20'],
+      timeRanges: [
+        { startMinutes: 1110, endMinutes: 1220, label: '18h30 - 20h20' },
+      ],
       label: 'Terça e Quinta - Noite (18h30 - 20h20)',
       invalidSlots: [],
     });
@@ -32,16 +36,18 @@ describe('parseSigaaScheduleCode', () => {
     // same slots as 2N34 but written out of order in the source code
     const result = parseSigaaScheduleCode('2N43');
 
-    expect(result.timeRanges).toEqual(['20h20 - 22h10']);
+    expect(result.timeRanges).toEqual([
+      { startMinutes: 1220, endMinutes: 1330, label: '20h20 - 22h10' },
+    ]);
   });
 
   it('produces separate ranges for non-consecutive slots', () => {
     const result = parseSigaaScheduleCode('2M136');
 
     expect(result.timeRanges).toEqual([
-      '7h00 - 7h55',
-      '8h50 - 9h45',
-      '11h35 - 12h30',
+      { startMinutes: 420, endMinutes: 475, label: '7h00 - 7h55' },
+      { startMinutes: 530, endMinutes: 585, label: '8h50 - 9h45' },
+      { startMinutes: 695, endMinutes: 750, label: '11h35 - 12h30' },
     ]);
   });
 
@@ -50,7 +56,9 @@ describe('parseSigaaScheduleCode', () => {
     const result = parseSigaaScheduleCode('2N45');
 
     expect(result.invalidSlots).toEqual(['5']);
-    expect(result.timeRanges).toEqual(['21h15 - 22h10']);
+    expect(result.timeRanges).toEqual([
+      { startMinutes: 1275, endMinutes: 1330, label: '21h15 - 22h10' },
+    ]);
   });
 
   it('throws for a code that does not match the day/shift/slot format', () => {

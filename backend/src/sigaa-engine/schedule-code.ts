@@ -15,30 +15,37 @@ const SHIFT_NAMES: Record<string, string> = {
   N: 'Noite',
 };
 
-const SLOT_TIMES: Record<string, Record<string, [string, string]>> = {
+/** [startMinutes, endMinutes] since midnight, per shift + slot index. */
+const SLOT_MINUTES: Record<string, Record<string, [number, number]>> = {
   M: {
-    '1': ['7h00', '7h55'],
-    '2': ['7h55', '8h50'],
-    '3': ['8h50', '9h45'],
-    '4': ['9h45', '10h40'],
-    '5': ['10h40', '11h35'],
-    '6': ['11h35', '12h30'],
+    '1': [420, 475],
+    '2': [475, 530],
+    '3': [530, 585],
+    '4': [585, 640],
+    '5': [640, 695],
+    '6': [695, 750],
   },
   T: {
-    '1': ['13h00', '13h55'],
-    '2': ['13h55', '14h50'],
-    '3': ['14h50', '15h45'],
-    '4': ['15h45', '16h40'],
-    '5': ['16h40', '17h35'],
-    '6': ['17h35', '18h30'],
+    '1': [780, 835],
+    '2': [835, 890],
+    '3': [890, 945],
+    '4': [945, 1000],
+    '5': [1000, 1055],
+    '6': [1055, 1110],
   },
   N: {
-    '1': ['18h30', '19h25'],
-    '2': ['19h25', '20h20'],
-    '3': ['20h20', '21h15'],
-    '4': ['21h15', '22h10'],
+    '1': [1110, 1165],
+    '2': [1165, 1220],
+    '3': [1220, 1275],
+    '4': [1275, 1330],
   },
 };
+
+function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h${String(mins).padStart(2, '0')}`;
+}
 
 export class InvalidScheduleCodeError extends Error {
   constructor(code: string) {
@@ -47,10 +54,16 @@ export class InvalidScheduleCodeError extends Error {
   }
 }
 
+export interface ScheduleTimeRange {
+  startMinutes: number;
+  endMinutes: number;
+  label: string;
+}
+
 export interface ParsedScheduleCode {
   days: string[];
   shift: string;
-  timeRanges: string[];
+  timeRanges: ScheduleTimeRange[];
   label: string;
   invalidSlots: string[];
 }
@@ -66,7 +79,7 @@ export function parseSigaaScheduleCode(code: string): ParsedScheduleCode {
   const days = dayDigits.split('').map((digit) => DAY_NAMES[digit]);
   const shift = SHIFT_NAMES[shiftLetter];
 
-  const slotTable = SLOT_TIMES[shiftLetter];
+  const slotTable = SLOT_MINUTES[shiftLetter];
   const invalidSlots: string[] = [];
   const validSlots: number[] = [];
 
@@ -80,12 +93,19 @@ export function parseSigaaScheduleCode(code: string): ParsedScheduleCode {
 
   validSlots.sort((a, b) => a - b);
 
-  const timeRanges = groupConsecutiveSlots(validSlots).map(
-    (group) =>
-      `${slotTable[String(group[0])][0]} - ${slotTable[String(group[group.length - 1])][1]}`,
-  );
+  const timeRanges = groupConsecutiveSlots(validSlots).map((group) => {
+    const startMinutes = slotTable[String(group[0])][0];
+    const endMinutes = slotTable[String(group[group.length - 1])][1];
+    return {
+      startMinutes,
+      endMinutes,
+      label: `${formatMinutes(startMinutes)} - ${formatMinutes(endMinutes)}`,
+    };
+  });
 
-  const label = `${days.join(' e ')} - ${shift} (${timeRanges.join(', ')})`;
+  const label = `${days.join(' e ')} - ${shift} (${timeRanges
+    .map((range) => range.label)
+    .join(', ')})`;
 
   return { days, shift, timeRanges, label, invalidSlots };
 }

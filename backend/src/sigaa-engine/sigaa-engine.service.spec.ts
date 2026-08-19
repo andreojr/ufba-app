@@ -44,7 +44,8 @@ describe('SigaaEngineService.fetchSchedule', () => {
       '/sigaa/portais/discente/discente.jsf',
     );
     expect(turmas).toHaveLength(1);
-    expect(turmas[0].componente).toBe('ENG999 - LABORATÓRIO INTEGRADO III-A');
+    expect(turmas[0].codigo).toBe('ENG999');
+    expect(turmas[0].nome).toBe('LABORATÓRIO INTEGRADO III-A');
   });
 
   it('propagates SigaaInvalidCredentialsError without attempting to fetch the portal', async () => {

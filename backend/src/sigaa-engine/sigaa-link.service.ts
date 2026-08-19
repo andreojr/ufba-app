@@ -51,4 +51,27 @@ export class SigaaLinkService {
       linkedAt: new Date(),
     });
   }
+
+  /**
+   * Restores a previously cloud-saved credential (e.g. after a reinstall or
+   * on a new device). Decryption goes through the same audit-logged vault
+   * path as every other decrypt.
+   */
+  async getLinkedCredentials(
+    userId: string,
+  ): Promise<
+    { linked: false } | { linked: true; login: string; senha: string }
+  > {
+    const record = await this.repository.findByUserId(userId);
+    if (!record) {
+      return { linked: false };
+    }
+
+    const senha = await this.vault.decrypt(record.encryptedSenha, {
+      userId,
+      reason: 'mobile-restore',
+    });
+
+    return { linked: true, login: record.sigaaLogin, senha };
+  }
 }
