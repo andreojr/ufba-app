@@ -645,10 +645,27 @@ describe('parseHistorico', () => {
     expect(historico.prazoConclusaoMaximo).toBe('2033.1');
   });
 
-  it('reads the issue date and the verification code from the footer', () => {
+  it('reads the issue date off the header line', () => {
     const historico = parseHistorico(itens);
 
     expect(historico.emitidoEm).toBe('2026-08-19');
+  });
+
+  it('throws when a header label it depends on is absent', () => {
+    // Layout drift must fail loudly. Without this the parser returns an object
+    // that looks complete and is wrong, which is the one outcome the spec
+    // forbids outright.
+    const semCurriculo = itens.filter((item) => !item.texto.startsWith('Currículo:'));
+
+    expect(() => parseHistorico(semCurriculo)).toThrow(/Currículo/);
+  });
+
+  it('throws when a numeric header field is not a number', () => {
+    const adulterado = itens.map((item) =>
+      item.texto === '8' && item.x < 200 ? { ...item, texto: 'oito' } : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/não é um número/);
   });
 
   it('does not carry the document authenticity token', () => {
@@ -808,6 +825,22 @@ function exigirValor(itens: ItemTexto[], rotulo: string): string {
   return valor;
 }
 
+/**
+ * A label whose value must be a number. `Number(exigirValor(...))` alone yields
+ * NaN for a value the layout moved, which then persists as a plausible-looking
+ * field instead of failing — the shape this parser is required to refuse.
+ */
+function exigirNumero(itens: ItemTexto[], rotulo: string): number {
+  const bruto = exigirValor(itens, rotulo);
+  const numero = Number(bruto);
+  if (!Number.isFinite(numero)) {
+    throw new Error(
+      `Histórico não reconhecido: "${rotulo}" trouxe "${bruto}", que não é um número.`,
+    );
+  }
+  return numero;
+}
+
 function numeroOuNulo(valor: string | null): number | null {
   if (valor === null) {
     return null;
@@ -844,7 +877,7 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
   return {
     emitidoEm,
     curriculo: exigirValor(itens, 'Currículo:'),
-    periodoLetivoAtual: Number(exigirValor(itens, 'Período Letivo Atual:')),
+    periodoLetivoAtual: exigirNumero(itens, 'Período Letivo Atual:'),
     prazoConclusaoPadrao: prazos[1],
     prazoConclusaoMaximo: prazos[2],
     indices: {
@@ -870,7 +903,7 @@ export { SITUACOES, NATUREZAS };
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.spec`
-Expected: PASS, 5 tests. If `Currículo:` or `Período Letivo Atual:` throws, the label in the fixture differs — inspect it with the command in Task 2 Step 4 and adjust the label string, not the helper.
+Expected: PASS, 7 tests. If `Currículo:` or `Período Letivo Atual:` throws, the label in the fixture differs — inspect it with the command in Task 2 Step 4 and adjust the label string, not the helper.
 
 - [ ] **Step 5: Commit**
 
@@ -1494,6 +1527,17 @@ function validarInvariantes(historico: Historico, totalPendentesDeclarado: numbe
   // the real document, where this reproduces the printed CR exactly.
   const comNota = historico.cursados.filter((c) => c.nota !== null);
   const pesoTotal = comNota.reduce((soma, c) => soma + c.cargaHoraria, 0);
+
+  // A null CR is legitimate only for a transcript with nothing graded yet. With
+  // graded components present, SIGAA always prints one — so a null here means the
+  // label moved, and silently skipping the check would disable the strongest
+  // evidence we have that the parser read the right cells at all.
+  if (historico.indices.cr === null && pesoTotal > 0) {
+    throw new Error(
+      'Histórico inconsistente: não achei o CR, mas existem componentes com nota. ' +
+        'O layout do documento pode ter mudado.',
+    );
+  }
 
   if (historico.indices.cr !== null && pesoTotal > 0) {
     const crCalculado =
