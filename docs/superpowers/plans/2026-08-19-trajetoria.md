@@ -287,8 +287,24 @@ const CAMPOS_SENSIVEIS: { rotulo: string; ficticio: string }[] = [
   { rotulo: 'Nº do documento com órgão expedidor:', ficticio: '9999999999, (SSP/BA)' },
 ];
 
-/** The footer's authenticity code — found by shape, not by value. */
-const CODIGO_VERIFICACAO_PATTERN = /código de verificação:\s*([0-9a-z]{6,})/i;
+/**
+ * The footer's authenticity code, found by its shape rather than by its label:
+ * ten lowercase alphanumerics carrying at least one digit and at least one
+ * letter.
+ *
+ * Three earlier versions anchored on the phrase "código de verificação:" and all
+ * three failed on geometry — the phrase is split across text runs, then across
+ * two physical lines, then across a right-margin stamp painted at a y between
+ * those lines. Each fix assumed a layout instead of measuring one.
+ *
+ * The token itself is intact inside a single item, which is how a shape-only grep
+ * located it in the leaked fixture of the first attempt. Shape is therefore the
+ * property to match on, and it needs no layout assumption at all. The two
+ * constraints exclude this document's near-misses: the ten-digit RG carries no
+ * letter, and lowercase ten-letter words like "informando" carry no digit.
+ */
+const CODIGO_VERIFICACAO_PATTERN =
+  /\b(?=[0-9a-z]{10}\b)(?=[0-9a-z]*\d)(?=[0-9a-z]*[a-z])[0-9a-z]{10}\b/;
 
 /**
  * Shapes personal data takes in this document, each with the complete set of
@@ -311,38 +327,13 @@ const FORMAS_PERMITIDAS: { nome: string; forma: RegExp; permitidos: string[] }[]
   { nome: 'matrícula', forma: /\b\d{9}\b/g, permitidos: ['209900011'] },
   {
     nome: 'código de verificação',
-    forma: /\b[0-9a-f]{10}\b/g,
-    // The fictional RG is ten digits, so it matches this shape too.
-    permitidos: ['aaaa1111bb', '9999999999'],
+    // Same shape the discovery pass uses, so the gate cannot be narrower than
+    // what it is policing.
+    forma: /\b(?=[0-9a-z]{10}\b)(?=[0-9a-z]*\d)(?=[0-9a-z]*[a-z])[0-9a-z]{10}\b/g,
+    permitidos: ['aaaa1111bb'],
   },
 ];
 
-/**
- * Each page's text as one string in reading order: top to bottom, left to right.
- *
- * Deliberately not per line. The footer's "código de verificação:" and the code
- * itself sit on two different physical lines about 8pt apart, so grouping items
- * by y finds the phrase on neither of them. Joining a whole page in reading
- * order makes any wrapped phrase contiguous again, wherever it happens to wrap —
- * which is the property this needs, since the wrap position is a property of the
- * deploy's page width and not something to encode.
- */
-function paginasEmOrdemDeLeitura(itens: ItemTexto[]): string[] {
-  const porPagina = new Map<number, ItemTexto[]>();
-  for (const item of itens) {
-    porPagina.set(item.pagina, [...(porPagina.get(item.pagina) ?? []), item]);
-  }
-
-  return [...porPagina.values()].map((pagina) =>
-    pagina
-      // y descending because the PDF origin is bottom-left: a larger y is
-      // further up the page. Rounded so items painted on one line, whose y can
-      // differ by hundredths, sort by x among themselves instead of interleaving.
-      .sort((a, b) => Math.round(b.y * 2) - Math.round(a.y * 2) || a.x - b.x)
-      .map((i) => i.texto)
-      .join(' '),
-  );
-}
 
 /** The value painted beside `rotulo`: same y, next item to the right. */
 function valorAoLadoDe(itens: ItemTexto[], rotulo: string): string | null {
@@ -392,14 +383,13 @@ async function main(): Promise<void> {
     substituicoes.push({ real, ficticio });
   }
 
-  // Against whole pages in reading order, not individual items and not single
-  // lines: the footer's phrase wraps onto a second physical line, so neither an
-  // item nor a line ever contains "código de verificação: <code>" entire.
+  // One pass over individual items, matching the token's shape. No layout
+  // assumption: the phrase around it wraps, the token does not.
   let achouCodigo = false;
-  for (const linha of paginasEmOrdemDeLeitura(itens)) {
-    const match = CODIGO_VERIFICACAO_PATTERN.exec(linha);
+  for (const item of itens) {
+    const match = CODIGO_VERIFICACAO_PATTERN.exec(item.texto);
     if (match) {
-      substituicoes.push({ real: match[1], ficticio: 'aaaa1111bb' });
+      substituicoes.push({ real: match[0], ficticio: 'aaaa1111bb' });
       achouCodigo = true;
       break;
     }
