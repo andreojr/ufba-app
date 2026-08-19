@@ -1,28 +1,5 @@
 import * as cheerio from 'cheerio';
-import { parseSigaaScheduleCode } from '../schedule-code';
-import { parseLocal } from './local';
-
-export interface Vigencia {
-  inicio: string;
-  fim: string;
-}
-
-export interface TurmaSlot {
-  dia: string;
-  inicioMin: number;
-  fimMin: number;
-  predio: string | null;
-  sala: string | null;
-  localOriginal: string;
-}
-
-export interface Turma {
-  codigo: string | null;
-  nome: string;
-  slots: TurmaSlot[];
-  vigencia: Vigencia;
-  semestre: string;
-}
+import { buildTurmaSlots, Turma } from './turma';
 
 const SEMESTER_HEADER_PATTERN = /^\d{4}\.\d$/;
 // A turma can have more than one schedule code in the same cell (e.g. a
@@ -43,6 +20,14 @@ function splitCodigoNome(componente: string): {
   return { codigo, nome };
 }
 
+/**
+ * Parses the "Minhas Turmas" table of the portal discente home.
+ *
+ * This is the fallback source for the schedule — it carries no course code and
+ * no docente, which is why `parseAtestadoTurmas` is preferred. It stays because
+ * it reads a page every session already fetches, so it still works when the
+ * atestado postback doesn't.
+ */
 export function parseTurmasHorario(html: string): Turma[] {
   const $ = cheerio.load(html);
   const turmas: Turma[] = [];
@@ -88,36 +73,13 @@ export function parseTurmasHorario(html: string): Turma[] {
       return;
     }
     const [, codesText, inicio, fim] = match;
-    const codigosHorario = codesText.split(/\s+/).filter(Boolean);
-
-    const parsedCodes = codigosHorario.map((code) =>
-      parseSigaaScheduleCode(code),
-    );
-    const allDays = Array.from(new Set(parsedCodes.flatMap((p) => p.days)));
-    const locationByDay = parseLocal(local, allDays);
     const { codigo, nome } = splitCodigoNome(componente);
-
-    const slots: TurmaSlot[] = [];
-    for (const parsed of parsedCodes) {
-      for (const dia of parsed.days) {
-        const location = locationByDay[dia];
-        for (const range of parsed.timeRanges) {
-          slots.push({
-            dia,
-            inicioMin: range.startMinutes,
-            fimMin: range.endMinutes,
-            predio: location.predio,
-            sala: location.sala,
-            localOriginal: location.localOriginal,
-          });
-        }
-      }
-    }
 
     turmas.push({
       codigo,
       nome,
-      slots,
+      docente: null,
+      slots: buildTurmaSlots(codesText, local),
       vigencia: { inicio, fim },
       semestre: currentSemester,
     });

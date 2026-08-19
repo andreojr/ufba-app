@@ -1,4 +1,4 @@
-import { HttpStatus, NotImplementedException } from '@nestjs/common';
+import { HttpStatus, Logger, NotImplementedException } from '@nestjs/common';
 import type { ArgumentsHost } from '@nestjs/common';
 import { SigaaExceptionFilter } from './sigaa-exception.filter';
 import {
@@ -80,5 +80,16 @@ describe('SigaaExceptionFilter', () => {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'boom',
     });
+  });
+
+  it('logs the exception (with stack) when it falls back to 500, so it shows up server-side instead of only in the response body', () => {
+    const { host } = fakeHost();
+    const error = new Error('boom');
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+
+    filter.catch(error, host);
+
+    expect(logSpy).toHaveBeenCalledWith(error.message, error.stack);
+    logSpy.mockRestore();
   });
 });

@@ -229,3 +229,118 @@ describe('SigaaSession authenticated navigation', () => {
     ).rejects.toThrow(SigaaSessionExpiredError);
   });
 });
+
+describe('SigaaSession.postbackBinary', () => {
+  async function loggedInSession(extraResponses: SigaaHttpResponse[] = []) {
+    const http = new FakeHttpClient([...loginResponses(), ...extraResponses]);
+    const session = new SigaaSession(http);
+    await session.login({ login: 'user', senha: 'pass' });
+    return { session, http };
+  }
+
+  it('follows the redirect from the postback and returns the binary body', async () => {
+    const pdfBuffer = Buffer.from('%PDF-1.4 fake pdf bytes');
+    const { session, http } = await loggedInSession([
+      redirect(
+        'https://sigaa.ufba.br/sigaa/mobile/touch/gerarHistorico?sistema=2',
+      ),
+      { status: 200, headers: {}, body: '', bodyBuffer: pdfBuffer },
+    ]);
+
+    const result = await session.postbackBinary(
+      '/sigaa/mobile/touch/menu.jsf',
+      {
+        'form-portal-discente:lnkConsultarHistorico':
+          'form-portal-discente:lnkConsultarHistorico',
+      },
+    );
+
+    expect(result).toBe(pdfBuffer);
+    expect(http.requests[4]).toMatchObject({
+      method: 'POST',
+      path: '/sigaa/mobile/touch/menu.jsf',
+      cookie: 'JSESSIONID=abc123',
+    });
+    expect(http.requests[5]).toMatchObject({
+      method: 'GET',
+      path: '/sigaa/mobile/touch/gerarHistorico?sistema=2',
+      cookie: 'JSESSIONID=abc123',
+    });
+  });
+
+  it('returns the response bytes directly when the postback answers 200 with a body (classic portal flow: discente.jsf responds with the PDF itself, no redirect)', async () => {
+    const pdfBuffer = Buffer.from('%PDF-1.4 classic flow bytes');
+    const { session, http } = await loggedInSession([
+      {
+        status: 200,
+        headers: {},
+        body: '',
+        bodyBuffer: pdfBuffer,
+      },
+    ]);
+
+    const result = await session.postbackBinary(
+      '/sigaa/portais/discente/discente.jsf',
+      { jscook_action: 'menu:A]#{ portalDiscente.historico }' },
+    );
+
+    expect(result).toBe(pdfBuffer);
+    expect(http.requests).toHaveLength(5);
+    expect(http.requests[4]).toMatchObject({
+      method: 'POST',
+      path: '/sigaa/portais/discente/discente.jsf',
+      cookie: 'JSESSIONID=abc123',
+    });
+  });
+
+  it('throws if the postback yields neither a redirect nor a binary body', async () => {
+    const { session } = await loggedInSession([
+      ok('<html>page re-render without bytes</html>'),
+    ]);
+
+    await expect(
+      session.postbackBinary('/sigaa/mobile/touch/menu.jsf', {}),
+    ).rejects.toThrow(/binary/i);
+  });
+});
+
+describe('SigaaSession.getAsset', () => {
+  async function loggedInSession(extraResponses: SigaaHttpResponse[] = []) {
+    const http = new FakeHttpClient([...loginResponses(), ...extraResponses]);
+    const session = new SigaaSession(http);
+    await session.login({ login: 'user', senha: 'pass' });
+    return { session, http };
+  }
+
+  it('fetches a same-origin asset with the session cookie, returning its bytes and content-type', async () => {
+    const css = Buffer.from('.matricula{}');
+    const { session, http } = await loggedInSession([
+      {
+        status: 200,
+        headers: { 'content-type': 'text/css;charset=ISO-8859-1' },
+        body: '.matricula{}',
+        bodyBuffer: css,
+      },
+    ]);
+
+    const asset = await session.getAsset('/sigaa/css/atestado_matricula.css');
+
+    expect(asset).toEqual({
+      contentType: 'text/css;charset=ISO-8859-1',
+      bytes: css,
+    });
+    expect(http.requests[4]).toMatchObject({
+      method: 'GET',
+      path: '/sigaa/css/atestado_matricula.css',
+      cookie: 'JSESSIONID=abc123',
+    });
+  });
+
+  it('returns null when the asset is missing (non-200), so the inliner can skip it', async () => {
+    const { session } = await loggedInSession([
+      { status: 404, headers: {}, body: 'not found' },
+    ]);
+
+    expect(await session.getAsset('/css/ufrn_print.css')).toBeNull();
+  });
+});

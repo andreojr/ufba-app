@@ -1,4 +1,8 @@
-import { decodeIso88591, encodeFormBody } from './http-client';
+import {
+  createSigaaHttpClient,
+  decodeIso88591,
+  encodeFormBody,
+} from './http-client';
 
 describe('decodeIso88591', () => {
   it('decodes accented characters correctly as Latin-1, not UTF-8', () => {
@@ -23,5 +27,28 @@ describe('encodeFormBody', () => {
 
   it('produces an empty string for an empty body', () => {
     expect(encodeFormBody({})).toBe('');
+  });
+});
+
+describe('createSigaaHttpClient request', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('forwards the response content-type header (needed to inline binary assets)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-type' ? 'image/gif' : null,
+      },
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+
+    const client = createSigaaHttpClient('https://sigaa.example');
+    const response = await client.request({ method: 'GET', path: '/x.gif' });
+
+    expect(response.headers['content-type']).toBe('image/gif');
   });
 });

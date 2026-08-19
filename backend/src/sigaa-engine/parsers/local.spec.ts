@@ -41,7 +41,11 @@ describe('parseLocal', () => {
       Terça: { predio: 'PAF I', sala: null, localOriginal: local },
       // "Smart Class III" is a room name, not a predio — the Smart Classes
       // all live in PAF II (campus-layout knowledge, not in the text itself).
-      Quinta: { predio: 'PAF II', sala: 'Smart Class III', localOriginal: local },
+      Quinta: {
+        predio: 'PAF II',
+        sala: 'Smart Class III',
+        localOriginal: local,
+      },
     });
   });
 
@@ -51,7 +55,11 @@ describe('parseLocal', () => {
     const result = parseLocal(local, ['Segunda']);
 
     expect(result).toEqual({
-      Segunda: { predio: 'PAF II', sala: 'Smart Class II', localOriginal: local },
+      Segunda: {
+        predio: 'PAF II',
+        sala: 'Smart Class II',
+        localOriginal: local,
+      },
     });
   });
 

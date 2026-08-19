@@ -1,24 +1,198 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SigaaCredentials, SigaaSession } from './session';
-import { parseTurmasHorario, Turma } from './parsers/turmas-horario';
+import { parseTurmasHorario } from './parsers/turmas-horario';
+import { Turma } from './parsers/turma';
+import { parseAtestadoTurmas, PeriodoLetivo } from './parsers/atestado-turmas';
+import { DiscentePerfil, parseDiscentePerfil } from './parsers/discente-perfil';
+import {
+  parseAtestadoMenuPostback,
+  parseHistoricoMenuPostback,
+} from './parsers/portal-menu';
+import { inlineSameOriginAssets } from './inline-assets';
+import { expandJawrStylesheets } from './jawr-styles';
+import { fillScheduleGrid } from './atestado-grid';
+import { SIGAA_BASE_URL } from './http-client';
 
 const PORTAL_HOME_PATH = '/sigaa/portais/discente/discente.jsf';
+const JAWR_LOADER_PATH = '/shared/jsBundles/jawr_loader.js';
+const A4_PAGE_STYLE = '<style>@page{size:A4;margin:10mm}</style>';
 
 export type SigaaSessionFactory = () => SigaaSession;
 
+export interface SigaaWebSession {
+  /** Raw `JSESSIONID=<value>` cookie pair — hand this to a real browser/WebView, not a fetch header. */
+  sessionCookie: string;
+  /** Where to point that browser once the cookie is set: the portal home, already authenticated. */
+  targetUrl: string;
+}
+
 @Injectable()
 export class SigaaEngineService {
+  private readonly logger = new Logger(SigaaEngineService.name);
+
   constructor(private readonly createSession: SigaaSessionFactory) {}
 
   /**
    * Logs in with the given credentials (never persisted by this method) and
-   * returns the current semester's turmas + translated schedule, straight from
-   * the portal home — no extra navigation needed (see spike).
+   * returns the current term's turmas + translated schedule, read from the
+   * atestado de matrícula rather than the portal home: only that document
+   * carries the course code, the docente, and the official term dates (see
+   * ATESTADO_MATRICULA_INVESTIGATION.md). The home is still fetched — it's
+   * where the postback fields come from — so the student's identity box
+   * (#agenda-docente) comes along for free, nullable fields and all.
+   *
+   * The atestado's jscook_action token varies per deploy, so a failure there
+   * degrades to the home's "Minhas Turmas" table: no code, no docente, no
+   * periodoLetivo, but a schedule rather than an error screen.
    */
-  async fetchSchedule(credentials: SigaaCredentials): Promise<Turma[]> {
+  async fetchSchedule(credentials: SigaaCredentials): Promise<{
+    turmas: Turma[];
+    perfil: DiscentePerfil;
+    periodoLetivo: PeriodoLetivo | null;
+  }> {
     const session = this.createSession();
     await session.login(credentials);
-    const html = await session.get(PORTAL_HOME_PATH);
-    return parseTurmasHorario(html);
+    // A JSF postback is only valid against a view the server already rendered
+    // for this session, so this GET is required either way.
+    const portalHtml = await session.get(PORTAL_HOME_PATH);
+    const perfil = parseDiscentePerfil(portalHtml);
+
+    try {
+      const { id, jscookAction } = parseAtestadoMenuPostback(portalHtml);
+      const atestadoHtml = await session.postback(PORTAL_HOME_PATH, {
+        'menu:form_menu_discente': 'menu:form_menu_discente',
+        id,
+        jscook_action: jscookAction,
+      });
+      const { turmas, periodoLetivo } = parseAtestadoTurmas(atestadoHtml);
+      if (turmas.length > 0) {
+        return { turmas, perfil, periodoLetivo };
+      }
+      this.logger.warn(
+        'The atestado de matrícula yielded no turmas; falling back to the portal home',
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Could not read the schedule off the atestado de matrícula; falling back to the portal home',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+
+    return {
+      turmas: parseTurmasHorario(portalHtml),
+      perfil,
+      periodoLetivo: null,
+    };
+  }
+
+  /**
+   * Logs in with the given credentials (never persisted by this method) and returns
+   * the resulting SIGAA session cookie so a client can open the *actual* SIGAA site
+   * already authenticated — e.g. a mobile WebView with the cookie injected into its
+   * own cookie store. This is distinct from fetchSchedule/get()/postback(): those
+   * drive navigation ourselves one HTTP request at a time, but a WebView hands
+   * control to a real browser engine, so the cookie has to live in a proper cookie
+   * jar rather than a one-off request header (see the SIGAA investigation spike).
+   */
+  async createWebSession(
+    credentials: SigaaCredentials,
+  ): Promise<SigaaWebSession> {
+    const session = this.createSession();
+    await session.login(credentials);
+
+    const sessionCookie = session.sessionCookie;
+    if (!sessionCookie) {
+      throw new Error(
+        'SIGAA login succeeded without yielding a session cookie',
+      );
+    }
+
+    return {
+      sessionCookie,
+      targetUrl: `${SIGAA_BASE_URL}${PORTAL_HOME_PATH}`,
+    };
+  }
+
+  /**
+   * Logs in and returns the transcript ("Histórico Escolar") as PDF bytes,
+   * via the classic portal's "Ensino > Emitir Histórico" menu item: a
+   * JSCookMenu postback against discente.jsf whose 200 response *is* the PDF.
+   * The mobile touch flow this replaced (postback → 302 → gerarHistorico)
+   * only works for some vínculos — for others gerarHistorico streams zero
+   * bytes — while the classic flow is the one every account exercises through
+   * the real desktop site (see HISTORICO_PDF_INVESTIGATION.md).
+   */
+  async fetchHistorico(credentials: SigaaCredentials): Promise<Buffer> {
+    const session = this.createSession();
+    await session.login(credentials);
+    // A JSF postback is only valid against a view the server already rendered
+    // for this session — this GET both renders it and hands us the HTML the
+    // menu postback's per-deploy fields are scraped from.
+    const portalHtml = await session.get(PORTAL_HOME_PATH);
+    const { id, jscookAction } = parseHistoricoMenuPostback(portalHtml);
+    const pdf = await session.postbackBinary(PORTAL_HOME_PATH, {
+      'menu:form_menu_discente': 'menu:form_menu_discente',
+      id,
+      jscook_action: jscookAction,
+    });
+
+    // SIGAA answers failures as a 200 HTML page (session lost, no vínculo,
+    // etc.) — never hand that to a client as if it were the document.
+    if (!pdf.subarray(0, 5).toString('latin1').startsWith('%PDF')) {
+      throw new Error(
+        `Expected the histórico postback to answer with a PDF, got ${pdf.length} bytes starting with ${JSON.stringify(
+          pdf.subarray(0, 40).toString('latin1'),
+        )}`,
+      );
+    }
+    return pdf;
+  }
+
+  /**
+   * Logs in and returns the atestado de matrícula ("Emitir Atestado de
+   * Matrícula") as a *self-contained HTML document* — SIGAA serves this one as a
+   * print-ready page (window.print() on load), not a PDF byte stream like
+   * histórico. Same classic JSCookMenu postback, but its 200 answer is HTML that
+   * references CSS/images SIGAA serves behind the session; we inline those (and
+   * strip scripts) so the client can render it to a PDF fully offline — on the
+   * device via expo-print (see ATESTADO_MATRICULA_INVESTIGATION.md).
+   */
+  async fetchAtestado(credentials: SigaaCredentials): Promise<string> {
+    const session = this.createSession();
+    await session.login(credentials);
+    const portalHtml = await session.get(PORTAL_HOME_PATH);
+    const { id, jscookAction } = parseAtestadoMenuPostback(portalHtml);
+    const html = await session.postback(PORTAL_HOME_PATH, {
+      'menu:form_menu_discente': 'menu:form_menu_discente',
+      id,
+      jscook_action: jscookAction,
+    });
+
+    // The print layout (ufrn_print.css: hides the "Voltar"/"Imprimir" nav,
+    // centers the page) is pulled at runtime by JAWR.loader.style() in a script
+    // we're about to strip. Resolve those calls to real <link>s off the loader's
+    // per-deploy bundle map so the inliner embeds them (applied unconditionally,
+    // so the print layout holds however the device renders the PDF). Best-effort:
+    // if the loader can't be fetched, we still return a styled — just not
+    // print-tuned — document.
+    const loader = await session.getAsset(JAWR_LOADER_PATH);
+    const withPrintStyles = loader
+      ? expandJawrStylesheets(html, loader.bytes.toString('latin1'))
+      : html;
+
+    // The "Tabela de Horários" grid is filled in by a script (one
+    // getElementById(...).innerHTML per occupied cell) that we're about to
+    // strip; apply those assignments now so the grid isn't printed all "---".
+    const withGrid = fillScheduleGrid(withPrintStyles);
+
+    // Force A4 (SIGAA's own page size): the device's expo-print defaults to US
+    // Letter, which reflows the document to different proportions than the
+    // official desktop print. @page is the only page-size lever available from
+    // the HTML, and every renderer honors it.
+    const paged = withGrid.includes('<head>')
+      ? withGrid.replace('<head>', `<head>${A4_PAGE_STYLE}`)
+      : A4_PAGE_STYLE + withGrid;
+
+    return inlineSameOriginAssets(paged, (path) => session.getAsset(path));
   }
 }

@@ -6,7 +6,8 @@ import {
 } from './session';
 import { withRetry } from './retry';
 
-const BASE_URL = 'https://sigaa.ufba.br';
+export const SIGAA_BASE_URL = 'https://sigaa.ufba.br';
+const BASE_URL = SIGAA_BASE_URL;
 
 export class SigaaRateLimitedError extends Error {
   constructor() {
@@ -65,8 +66,10 @@ export function createSigaaHttpClient(
             headers: {
               location: response.headers.get('location') ?? '',
               'set-cookie': response.headers.get('set-cookie') ?? '',
+              'content-type': response.headers.get('content-type') ?? '',
             },
             body: decodeIso88591(buffer),
+            bodyBuffer: Buffer.from(buffer),
           };
         },
         { retries: 1, backoffMs: 1000 },

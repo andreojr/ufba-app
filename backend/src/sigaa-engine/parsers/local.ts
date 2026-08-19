@@ -58,7 +58,11 @@ function normalizeKnownRoom(info: LocalInfo): LocalInfo {
   if (!known) {
     return info;
   }
-  return { predio: known.predio, sala: info.predio, localOriginal: info.localOriginal };
+  return {
+    predio: known.predio,
+    sala: info.predio,
+    localOriginal: info.localOriginal,
+  };
 }
 
 /**

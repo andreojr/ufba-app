@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -34,6 +35,8 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   Error,
 )
 export class SigaaExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(SigaaExceptionFilter.name);
+
   catch(exception: Error, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
@@ -47,6 +50,13 @@ export class SigaaExceptionFilter implements ExceptionFilter {
 
     const status =
       STATUS_BY_ERROR_NAME[exception.name] ?? HttpStatus.INTERNAL_SERVER_ERROR;
+
+    // Genuinely unexpected errors used to vanish into the response body only —
+    // the client sees a generic "something went wrong", but nothing showed up
+    // server-side to debug from. Log the stack for exactly that case.
+    if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(exception.message, exception.stack);
+    }
 
     response.status(status).json({
       statusCode: status,

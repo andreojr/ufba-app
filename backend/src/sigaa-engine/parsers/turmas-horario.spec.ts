@@ -164,9 +164,30 @@ describe('parseTurmasHorario', () => {
     );
 
     expect(turmas[0].slots).toEqual([
-      { dia: 'Segunda', inicioMin: 420, fimMin: 530, predio: null, sala: null, localOriginal: 'Sala X' },
-      { dia: 'Quarta', inicioMin: 890, fimMin: 1000, predio: null, sala: null, localOriginal: 'Sala X' },
-      { dia: 'Sexta', inicioMin: 1110, fimMin: 1220, predio: null, sala: null, localOriginal: 'Sala X' },
+      {
+        dia: 'Segunda',
+        inicioMin: 420,
+        fimMin: 530,
+        predio: null,
+        sala: null,
+        localOriginal: 'Sala X',
+      },
+      {
+        dia: 'Quarta',
+        inicioMin: 890,
+        fimMin: 1000,
+        predio: null,
+        sala: null,
+        localOriginal: 'Sala X',
+      },
+      {
+        dia: 'Sexta',
+        inicioMin: 1110,
+        fimMin: 1220,
+        predio: null,
+        sala: null,
+        localOriginal: 'Sala X',
+      },
     ]);
   });
 
