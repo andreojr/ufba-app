@@ -16,19 +16,21 @@ const ALTURA_PADRAO = 120;
 const LARGURA_MINIMA = 280;
 const ESPACO_POR_BARRA = 56;
 const LARGURA_MINIMA_BARRA = 4;
-// No x margin: unlike the line chart's points, a bar already reads as its
-// own distinct shape right up to the chart's edge — nothing gets crowded.
-// Generous on y: room above the tallest bar for its value label, rotated
-// vertical — margem 0 would clip that label against the chart's own top edge.
-const MARGEM_Y = 28;
+// Reserved above the plot, outside `altura`, purely for the floating value
+// label — same fix the line chart needed: sharing this space with the bars
+// themselves (a fixed MARGEM_Y taken out of a short chart) left too little
+// height for the bars to show real contrast between close values.
+const ESPACO_LABEL = 34;
 // Purple, low-opacity: a value label that reads as an annotation floating
 // over the bar, not another line of body text competing with it.
 const COR_VALOR = "rgba(124, 58, 237, 0.55)";
 
 /**
  * The carga-horária-per-período bar chart. Bars scale to the tallest one in
- * the series. Scrolls horizontally once there are more terms than fit the
- * screen, rather than squeezing them together.
+ * the series across the FULL `altura` — the value label floats in its own
+ * reserved band above the plot instead of eating into that height. Scrolls
+ * horizontally once there are more terms than fit the screen, rather than
+ * squeezing them together.
  */
 export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX.Element {
   const accent = useThemeColor("accent");
@@ -40,42 +42,54 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
   const largura = Math.max(LARGURA_MINIMA, barras.length * ESPACO_POR_BARRA);
   const larguraColuna = largura / barras.length;
   const maiorValor = Math.max(...barras.map((b) => b.valor), LARGURA_MINIMA_BARRA);
-  const alturaUtil = altura - MARGEM_Y;
+  const alturasBarras = barras.map((barra) =>
+    Math.max((barra.valor / maiorValor) * altura, LARGURA_MINIMA_BARRA),
+  );
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="bar-chart-scroll">
       <View testID="bar-chart" style={{ width: largura }}>
-        <View className="flex-row items-end" style={{ height: altura }}>
+        <View style={{ width: largura, height: altura + ESPACO_LABEL }}>
+          <View
+            className="flex-row items-end"
+            style={{
+              position: "absolute",
+              top: ESPACO_LABEL,
+              left: 0,
+              width: largura,
+              height: altura,
+            }}
+          >
+            {barras.map((barra, indice) => (
+              <View key={indice} className="items-center" style={{ width: larguraColuna }}>
+                <View
+                  className="rounded-t-md w-2/3"
+                  style={{ height: alturasBarras[indice], backgroundColor: accent }}
+                />
+              </View>
+            ))}
+          </View>
+          {/* Floating above its own bar rather than sharing the bar's own
+              height budget — same fix as the line chart's point labels. */}
           {barras.map((barra, indice) => (
-            <View key={indice} className="items-center justify-end" style={{ width: larguraColuna }}>
-              {/* Vertical rather than horizontal: it already sits over its own
-                  bar (unlike the line chart's point, which needed to move),
-                  so only the tilt changes — 90° instead of 45°. */}
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontWeight: "600",
-                  color: COR_VALOR,
-                  marginBottom: 10,
-                  transform: [{ rotate: "-90deg" }],
-                }}
-              >
-                {barra.valor} h
-              </Text>
-              <View
-                className="rounded-t-md w-2/3"
-                style={{
-                  height: Math.max((barra.valor / maiorValor) * alturaUtil, LARGURA_MINIMA_BARRA),
-                  backgroundColor: accent,
-                }}
-              />
-            </View>
+            <Text
+              key={indice}
+              style={{
+                position: "absolute",
+                left: indice * larguraColuna,
+                top: ESPACO_LABEL + (altura - alturasBarras[indice]) - 30,
+                width: larguraColuna,
+                textAlign: "center",
+                fontSize: 10,
+                fontWeight: "600",
+                color: COR_VALOR,
+                transform: [{ rotate: "-90deg" }],
+              }}
+            >
+              {barra.valor} h
+            </Text>
           ))}
         </View>
-        {/* No margin-top here: the bars' row is exactly `altura` tall and
-            bottom-aligned, so its own bottom edge already sits right where
-            the tallest bar ends — this line has to sit flush against that
-            edge, not floating below it. */}
         <View className="flex-row border-t border-white/10 pt-1.5">
           {barras.map((barra, indice) => (
             <View key={indice} className="items-center" style={{ width: larguraColuna }}>

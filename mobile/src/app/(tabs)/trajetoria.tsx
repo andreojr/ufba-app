@@ -30,6 +30,7 @@ import {
   rotuloSituacao,
   rotulosPorAno,
   somarCargaHoraria,
+  variacaoUltimoPeriodo,
   zonasDePlanejamento,
   type AnoTrajetoria,
 } from "@/lib/trajetoria";
@@ -350,6 +351,7 @@ function ReadyTrajetoria({
     rotulo: rotulosAno[indice],
     valor: ponto.cr,
   }));
+  const variacaoCr = variacaoUltimoPeriodo(crPorPeriodo);
   const barrasCargaHoraria = periodos.map((periodo, indice) => ({
     rotulo: rotulosAno[indice],
     valor: somarCargaHoraria(periodo.componentes),
@@ -391,9 +393,22 @@ function ReadyTrajetoria({
                 <Typography.Paragraph type="body-xs" color="muted">
                   Coeficiente de Rendimento
                 </Typography.Paragraph>
-                <Typography.Heading type="h5">
-                  {formatarCoeficiente(historico.indices.cr)}
-                </Typography.Heading>
+                <View className="flex-row items-center gap-2.5">
+                  <Typography.Heading type="h3">
+                    {formatarCoeficiente(historico.indices.cr)}
+                  </Typography.Heading>
+                  {/* vs. o período anterior: sem cor de destaque quando é null
+                      ou zero — "sem mudança" não deve competir visualmente
+                      com uma alta ou queda real. */}
+                  <Typography.Paragraph
+                    testID="cr-variacao"
+                    type="body-sm"
+                    weight="medium"
+                    color={variacaoCr ? undefined : "muted"}
+                  >
+                    {formatarImpacto(variacaoCr)}
+                  </Typography.Paragraph>
+                </View>
               </View>
               <LineChart pontos={pontosCr} altura={70} />
             </>

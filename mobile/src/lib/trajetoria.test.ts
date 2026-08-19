@@ -13,6 +13,7 @@ import {
   rotuloSituacao,
   rotulosPorAno,
   somarCargaHoraria,
+  variacaoUltimoPeriodo,
   zonasDePlanejamento,
 } from "./trajetoria";
 import type { ComponenteCursado, ComponentePendente } from "./types";
@@ -328,6 +329,45 @@ describe("rotulosPorAno", () => {
 
   it("returns nothing for an empty series", () => {
     expect(rotulosPorAno([])).toEqual([]);
+  });
+});
+
+describe("variacaoUltimoPeriodo", () => {
+  it("is positive when the CR rose from the term before the latest one", () => {
+    const serie = [
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: 8.5 },
+    ];
+    expect(variacaoUltimoPeriodo(serie)).toBeCloseTo(0.5);
+  });
+
+  it("is negative when the CR fell from the term before the latest one", () => {
+    const serie = [
+      { semestre: "2025.1", cr: 8.5 },
+      { semestre: "2025.2", cr: 8 },
+    ];
+    expect(variacaoUltimoPeriodo(serie)).toBeCloseTo(-0.5);
+  });
+
+  it("is zero when the CR held steady", () => {
+    const serie = [
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: 8 },
+    ];
+    expect(variacaoUltimoPeriodo(serie)).toBe(0);
+  });
+
+  it("returns null with less than two terms — nothing to compare against", () => {
+    expect(variacaoUltimoPeriodo([{ semestre: "2025.1", cr: 8 }])).toBeNull();
+    expect(variacaoUltimoPeriodo([])).toBeNull();
+  });
+
+  it("returns null when either term has nothing graded yet", () => {
+    const serie = [
+      { semestre: "2025.1", cr: null },
+      { semestre: "2025.2", cr: 8 },
+    ];
+    expect(variacaoUltimoPeriodo(serie)).toBeNull();
   });
 });
 

@@ -96,7 +96,7 @@ jest.mock("heroui-native", () => {
     ),
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
-      Paragraph: ({ children }: any) => <Text>{children}</Text>,
+      Paragraph: ({ children, testID }: any) => <Text testID={testID}>{children}</Text>,
     },
     useThemeColor: () => "#888888",
   };
@@ -515,6 +515,80 @@ describe("Trajetória", () => {
     expect(screen.getByText("↑ 1,00")).toBeTruthy();
     // MATA40's 6 sits below the CR computed without it (8): a negative pull.
     expect(screen.getByText("↓ 1,00")).toBeTruthy();
+  });
+
+  it("shows how much the CR moved since the term before, beside the current CR", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        indices: { cr: 8.5, iap: null },
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+          {
+            semestre: "2025.2",
+            natureza: "OB",
+            codigo: "MATA40",
+            nome: "CÁLCULO A",
+            cargaHoraria: 60,
+            nota: 9,
+            situacao: "APR",
+            docente: null,
+          },
+        ],
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    // Cumulative CR: 8 after 2025.1, (60·8+60·9)/120 = 8.5 after 2025.2 — up
+    // half a point from the term before. Queried by testID, not text: with
+    // only two graded components, one of them will always show this exact
+    // same impacto text too (removing the only component in the latest term
+    // is mathematically identical to reverting to the term before it).
+    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("↑ 0,50");
+  });
+
+  it("shows no change as a plain dash rather than an arrow on a flat CR", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+          {
+            semestre: "2025.2",
+            natureza: "OB",
+            codigo: "MATA40",
+            nome: "CÁLCULO A",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+        ],
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    // Both terms average out to the same 8 — no real movement to show as an
+    // arrow.
+    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("—");
   });
 
   it("shows a carga horária bar chart with no grades once that tab is selected", async () => {

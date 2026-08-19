@@ -192,6 +192,26 @@ export function calcularCrAcumulado(
 }
 
 /**
+ * How much the CR moved from the term before the latest one to the latest
+ * one — what the summary card's "vs. último período" indicator shows beside
+ * the current CR. Null with fewer than two terms (nothing to compare
+ * against) or when either end has nothing graded yet.
+ */
+export function variacaoUltimoPeriodo(
+  serie: { semestre: string; cr: number | null }[],
+): number | null {
+  if (serie.length < 2) {
+    return null;
+  }
+  const atual = serie[serie.length - 1].cr;
+  const anterior = serie[serie.length - 2].cr;
+  if (atual === null || anterior === null) {
+    return null;
+  }
+  return atual - anterior;
+}
+
+/**
  * How much a single graded component moves the overall CR: the CR with every
  * graded component, minus the CR computed with `codigo` left out. Positive
  * means the component pulled the CR up, negative means it pulled it down.
