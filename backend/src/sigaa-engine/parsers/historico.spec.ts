@@ -27,10 +27,29 @@ describe('parseHistorico', () => {
     expect(historico.prazoConclusaoMaximo).toBe('2033.1');
   });
 
-  it('reads the issue date and the verification code from the footer', () => {
+  it('reads the issue date off the header line', () => {
     const historico = parseHistorico(itens);
 
     expect(historico.emitidoEm).toBe('2026-08-19');
+  });
+
+  it('throws when a header label it depends on is absent', () => {
+    // Layout drift must fail loudly. Without this the parser returns an object
+    // that looks complete and is wrong, which is the one outcome the spec
+    // forbids outright.
+    const semCurriculo = itens.filter(
+      (item) => !item.texto.startsWith('Currículo:'),
+    );
+
+    expect(() => parseHistorico(semCurriculo)).toThrow(/Currículo/);
+  });
+
+  it('throws when a numeric header field is not a number', () => {
+    const adulterado = itens.map((item) =>
+      item.texto === '8' && item.x < 200 ? { ...item, texto: 'oito' } : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/não é um número/);
   });
 
   it('does not carry the document authenticity token', () => {

@@ -127,6 +127,22 @@ function exigirValor(itens: ItemTexto[], rotulo: string): string {
   return valor;
 }
 
+/**
+ * A label whose value must be a number. `Number(exigirValor(...))` alone yields
+ * NaN for a value the layout moved, which then persists as a plausible-looking
+ * field instead of failing — the shape this parser is required to refuse.
+ */
+function exigirNumero(itens: ItemTexto[], rotulo: string): number {
+  const bruto = exigirValor(itens, rotulo);
+  const numero = Number(bruto);
+  if (!Number.isFinite(numero)) {
+    throw new Error(
+      `Histórico não reconhecido: "${rotulo}" trouxe "${bruto}", que não é um número.`,
+    );
+  }
+  return numero;
+}
+
 function numeroOuNulo(valor: string | null): number | null {
   if (valor === null) {
     return null;
@@ -166,7 +182,7 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
   return {
     emitidoEm,
     curriculo: exigirValor(itens, 'Currículo:'),
-    periodoLetivoAtual: Number(exigirValor(itens, 'Período Letivo Atual:')),
+    periodoLetivoAtual: exigirNumero(itens, 'Período Letivo Atual:'),
     prazoConclusaoPadrao: prazos[1],
     prazoConclusaoMaximo: prazos[2],
     indices: {
