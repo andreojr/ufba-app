@@ -455,11 +455,76 @@ function casarEmAlgumItem(
   );
 }
 
+/**
+ * Situações that grant integralised hours. Only APR appears in the fixture, but
+ * the broader set is the semantically correct one — a transcript carrying a
+ * dispensa must not be rejected by the workload check.
+ */
+const SITUACOES_INTEGRALIZADAS: readonly SituacaoComponente[] = [
+  'APR', 'DISP', 'CUMP', 'INCORP', 'TRANS',
+];
+
+/**
+ * The three things the document asserts about itself. A parser that read the
+ * wrong column still yields a plausible object, so these are the difference
+ * between a loud failure and silently wrong data on the student's screen.
+ */
+function validarInvariantes(historico: Historico, totalPendentesDeclarado: number): void {
+  const integralizadaSomada = historico.cursados
+    .filter((c) => SITUACOES_INTEGRALIZADAS.includes(c.situacao))
+    .reduce((soma, c) => soma + c.cargaHoraria, 0);
+
+  if (integralizadaSomada !== historico.cargaHoraria.total.integralizada) {
+    throw new Error(
+      'Histórico inconsistente: a carga horária somada dos componentes ' +
+        `concluídos (${integralizadaSomada}h) não bate com a integralizada do ` +
+        `quadro (${historico.cargaHoraria.total.integralizada}h).`,
+    );
+  }
+
+  // Weighted by carga horária over rows carrying a grade. Trancados and
+  // matriculados are out of both numerator and denominator — confirmed against
+  // the real document, where this reproduces the printed CR exactly.
+  const comNota = historico.cursados.filter((c) => c.nota !== null);
+  const pesoTotal = comNota.reduce((soma, c) => soma + c.cargaHoraria, 0);
+
+  // A null CR is legitimate only for a transcript with nothing graded yet. With
+  // graded components present, SIGAA always prints one — so a null here means the
+  // label moved, and silently skipping the check would disable the strongest
+  // evidence we have that the parser read the right cells at all.
+  if (historico.indices.cr === null && pesoTotal > 0) {
+    throw new Error(
+      'Histórico inconsistente: não achei o CR, mas existem componentes com nota. ' +
+        'O layout do documento pode ter mudado.',
+    );
+  }
+
+  if (historico.indices.cr !== null && pesoTotal > 0) {
+    const crCalculado =
+      comNota.reduce((soma, c) => soma + c.cargaHoraria * (c.nota as number), 0) /
+      pesoTotal;
+
+    if (Math.abs(crCalculado - historico.indices.cr) > 0.0001) {
+      throw new Error(
+        `Histórico inconsistente: o CR recalculado (${crCalculado.toFixed(4)}) ` +
+          `não bate com o do documento (${historico.indices.cr}).`,
+      );
+    }
+  }
+
+  if (historico.pendentesObrigatorios.length !== totalPendentesDeclarado) {
+    throw new Error(
+      `Histórico inconsistente: li ${historico.pendentesObrigatorios.length} ` +
+        `componentes pendentes, mas o título declara ${totalPendentesDeclarado}.`,
+    );
+  }
+}
+
 export function parseHistorico(itens: ItemTexto[]): Historico {
   const emitidoEm = paraIso(casarEmAlgumItem(itens, EMITIDO_EM_PATTERN)[1]);
   const prazos = casarEmAlgumItem(itens, PRAZOS_PATTERN);
 
-  return {
+  const historico: Historico = {
     emitidoEm,
     curriculo: exigirValor(itens, 'Currículo:'),
     periodoLetivoAtual: exigirNumero(itens, 'Período Letivo Atual:'),
@@ -475,6 +540,15 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
     equivalencias: linhasDaSecao(itens, /^Equival[êe]ncias/),
     observacoes: linhasDaSecao(itens, /^Observa[çc][õo]es/),
   };
+
+  const tituloPendentes = itens.find((i) => TITULO_PENDENTES_PATTERN.test(i.texto));
+  const totalDeclarado = tituloPendentes
+    ? Number(TITULO_PENDENTES_PATTERN.exec(tituloPendentes.texto)?.[1])
+    : 0;
+
+  validarInvariantes(historico, totalDeclarado);
+
+  return historico;
 }
 
 export { SITUACOES, NATUREZAS };

@@ -4,6 +4,7 @@ import { parseHistorico, SITUACOES } from './historico';
 import type { ItemTexto } from './historico-texto';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'historico-itens.json');
+const TITULO_PENDENTES_TEXTO = /Componentes Curriculares Obrigatórios Pendentes:\d+/;
 
 describe('parseHistorico', () => {
   const itens = JSON.parse(readFileSync(FIXTURE_PATH, 'utf-8')) as ItemTexto[];
@@ -202,5 +203,29 @@ describe('parseHistorico', () => {
     expect(equivalencias).toHaveLength(1);
     expect(equivalencias[0]).toContain('através de');
     expect(observacoes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('accepts the real document, whose invariants all hold', () => {
+    expect(() => parseHistorico(itens)).not.toThrow();
+  });
+
+  it('refuses a document whose CR does not match its own component rows', () => {
+    // Doctoring one grade breaks the recomputed CR. A parser reading the wrong
+    // column would look exactly like this, which is what the check is for.
+    const adulterado = itens.map((item) =>
+      item.texto === '6.8' ? { ...item, texto: '9.9' } : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/CR/i);
+  });
+
+  it('refuses a document whose pending count contradicts its own title', () => {
+    const adulterado = itens.map((item) =>
+      TITULO_PENDENTES_TEXTO.test(item.texto)
+        ? { ...item, texto: item.texto.replace(/:\d+$/, ':99') }
+        : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/pendente/i);
   });
 });
