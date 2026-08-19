@@ -284,11 +284,57 @@ const CAMPOS_SENSIVEIS: { rotulo: string; ficticio: string }[] = [
   { rotulo: 'Data de Nascimento:', ficticio: '15/03/2001' },
   { rotulo: 'Local de Nascimento:', ficticio: 'CIDADE FICTICIA/BA' },
   { rotulo: 'Nº do CPF:', ficticio: '111.222.333-44' },
-  { rotulo: 'Nº do documento:', ficticio: '9999999999, (SSP/BA)' },
+  { rotulo: 'Nº do documento com órgão expedidor:', ficticio: '9999999999, (SSP/BA)' },
 ];
 
 /** The footer's authenticity code — found by shape, not by value. */
 const CODIGO_VERIFICACAO_PATTERN = /código de verificação:\s*([0-9a-z]{6,})/i;
+
+/**
+ * Shapes personal data takes in this document, each with the complete set of
+ * values it is allowed to still have after redaction.
+ *
+ * This gate is deliberately independent of discovery. An earlier version checked
+ * only the values it had found, which meant a field it *failed* to find sailed
+ * through: the verification code's phrase wraps across two text items, the
+ * label-based search missed it, and the script reported success over a fixture
+ * that still carried the real code in all three footers. A shape the script
+ * never looked for is exactly the shape that needs catching.
+ */
+const FORMAS_PERMITIDAS: { nome: string; forma: RegExp; permitidos: string[] }[] = [
+  { nome: 'CPF', forma: /\d{3}\.\d{3}\.\d{3}-\d{2}/g, permitidos: ['111.222.333-44'] },
+  {
+    nome: 'documento com órgão expedidor',
+    forma: /\d{6,}, \(\w+\/[A-Z]{2}\)/g,
+    permitidos: ['9999999999, (SSP/BA)'],
+  },
+  { nome: 'matrícula', forma: /\b\d{9}\b/g, permitidos: ['209900011'] },
+  {
+    nome: 'código de verificação',
+    forma: /\b[0-9a-f]{10}\b/g,
+    // The fictional RG is ten digits, so it matches this shape too.
+    permitidos: ['aaaa1111bb', '9999999999'],
+  },
+];
+
+/**
+ * Items joined per painted line, so a phrase split across text runs still
+ * matches. The footer's "código de verificação:" wraps mid-phrase, which is why
+ * matching item by item finds nothing.
+ */
+function linhasReconstruidas(itens: ItemTexto[]): string[] {
+  const porLinha = new Map<string, ItemTexto[]>();
+  for (const item of itens) {
+    const chave = `${item.pagina}:${Math.round(item.y * 2) / 2}`;
+    porLinha.set(chave, [...(porLinha.get(chave) ?? []), item]);
+  }
+  return [...porLinha.values()].map((linha) =>
+    linha
+      .sort((a, b) => a.x - b.x)
+      .map((i) => i.texto)
+      .join(' '),
+  );
+}
 
 /** The value painted beside `rotulo`: same y, next item to the right. */
 function valorAoLadoDe(itens: ItemTexto[], rotulo: string): string | null {
@@ -338,12 +384,22 @@ async function main(): Promise<void> {
     substituicoes.push({ real, ficticio });
   }
 
-  for (const item of itens) {
-    const match = CODIGO_VERIFICACAO_PATTERN.exec(item.texto);
+  // Against reconstructed lines, not individual items: the footer's phrase wraps
+  // across two runs, so no single item contains "código de verificação: <code>".
+  let achouCodigo = false;
+  for (const linha of linhasReconstruidas(itens)) {
+    const match = CODIGO_VERIFICACAO_PATTERN.exec(linha);
     if (match) {
       substituicoes.push({ real: match[1], ficticio: 'aaaa1111bb' });
+      achouCodigo = true;
       break;
     }
+  }
+  if (!achouCodigo) {
+    throw new Error(
+      'Não achei o código de verificação no rodapé — sem ele a anonimização ' +
+        'estaria incompleta.',
+    );
   }
 
   // Longest first: replacing the matrícula before the RG would corrupt an RG
@@ -358,15 +414,30 @@ async function main(): Promise<void> {
     return { ...item, texto };
   });
 
-  // The script's own gate: if any discovered value survived, the fixture is not
-  // safe to commit and this must not exit successfully.
   const serializado = JSON.stringify(anonimos, null, 2);
+
+  // Gate 1: nothing the script discovered may survive.
   const vazando = substituicoes.filter(({ real }) => serializado.includes(real));
   if (vazando.length > 0) {
     throw new Error(
       `${vazando.length} valor(es) pessoal(is) sobreviveram à anonimização. ` +
         'Fixture NÃO escrita.',
     );
+  }
+
+  // Gate 2: and nothing SHAPED like personal data may remain unless it is one of
+  // the fictional values. This is the gate that does not trust gate 1's inputs —
+  // it catches a field the script never managed to discover.
+  for (const { nome, forma, permitidos } of FORMAS_PERMITIDAS) {
+    const encontrados = [...new Set(serializado.match(forma) ?? [])];
+    const inesperados = encontrados.filter((valor) => !permitidos.includes(valor));
+    if (inesperados.length > 0) {
+      // Report the count and the field, never the values themselves.
+      throw new Error(
+        `${inesperados.length} valor(es) com a forma de "${nome}" não estão na ` +
+          'lista de valores fictícios. Fixture NÃO escrita.',
+      );
+    }
   }
 
   const destino = join(
