@@ -21,29 +21,40 @@ describe("dominioComMargem", () => {
 });
 
 describe("escalaLinear", () => {
-  it("maps the domain's max to the top (y = 0) and min to the bottom (y = altura)", () => {
-    const escala = escalaLinear({ min: 0, max: 10 }, 100);
+  it("maps the domain's max to the top (y = 0) and min to the bottom (y = altura), no margin", () => {
+    const escala = escalaLinear({ min: 0, max: 10 }, 100, 0);
     expect(escala(10)).toBe(0);
     expect(escala(0)).toBe(100);
     expect(escala(5)).toBe(50);
   });
 
+  it("insets both ends by margem, leaving room for a floating label above the highest point", () => {
+    const escala = escalaLinear({ min: 0, max: 10 }, 100, 20);
+    expect(escala(10)).toBe(20);
+    expect(escala(0)).toBe(80);
+    expect(escala(5)).toBe(50);
+  });
+
   it("centers every value when the domain has no width", () => {
-    const escala = escalaLinear({ min: 8, max: 8 }, 100);
+    const escala = escalaLinear({ min: 8, max: 8 }, 100, 20);
     expect(escala(8)).toBe(50);
   });
 });
 
 describe("posicoesX", () => {
-  it("spreads points evenly from edge to edge", () => {
-    expect(posicoesX(3, 100)).toEqual([0, 50, 100]);
+  it("spreads points evenly from edge to edge, no margin", () => {
+    expect(posicoesX(3, 100, 0)).toEqual([0, 50, 100]);
   });
 
-  it("centers a single point", () => {
-    expect(posicoesX(1, 100)).toEqual([50]);
+  it("insets both ends by margem", () => {
+    expect(posicoesX(3, 100, 10)).toEqual([10, 50, 90]);
+  });
+
+  it("centers a single point regardless of margem", () => {
+    expect(posicoesX(1, 100, 10)).toEqual([50]);
   });
 
   it("returns nothing for an empty series", () => {
-    expect(posicoesX(0, 100)).toEqual([]);
+    expect(posicoesX(0, 100, 10)).toEqual([]);
   });
 });

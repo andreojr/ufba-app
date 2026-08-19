@@ -29,6 +29,14 @@ describe("BarChart", () => {
     expect(screen.getByText("2025.2")).toBeTruthy();
   });
 
+  it("scrolls horizontally rather than squeezing every term into the screen's width", async () => {
+    await render(
+      <BarChart barras={Array.from({ length: 12 }, (_, i) => ({ rotulo: `202${i}`, valor: 60 }))} />,
+    );
+
+    expect(screen.getByTestId("bar-chart-scroll")).toBeTruthy();
+  });
+
   it("renders nothing for an empty series rather than crashing on the scale math", async () => {
     await render(<BarChart barras={[]} />);
 

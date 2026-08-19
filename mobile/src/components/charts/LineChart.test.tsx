@@ -13,7 +13,7 @@ jest.mock("heroui-native", () => {
 });
 
 describe("LineChart", () => {
-  it("labels every point with its formatted value and rótulo", async () => {
+  it("floats each point's formatted value over it, and labels the x-axis with its rótulo", async () => {
     await render(
       <LineChart
         pontos={[
@@ -29,10 +29,20 @@ describe("LineChart", () => {
     expect(screen.getByText("2025.2")).toBeTruthy();
   });
 
-  it("shows an em dash under a term with nothing graded yet", async () => {
+  it("skips the floating value for a term with nothing graded yet, without dropping its rótulo", async () => {
     await render(<LineChart pontos={[{ rotulo: "2026.1", valor: null }]} />);
 
-    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.getByText("2026.1")).toBeTruthy();
+  });
+
+  it("scrolls horizontally rather than squeezing every term into the screen's width", async () => {
+    await render(
+      <LineChart
+        pontos={Array.from({ length: 12 }, (_, i) => ({ rotulo: `202${i}`, valor: 7 }))}
+      />,
+    );
+
+    expect(screen.getByTestId("line-chart-scroll")).toBeTruthy();
   });
 
   it("renders nothing for an empty series rather than crashing on the scale math", async () => {

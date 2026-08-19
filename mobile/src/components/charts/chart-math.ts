@@ -23,24 +23,37 @@ export function dominioComMargem(valores: number[], margem: number): Dominio {
 
 /**
  * Linear map from a value domain to an SVG y-axis, where higher values sit
- * higher on screen (y = 0 at the top). A zero-width domain centers every
- * value rather than dividing by zero.
+ * higher on screen (y = 0 at the top). `margem` insets both ends by that many
+ * pixels — generous on purpose, since the floating value label sits just
+ * above each point and needs room that isn't there at margem 0, which would
+ * clip the highest point's label against the chart's own edge. A zero-width
+ * domain centers every value rather than dividing by zero.
  */
-export function escalaLinear(dominio: Dominio, altura: number): (valor: number) => number {
+export function escalaLinear(
+  dominio: Dominio,
+  altura: number,
+  margem: number,
+): (valor: number) => number {
+  const alturaUtil = altura - margem * 2;
   const largura = dominio.max - dominio.min;
   if (largura === 0) {
     return () => altura / 2;
   }
-  return (valor) => altura - ((valor - dominio.min) / largura) * altura;
+  return (valor) => margem + alturaUtil - ((valor - dominio.min) / largura) * alturaUtil;
 }
 
-/** Evenly spaced x positions for `quantidade` points across `largura`, edge to edge. */
-export function posicoesX(quantidade: number, largura: number): number[] {
+/**
+ * Evenly spaced x positions for `quantidade` points across `largura`, inset by
+ * `margem` pixels on each end — a light touch, just enough that the first and
+ * last point don't sit flush against the chart's edge.
+ */
+export function posicoesX(quantidade: number, largura: number, margem: number): number[] {
   if (quantidade === 0) {
     return [];
   }
   if (quantidade === 1) {
     return [largura / 2];
   }
-  return Array.from({ length: quantidade }, (_, i) => (i / (quantidade - 1)) * largura);
+  const larguraUtil = largura - margem * 2;
+  return Array.from({ length: quantidade }, (_, i) => margem + (i / (quantidade - 1)) * larguraUtil);
 }
