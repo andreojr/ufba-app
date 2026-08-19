@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { ApiError, postSchedule, postSigaaSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { savePeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
@@ -15,6 +16,12 @@ jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   postSchedule: jest.fn(),
   postSigaaSession: jest.fn(),
+}));
+// Mocked, not automocked: the screen calls `.catch()` on the returned promise,
+// and a bare jest.fn() returns undefined.
+jest.mock("@/lib/periodo-cache", () => ({
+  savePeriodoCache: jest.fn().mockResolvedValue(undefined),
+  getPeriodoCache: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -90,6 +97,7 @@ const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
 const mockedPostSchedule = jest.mocked(postSchedule);
 const mockedPostSigaaSession = jest.mocked(postSigaaSession);
+const mockedSavePeriodoCache = jest.mocked(savePeriodoCache);
 
 const ALL_WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
 
@@ -145,6 +153,7 @@ describe("HomeTab", () => {
     mockPush.mockClear();
     mockToastShow.mockClear();
     mockedPostSigaaSession.mockClear();
+    mockedSavePeriodoCache.mockClear();
   });
 
   it("greets the student by name in the header instead of a generic title", async () => {
@@ -470,6 +479,30 @@ describe("HomeTab", () => {
 
       expect(queryByText("Fora do período letivo.")).toBeNull();
       expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0);
+    });
+
+    it("caches the term it just fetched, since it is the only screen that asks for one", async () => {
+      // Trajetória never calls /schedule, so this write is the sole source of
+      // the end date its staleness nudge reads.
+      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+      mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+
+      const { getAllByText } = await render(<HomeTab />);
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+
+      expect(mockedSavePeriodoCache).toHaveBeenCalledWith(PERIODO_LETIVO);
+    });
+
+    it("caches nothing when the backend could not read the term", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+      mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+      mockedPostSchedule.mockResolvedValue(scheduleResponse(null));
+
+      const { getAllByText } = await render(<HomeTab />);
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+
+      expect(mockedSavePeriodoCache).not.toHaveBeenCalled();
     });
   });
 

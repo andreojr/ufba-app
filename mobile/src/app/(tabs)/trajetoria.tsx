@@ -1,34 +1,179 @@
-import { Menu, Typography, useThemeColor } from "heroui-native";
-import { useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Button, Menu, Typography, useThemeColor } from "heroui-native";
+import { useCallback, useEffect, useState, type JSX } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
+import { DownloadProgressBar } from "@/components/DownloadProgressBar";
+import { describeApiError } from "@/lib/api-errors";
+import { getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { HISTORICO_STAGES } from "@/lib/download-progress";
+import { gradeColor } from "@/lib/mock-data";
+import { getPeriodoCache } from "@/lib/periodo-cache";
+import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import {
-  INITIAL_PLAN,
-  PENDING_COURSES,
-  PERIODS,
-  PLAN_ZONES,
-  TRANSCRIPT_SUMMARY,
-  gradeColor,
-  type PendingCourseId,
-  type PlanZoneKey,
-} from "@/lib/mock-data";
+  agruparPorSemestre,
+  formatarCoeficiente,
+  formatarNota,
+  historicoDesatualizado,
+  percentualConcluido,
+  poolPlanejavel,
+  rotuloSituacao,
+  zonasDePlanejamento,
+} from "@/lib/trajetoria";
+import type { Historico, ItemPlano, TrajetoriaResponse } from "@/lib/types";
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "unsynced" }
+  | { status: "error"; message: string }
+  | { status: "ready"; historico: Historico; fetchedAt: Date; plano: ItemPlano[] };
+
+/** The planner's catch-all: everything not assigned to a term sits here. */
+const ZONA_SEM_PERIODO = "pool";
+
+/** How many upcoming terms the planner offers as drop zones. */
+const ZONAS_FUTURAS = 2;
+
+/**
+ * Which term each pending component was put in, keyed by código. Keyed rather
+ * than a list per zone so a move is a single overwrite: a component has one
+ * term by construction and cannot end up listed under two.
+ */
+type Plano = Record<string, string>;
+
+/**
+ * "Em curso" would be a lie once the term's end date has passed: the MATR rows
+ * mean only that our copy of the transcript predates the grades. Naming the
+ * wait is what the badge can honestly say, and it agrees with the nudge the
+ * same condition puts above.
+ */
+function rotuloPeriodo(emCurso: boolean, desatualizado: boolean): string {
+  if (!emCurso) {
+    return "Concluído";
+  }
+  return desatualizado ? "Aguardando notas" : "Em curso";
+}
+
+/** The saved plan, in the shape the zones read. Unplaced items stay out of it. */
+function planoSalvo(plano: ItemPlano[]): Plano {
+  return Object.fromEntries(
+    plano.flatMap((item) => (item.semestre ? [[item.codigo, item.semestre] as const] : [])),
+  );
+}
 
 export default function TrajetoriaTab(): JSX.Element {
-  const [plan, setPlan] = useState(INITIAL_PLAN);
+  const auth = useAuth();
+  const sigaaLink = useSigaaLink();
+  const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const mutedColor = useThemeColor("muted");
 
-  function movePendingCourse(id: PendingCourseId, targetZone: PlanZoneKey): void {
-    setPlan((current) => {
-      const next: Record<PlanZoneKey, PendingCourseId[]> = { p262: [], p271: [], pool: [] };
-      (Object.keys(current) as PlanZoneKey[]).forEach((zone) => {
-        next[zone] = current[zone].filter((courseId) => courseId !== id);
-      });
-      next[targetZone] = [...next[targetZone], id];
-      return next;
+  const [state, setState] = useState<LoadState>({ status: "loading" });
+  // Moves the student made in this session, on top of the plan the server sent.
+  // Persisting them is a later task, so a reload legitimately drops them — but
+  // a re-sync must drop them too, since the server's plan is the authority.
+  const [movimentos, setMovimentos] = useState<Plano>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [erroSync, setErroSync] = useState<string | null>(null);
+  const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
+
+  // No request of its own: the home screen writes this cache after every
+  // schedule fetch, and reading it is what lets this screen tell whether the
+  // term the transcript is still showing as "em curso" has already ended.
+  useEffect(() => {
+    void getPeriodoCache().then((periodo) => setFimDoPeriodo(periodo?.fim ?? null));
+  }, []);
+
+  const aplicar = useCallback((resposta: TrajetoriaResponse) => {
+    if (!("historico" in resposta)) {
+      setState({ status: "unsynced" });
+      return;
+    }
+    setState({
+      status: "ready",
+      historico: resposta.historico,
+      fetchedAt: new Date(resposta.fetchedAt),
+      plano: resposta.plano,
     });
+    setMovimentos({});
+  }, []);
+
+  // Reading the stored trajectory needs no SIGAA credential — the JWT already
+  // scopes it to this student. Only the re-scrape below does.
+  const carregar = useCallback(
+    async (silent = false) => {
+      if (!accessToken) {
+        return;
+      }
+      if (!silent) {
+        setState({ status: "loading" });
+      }
+      try {
+        aplicar(await getTrajetoria(accessToken));
+      } catch (error) {
+        console.warn("Failed to load trajetória", error);
+        setState({ status: "error", message: describeApiError(error) });
+      }
+    },
+    [accessToken, aplicar],
+  );
+
+  useEffect(() => {
+    if (sigaaLink.status === "linked" && accessToken) {
+      carregar();
+    } else if (sigaaLink.status === "unlinked") {
+      setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua trajetória." });
+    }
+  }, [sigaaLink.status, accessToken, carregar]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await carregar(true);
+    setRefreshing(false);
+  }, [carregar]);
+
+  const sincronizar = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+    const credentials = await getSigaaCredentials();
+    if (!credentials) {
+      // Reads as one sentence after the prefix the error line already carries.
+      setErroSync("Vincule sua conta do SIGAA primeiro.");
+      return;
+    }
+
+    setSincronizando(true);
+    setErroSync(null);
+    try {
+      aplicar(
+        await postTrajetoriaSync(accessToken, {
+          login: credentials.login,
+          senha: credentials.senha,
+        }),
+      );
+    } catch (error) {
+      console.warn("Failed to sync trajetória", error);
+      // The state deliberately survives the failure: a student looking at last
+      // term's grades should keep seeing them when a re-sync fails.
+      setErroSync(describeApiError(error));
+    } finally {
+      setSincronizando(false);
+    }
+  }, [accessToken, aplicar]);
+
+  function moverComponente(codigo: string, zona: string): void {
+    setMovimentos((atual) => ({ ...atual, [codigo]: zona }));
   }
+
+  const erro = erroSync ? (
+    <Typography.Paragraph type="body-xs" className="text-danger">
+      Não deu para sincronizar seu histórico. {erroSync}
+    </Typography.Paragraph>
+  ) : null;
 
   return (
     <View className="flex-1 bg-background">
@@ -37,151 +182,313 @@ export default function TrajetoriaTab(): JSX.Element {
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View className="rounded-3xl bg-surface-secondary p-4 gap-3.5">
-          <View className="flex-row items-stretch gap-4">
-            <View className="flex-1 gap-0.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                Coeficiente
-              </Typography.Paragraph>
-              <Typography.Heading type="h5">{TRANSCRIPT_SUMMARY.gpa}</Typography.Heading>
-            </View>
-            <View className="w-px bg-white/10" />
-            <View className="flex-[1.3] gap-0.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                Carga horária
-              </Typography.Paragraph>
-              <Typography.Heading type="h5">
-                {TRANSCRIPT_SUMMARY.completedHours}/{TRANSCRIPT_SUMMARY.totalHours}
-              </Typography.Heading>
-            </View>
-          </View>
-          <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
-            <View
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${TRANSCRIPT_SUMMARY.progressPercent}%` }}
-            />
-          </View>
-          <View className="flex-row items-center justify-between">
-            <Typography.Paragraph type="body-xs" color="muted">
-              {TRANSCRIPT_SUMMARY.progressPercent}% do curso concluído
+        {state.status === "loading" ? (
+          <View className="rounded-3xl bg-surface-secondary p-8 items-center">
+            <Typography.Paragraph type="body-sm" color="muted">
+              Carregando sua trajetória…
             </Typography.Paragraph>
-            <Typography.Paragraph type="body-xs" color="muted">
-              faltam {TRANSCRIPT_SUMMARY.remainingCourses} matérias
+          </View>
+        ) : null}
+
+        {state.status === "error" ? (
+          <View className="rounded-3xl bg-surface-secondary p-6 items-center gap-3">
+            <AppIcon name="IconWarningCircle" size={28} color={mutedColor} />
+            <Typography.Paragraph type="body-sm" color="muted" align="center">
+              {state.message}
             </Typography.Paragraph>
+            {sigaaLink.status === "linked" ? (
+              <Button variant="outline" size="sm" onPress={() => carregar()}>
+                Tentar de novo
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+
+        {state.status === "unsynced" ? (
+          <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
+            <Typography.Heading type="h6">Sua trajetória ainda não foi montada</Typography.Heading>
+            <Typography.Paragraph type="body-sm" color="muted">
+              Vamos buscar seu histórico escolar no SIGAA e montar sua trajetória. Leva alguns
+              segundos.
+            </Typography.Paragraph>
+
+            {/* Above the button, never below it: pressing sync is the moment the
+                student hands us a document carrying their CPF, RG and date of
+                birth, so both halves — what we keep and what we throw away —
+                have to be readable before the press. */}
+            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que fica guardado:{" "}
+                </Typography.Paragraph>
+                suas matérias, notas e carga horária — é o que monta esta tela.
+              </Typography.Paragraph>
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que não fica:{" "}
+                </Typography.Paragraph>
+                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
+                leitura.
+              </Typography.Paragraph>
+            </View>
+
+            <Button onPress={sincronizar} isDisabled={sincronizando}>
+              {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
+            </Button>
+
+            {/* The wait is ~40s of server-side scraping. A disabled button with a
+                changed label is not enough feedback for that long, and the
+                calibrated stage model for exactly this request already exists. */}
+            {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
+            {erro}
+          </View>
+        ) : null}
+
+        {state.status === "ready" ? (
+          <ReadyTrajetoria
+            historico={state.historico}
+            fetchedAt={state.fetchedAt}
+            fimDoPeriodo={fimDoPeriodo}
+            plano={state.plano}
+            movimentos={movimentos}
+            onMover={moverComponente}
+            onSincronizar={sincronizar}
+            sincronizando={sincronizando}
+            erro={erro}
+            mutedColor={mutedColor}
+          />
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ReadyTrajetoria({
+  historico,
+  fetchedAt,
+  fimDoPeriodo,
+  plano,
+  movimentos,
+  onMover,
+  onSincronizar,
+  sincronizando,
+  erro,
+  mutedColor,
+}: {
+  historico: Historico;
+  fetchedAt: Date;
+  fimDoPeriodo: string | null;
+  plano: ItemPlano[];
+  movimentos: Plano;
+  onMover: (codigo: string, zona: string) => void;
+  onSincronizar: () => void;
+  sincronizando: boolean;
+  erro: JSX.Element | null;
+  mutedColor: string;
+}): JSX.Element {
+  const { total } = historico.cargaHoraria;
+  const percentual = percentualConcluido(total);
+  const periodos = agruparPorSemestre(historico.cursados);
+  const pendentes = poolPlanejavel(historico.pendentesObrigatorios);
+  const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
+
+  // The term in progress, or — on a transcript with nothing enrolled — the last
+  // one on it, so the planner still has somewhere to count forward from.
+  const semestreAtual =
+    periodos.find((periodo) => periodo.emCurso)?.semestre ??
+    periodos[periodos.length - 1]?.semestre;
+  const zonas = semestreAtual
+    ? zonasDePlanejamento(semestreAtual, historico.prazoConclusaoMaximo, ZONAS_FUTURAS)
+    : [];
+  const salvo = planoSalvo(plano);
+
+  return (
+    <>
+      <View className="rounded-3xl bg-surface-secondary p-4 gap-3.5">
+        <View className="flex-row items-stretch gap-4">
+          <View className="flex-1 gap-0.5">
+            <Typography.Paragraph type="body-xs" color="muted">
+              Coeficiente
+            </Typography.Paragraph>
+            <Typography.Heading type="h5">
+              {formatarCoeficiente(historico.indices.cr)}
+            </Typography.Heading>
+          </View>
+          <View className="w-px bg-white/10" />
+          <View className="flex-[1.3] gap-0.5">
+            <Typography.Paragraph type="body-xs" color="muted">
+              Carga horária
+            </Typography.Paragraph>
+            <Typography.Heading type="h5">
+              {total.integralizada}/{total.exigida} h
+            </Typography.Heading>
           </View>
         </View>
+        <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+          <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
+        </View>
+        <View className="flex-row items-center justify-between">
+          <Typography.Paragraph type="body-xs" color="muted">
+            {percentual}% do curso concluído
+          </Typography.Paragraph>
+          <Typography.Paragraph type="body-xs" color="muted">
+            {pendentes.length === 1 ? "falta 1 matéria" : `faltam ${pendentes.length} matérias`}
+          </Typography.Paragraph>
+        </View>
+      </View>
 
-        {PERIODS.map((period) => (
-          <View key={period.label} className="gap-2.5">
-            <View className="flex-row items-center gap-2.5">
-              <Typography.Paragraph weight="medium">{period.label}</Typography.Paragraph>
-              <View
-                className={`rounded-full px-2 py-1 ${
-                  period.tone === "now" ? "bg-accent-soft" : "bg-white/5"
-                }`}
+      <View className="gap-2">
+        <View className="flex-row items-center justify-between gap-3">
+          <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
+            {desatualizado
+              ? "O semestre acabou e seu histórico ainda tem matérias em curso — sincronize para ver as notas."
+              : `Sincronizado em ${fetchedAt.toLocaleDateString("pt-BR")}`}
+          </Typography.Paragraph>
+          {sincronizando ? null : (
+            <Pressable onPress={onSincronizar} className="h-9 px-1 justify-center">
+              <Typography.Paragraph type="body-sm" weight="medium" className="text-accent">
+                Sincronizar
+              </Typography.Paragraph>
+            </Pressable>
+          )}
+        </View>
+        {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
+        {erro}
+      </View>
+
+      {periodos.map((periodo) => (
+        <View key={periodo.semestre} className="gap-2.5">
+          <View className="flex-row items-center gap-2.5">
+            <Typography.Paragraph weight="medium">{periodo.semestre}</Typography.Paragraph>
+            <View
+              className={`rounded-full px-2 py-1 ${
+                periodo.emCurso ? "bg-accent-soft" : "bg-white/5"
+              }`}
+            >
+              <Typography.Paragraph
+                type="body-xs"
+                className={periodo.emCurso ? "text-accent" : undefined}
+                color={periodo.emCurso ? undefined : "muted"}
               >
-                <Typography.Paragraph
-                  type="body-xs"
-                  className={period.tone === "now" ? "text-accent" : undefined}
-                  color={period.tone === "now" ? undefined : "muted"}
-                >
-                  {period.meta}
-                </Typography.Paragraph>
-              </View>
-              <View className="flex-1 h-px bg-white/10" />
+                {rotuloPeriodo(periodo.emCurso, desatualizado)}
+              </Typography.Paragraph>
             </View>
-            {period.rows.map((row) => (
+            <View className="flex-1 h-px bg-white/10" />
+          </View>
+          {periodo.componentes.map((componente) => {
+            const rotulo = rotuloSituacao(componente.situacao);
+            const nota = formatarNota(componente.nota);
+            return (
               <View
-                key={row.code}
+                key={`${componente.semestre}-${componente.codigo}`}
                 className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-3"
               >
                 <View className="flex-1 gap-0.5">
-                  <Typography.Paragraph weight="medium">{row.name}</Typography.Paragraph>
+                  <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
                   <Typography.Paragraph type="body-xs" color="muted">
-                    {row.code}
+                    {componente.codigo} · {componente.cargaHoraria} h
                   </Typography.Paragraph>
                 </View>
-                <Typography.Heading type="h6" style={{ color: gradeColor(row.grade) }}>
-                  {row.grade}
-                </Typography.Heading>
-              </View>
-            ))}
-          </View>
-        ))}
-
-        <View className="gap-5">
-          {PLAN_ZONES.map((zone) => {
-            const courseIds = plan[zone.key];
-            const isEmpty = courseIds.length === 0;
-            return (
-              <View key={zone.key} className="gap-2.5">
-                <View className="flex-row items-center gap-2.5">
-                  <Typography.Paragraph weight="medium">{zone.label}</Typography.Paragraph>
+                {rotulo ? (
                   <View className="rounded-full bg-white/5 px-2 py-1">
                     <Typography.Paragraph type="body-xs" color="muted">
-                      {zone.key === "pool"
-                        ? `a cursar · ${courseIds.length}`
-                        : isEmpty
-                          ? "vazio"
-                          : `${courseIds.length} ${courseIds.length === 1 ? "matéria" : "matérias"}`}
+                      {rotulo}
                     </Typography.Paragraph>
                   </View>
-                  <View className="flex-1 h-px bg-white/10" />
-                </View>
-                <View
-                  className={`gap-2 rounded-[20px] p-2 min-h-16 ${
-                    isEmpty ? "border border-dashed border-white/20" : ""
-                  }`}
-                >
-                  {courseIds.map((courseId) => {
-                    const course = PENDING_COURSES[courseId];
-                    const otherZones = PLAN_ZONES.filter((z) => z.key !== zone.key);
-                    return (
-                      <Menu key={courseId}>
-                        <Menu.Trigger asChild>
-                          <Pressable className="rounded-2xl bg-surface-secondary p-3 flex-row items-center gap-2.5">
-                            <AppIcon name="IconCheck" size={18} color={mutedColor} />
-                            <View className="flex-1 gap-0.5">
-                              <Typography.Paragraph weight="medium">
-                                {course.name}
-                              </Typography.Paragraph>
-                              <Typography.Paragraph type="body-xs" color="muted">
-                                {courseId} · {course.workload}
-                              </Typography.Paragraph>
-                            </View>
-                          </Pressable>
-                        </Menu.Trigger>
-                        <Menu.Portal>
-                          <Menu.Overlay />
-                          <Menu.Content presentation="popover" width={220}>
-                            <Menu.Label>Mover para</Menu.Label>
-                            {otherZones.map((target) => (
-                              <Menu.Item
-                                key={target.key}
-                                onPress={() => movePendingCourse(courseId, target.key)}
-                              >
-                                <Menu.ItemTitle>{target.label}</Menu.ItemTitle>
-                              </Menu.Item>
-                            ))}
-                          </Menu.Content>
-                        </Menu.Portal>
-                      </Menu>
-                    );
-                  })}
-                  {isEmpty ? (
-                    <View className="py-3.5 px-1.5 items-center">
-                      <Typography.Paragraph type="body-sm" color="muted">
-                        {zone.hint}
-                      </Typography.Paragraph>
-                    </View>
-                  ) : null}
-                </View>
+                ) : null}
+                <Typography.Heading type="h6" style={{ color: gradeColor(nota) }}>
+                  {nota}
+                </Typography.Heading>
               </View>
             );
           })}
         </View>
-      </ScrollView>
-    </View>
+      ))}
+
+      <View className="gap-5">
+        {[...zonas, ZONA_SEM_PERIODO].map((zona) => {
+          const semPeriodo = zona === ZONA_SEM_PERIODO;
+          const componentes = pendentes.filter((pendente) => {
+            const atual = movimentos[pendente.codigo] ?? salvo[pendente.codigo];
+            // A term the planner no longer offers (past the deadline, or beyond
+            // the two it shows) falls back to the pool rather than taking its
+            // component off the screen entirely.
+            return atual && zonas.includes(atual) ? atual === zona : semPeriodo;
+          });
+          const vazia = componentes.length === 0;
+          return (
+            <View key={zona} className="gap-2.5">
+              <View className="flex-row items-center gap-2.5">
+                <Typography.Paragraph weight="medium">
+                  {semPeriodo ? "Sem período" : zona}
+                </Typography.Paragraph>
+                <View className="rounded-full bg-white/5 px-2 py-1">
+                  <Typography.Paragraph type="body-xs" color="muted">
+                    {semPeriodo
+                      ? `a cursar · ${componentes.length}`
+                      : vazia
+                        ? "vazio"
+                        : `${componentes.length} ${componentes.length === 1 ? "matéria" : "matérias"}`}
+                  </Typography.Paragraph>
+                </View>
+                <View className="flex-1 h-px bg-white/10" />
+              </View>
+              <View
+                className={`gap-2 rounded-[20px] p-2 min-h-16 ${
+                  vazia ? "border border-dashed border-white/20" : ""
+                }`}
+              >
+                {componentes.map((componente) => (
+                  <Menu key={componente.codigo}>
+                    <Menu.Trigger asChild>
+                      <Pressable className="rounded-2xl bg-surface-secondary p-3 flex-row items-center gap-2.5">
+                        <AppIcon name="IconCheck" size={18} color={mutedColor} />
+                        <View className="flex-1 gap-0.5">
+                          <Typography.Paragraph weight="medium">
+                            {componente.nome}
+                          </Typography.Paragraph>
+                          <Typography.Paragraph type="body-xs" color="muted">
+                            {componente.codigo} · {componente.cargaHoraria} h
+                          </Typography.Paragraph>
+                        </View>
+                      </Pressable>
+                    </Menu.Trigger>
+                    <Menu.Portal>
+                      <Menu.Overlay />
+                      <Menu.Content presentation="popover" width={220}>
+                        <Menu.Label>Mover para</Menu.Label>
+                        {[...zonas, ZONA_SEM_PERIODO]
+                          .filter((destino) => destino !== zona)
+                          .map((destino) => (
+                            <Menu.Item
+                              key={destino}
+                              onPress={() => onMover(componente.codigo, destino)}
+                            >
+                              <Menu.ItemTitle>
+                                {destino === ZONA_SEM_PERIODO ? "Sem período" : destino}
+                              </Menu.ItemTitle>
+                            </Menu.Item>
+                          ))}
+                      </Menu.Content>
+                    </Menu.Portal>
+                  </Menu>
+                ))}
+                {vazia ? (
+                  <View className="py-3.5 px-1.5 items-center">
+                    <Typography.Paragraph type="body-sm" color="muted">
+                      {semPeriodo
+                        ? "Tudo planejado."
+                        : "Nenhuma matéria planejada para este período."}
+                    </Typography.Paragraph>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </>
   );
 }

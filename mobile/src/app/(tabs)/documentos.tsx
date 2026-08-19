@@ -4,16 +4,12 @@ import { Pressable, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
+import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
 import { postSigaaAtestado, postSigaaHistorico } from "@/lib/api";
 import { htmlToPdfBytes } from "@/lib/html-to-pdf";
 import { useAuth } from "@/lib/auth-context";
-import {
-  ATESTADO_STAGES,
-  downloadProgress,
-  HISTORICO_STAGES,
-  type ProgressStage,
-} from "@/lib/download-progress";
+import { ATESTADO_STAGES, HISTORICO_STAGES } from "@/lib/download-progress";
 import { DOCUMENT_DEFS, type DocumentKey } from "@/lib/mock-data";
 import {
   getSavedSigaaDocument,
@@ -44,45 +40,6 @@ function documentOf(state: DocState): SavedSigaaDocument | null {
 function formatDocMeta(document: SavedSigaaDocument): string {
   const kb = Math.max(1, Math.round(document.size / 1024));
   return `baixado em ${document.savedAt.toLocaleDateString("pt-BR")} · ${kb} KB`;
-}
-
-/**
- * The download is a single opaque POST, so there is no real progress signal
- * to render — instead the bar walks the backend's actual stages at their
- * typical pace (see download-progress.ts) and parks near the end if SIGAA is
- * slower than usual. Completion is signaled by the card leaving "busy", never
- * by the bar reaching 100% on its own.
- */
-function DownloadProgressBar({ stages }: { stages: ProgressStage[] }): JSX.Element {
-  const [progress, setProgress] = useState(() => downloadProgress(0, stages));
-
-  useEffect(() => {
-    // Elapsed time is accumulated per tick (not Date.now()) so the bar is
-    // driven purely by the timer — slight drift is irrelevant for a
-    // calibrated estimate, and it keeps the component testable under fake
-    // timers that don't mock Date.
-    const tickMs = 120;
-    let elapsedMs = 0;
-    const timer = setInterval(() => {
-      elapsedMs += tickMs;
-      setProgress(downloadProgress(elapsedMs, stages));
-    }, tickMs);
-    return () => clearInterval(timer);
-  }, [stages]);
-
-  return (
-    <View className="gap-2">
-      <View className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-        <View
-          className="h-full rounded-full bg-accent"
-          style={{ width: `${progress.fraction * 100}%` }}
-        />
-      </View>
-      <Typography.Paragraph type="body-xs" color="muted">
-        {progress.label}
-      </Typography.Paragraph>
-    </View>
-  );
 }
 
 /**

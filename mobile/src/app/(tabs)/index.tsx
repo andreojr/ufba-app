@@ -11,6 +11,7 @@ import { UfbaCrest } from "@/components/UfbaCrest";
 import { describeApiError } from "@/lib/api-errors";
 import { postSchedule, postSigaaSession } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { savePeriodoCache } from "@/lib/periodo-cache";
 import { isWithinPeriodo } from "@/lib/periodo-letivo";
 import {
   formatMinutes,
@@ -113,6 +114,14 @@ export default function HomeTab(): JSX.Element {
       }
       try {
         const { turmas, periodoLetivo } = await postSchedule(accessToken, credentials);
+        if (periodoLetivo) {
+          // Cached for screens that never call /schedule — Trajetória reads this
+          // to tell whether the term is over. Fire and forget: a failed write
+          // must not turn a good schedule fetch into an error.
+          void savePeriodoCache(periodoLetivo).catch((error: unknown) => {
+            console.warn("Failed to cache the academic term", error);
+          });
+        }
         setState({
           status: "ready",
           // Masked here, before anything reads the week: a turma's slots say
