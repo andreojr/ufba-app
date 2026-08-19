@@ -99,9 +99,17 @@ screen needs — transcript and plan in a single round trip).
 
 - `sigaa-engine/parsers/historico-texto.ts` — the only file importing
   `pdf-parse`. `extrairItensHistorico(pdf: Buffer): Promise<ItemTexto[]>`,
-  where `ItemTexto` is `{ pagina, x, y, texto, italico }`. `italico`
-  comes from the font name (`Helvetica-Oblique`), which is how a
-  docente line is told apart from a wrapped component name.
+  where `ItemTexto` is `{ pagina, x, y, texto, fontName }`.
+
+  Note on font: pdfjs cannot tell us which font is the oblique one
+  here. The transcript's fonts are not embedded, so
+  `getTextContent().styles` reports `fontFamily: "sans-serif"` for all
+  three, and the only distinguishing handle is a per-document generated
+  id (`g_d0_f3`) that must not be hardcoded. Verified against the real
+  document. The parser therefore identifies a docente line by shape,
+  not by font — see below. `fontName` is carried on `ItemTexto` for
+  debugging and fixture inspection only; no parsing decision may depend
+  on its value.
 
 - `sigaa-engine/parsers/historico.ts` —
   `parseHistorico(itens: ItemTexto[]): Historico`, pure and
@@ -110,6 +118,15 @@ screen needs — transcript and plan in a single round trip).
   shifts). Inside the component table, any item matching `^\d{4}\.\d$`
   at x < 60 is a row baseline; cells are sliced by x band with
   tolerance, since columns drift ~3 pt between pages.
+
+  A component row's second line — the one sitting 1 to 8 pt below the
+  baseline inside the name column — is the **docente** when its joined
+  text ends in `(Nh)`, and a **continuation of the component name**
+  otherwise. Verified against the real document: this agrees with
+  font-based classification on all 49 rows (48 docente lines, zero
+  disagreements), needs no font information, and handles a wrapped
+  component name — the fragility the spike flagged as unobserved but
+  likely — with no extra rule.
 
   Types: `SituacaoComponente` (`APR | CANC | DISP | MATR | REP | REPF
   | REPMF | TRANC | TRANS | INCORP | CUMP`, the full legend, not just
