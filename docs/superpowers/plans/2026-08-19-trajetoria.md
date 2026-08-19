@@ -238,11 +238,13 @@ git commit -m "feat(backend): extract positioned text items from the histórico 
 - Consumes: `extrairItensHistorico` from Task 1.
 - Produces: the fixture file every spec in Tasks 3–6 reads.
 
-This task has no test of its own — it produces test input. Its deliverable is verified by inspection in Step 4.
+This task has no test of its own — it produces test input. Its deliverable is verified by the script's own assertion plus the inspection in Step 4.
+
+**Read this before writing anything.** The script is committed. It therefore must never *contain* a personal value — not the name, not the matrícula, not the CPF, RG or birth date. A hardcoded list of "replace this real string with that fake one" would put the real strings into git history permanently, where rewriting history is the only way out: the fixture would be clean and the script would be the leak. So the script never names a value. It **discovers** them positionally, then replaces them globally.
+
+That works because the Dados Pessoais fields are label/value pairs painted at the same y, with the value to the right of the label — the same geometry Task 3's `valorAoLadoDe` relies on. The script finds the value beside each sensitive label, then replaces every occurrence of that string across every item. Global replacement is what catches the repeats: the matrícula also appears in the continuation header on pages 2 and 3, and in the footer's verification instructions.
 
 - [ ] **Step 1: Write the dump script**
-
-Anonymisation happens **inside** the script, before anything is written, so the real values never land on disk in the repo. Only `texto` fields change; the x/y coordinates the parser depends on are independent of content, which is why substituting a name of a different length is harmless here.
 
 `create: backend/scripts/dump-historico-fixture.ts`:
 
@@ -253,26 +255,66 @@ Anonymisation happens **inside** the script, before anything is written, so the 
  *
  * Usage: npx ts-node scripts/dump-historico-fixture.ts <caminho-do-pdf>
  *
- * The real PDF must never be committed, and neither may a dump carrying its
- * personal data — hence the substitutions below, applied before writing.
- * Coordinates are left untouched: the parser reads cells off x/y bands, and
- * those do not depend on the text's content or length.
+ * This file is committed, so it contains no personal value of any kind. It
+ * locates them instead: each sensitive field is a label with its value painted
+ * at the same y, to the right — so the script reads the value beside the label,
+ * then replaces every occurrence of that string across the whole dump. That
+ * global pass is what catches the repeats (the matrícula reappears in the
+ * page-2/3 continuation header and in the footer).
+ *
+ * Coordinates are never touched. The parser reads cells off x/y bands, so a
+ * replacement of a different length is harmless — which is exactly why this
+ * approach is safe for the fixture's purpose.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { extrairItensHistorico } from '../src/sigaa-engine/parsers/historico-texto';
+import {
+  extrairItensHistorico,
+  type ItemTexto,
+} from '../src/sigaa-engine/parsers/historico-texto';
 
-// Fill in the left-hand side with the real values found in the source PDF.
-// Every entry is a plain string replacement over each item's `texto`.
-const SUBSTITUICOES: [string, string][] = [
-  ['ANDRE LUIZ DE OLIVEIRA JUNIOR', 'MARIA DA SILVA SANTOS'],
-  ['223116037', '209900011'],
-  // CPF, RG and birth date: copy the exact strings as they appear in the PDF.
-  ['000.000.000-00', '111.222.333-44'],
-  ['0000000000, (SSP/BA)', '9999999999, (SSP/BA)'],
-  ['01/01/2000', '15/03/2001'],
-  ['49c587ba37', 'aaaa1111bb'],
+/**
+ * Sensitive labels, each paired with the fictional value that replaces whatever
+ * sits beside it. The left side is a label printed on every transcript; the
+ * right side is invented. Neither is personal data.
+ */
+const CAMPOS_SENSIVEIS: { rotulo: string; ficticio: string }[] = [
+  { rotulo: 'Nome:', ficticio: 'MARIA DA SILVA SANTOS' },
+  { rotulo: 'Matrícula:', ficticio: '209900011' },
+  { rotulo: 'Data de Nascimento:', ficticio: '15/03/2001' },
+  { rotulo: 'Local de Nascimento:', ficticio: 'CIDADE FICTICIA/BA' },
+  { rotulo: 'Nº do CPF:', ficticio: '111.222.333-44' },
+  { rotulo: 'Nº do documento:', ficticio: '9999999999, (SSP/BA)' },
 ];
+
+/** The footer's authenticity code — found by shape, not by value. */
+const CODIGO_VERIFICACAO_PATTERN = /código de verificação:\s*([0-9a-z]{6,})/i;
+
+/** The value painted beside `rotulo`: same y, next item to the right. */
+function valorAoLadoDe(itens: ItemTexto[], rotulo: string): string | null {
+  const label = itens.find((i) => i.texto === rotulo || i.texto.startsWith(rotulo));
+  if (!label) {
+    return null;
+  }
+
+  // Some deploys paint the label and its value as one run ("Matrícula: 123").
+  const embutido = label.texto.slice(rotulo.length).trim();
+  if (embutido) {
+    return embutido;
+  }
+
+  return (
+    itens
+      .filter(
+        (i) =>
+          i !== label &&
+          i.pagina === label.pagina &&
+          Math.abs(i.y - label.y) <= 1.5 &&
+          i.x > label.x,
+      )
+      .sort((a, b) => a.x - b.x)[0]?.texto ?? null
+  );
+}
 
 async function main(): Promise<void> {
   const caminho = process.argv[2];
@@ -282,13 +324,50 @@ async function main(): Promise<void> {
 
   const itens = await extrairItensHistorico(readFileSync(caminho));
 
+  const substituicoes: { real: string; ficticio: string }[] = [];
+  for (const { rotulo, ficticio } of CAMPOS_SENSIVEIS) {
+    const real = valorAoLadoDe(itens, rotulo);
+    if (!real) {
+      // A label this script cannot find is a field it cannot redact. Refuse
+      // rather than write a fixture that silently keeps real data.
+      throw new Error(
+        `Não achei o valor do campo "${rotulo}" — o layout mudou, e sem ele a ` +
+          'anonimização estaria incompleta.',
+      );
+    }
+    substituicoes.push({ real, ficticio });
+  }
+
+  for (const item of itens) {
+    const match = CODIGO_VERIFICACAO_PATTERN.exec(item.texto);
+    if (match) {
+      substituicoes.push({ real: match[1], ficticio: 'aaaa1111bb' });
+      break;
+    }
+  }
+
+  // Longest first: replacing the matrícula before the RG would corrupt an RG
+  // that happens to contain it as a substring.
+  substituicoes.sort((a, b) => b.real.length - a.real.length);
+
   const anonimos = itens.map((item) => {
     let texto = item.texto;
-    for (const [de, para] of SUBSTITUICOES) {
-      texto = texto.split(de).join(para);
+    for (const { real, ficticio } of substituicoes) {
+      texto = texto.split(real).join(ficticio);
     }
     return { ...item, texto };
   });
+
+  // The script's own gate: if any discovered value survived, the fixture is not
+  // safe to commit and this must not exit successfully.
+  const serializado = JSON.stringify(anonimos, null, 2);
+  const vazando = substituicoes.filter(({ real }) => serializado.includes(real));
+  if (vazando.length > 0) {
+    throw new Error(
+      `${vazando.length} valor(es) pessoal(is) sobreviveram à anonimização. ` +
+        'Fixture NÃO escrita.',
+    );
+  }
 
   const destino = join(
     __dirname,
@@ -299,34 +378,43 @@ async function main(): Promise<void> {
     '__fixtures__',
     'historico-itens.json',
   );
-  writeFileSync(destino, `${JSON.stringify(anonimos, null, 2)}\n`);
-  console.log(`${anonimos.length} itens escritos em ${destino}`);
+  writeFileSync(destino, `${serializado}\n`);
+  console.log(
+    `${anonimos.length} itens escritos em ${destino} ` +
+      `(${substituicoes.length} valores anonimizados)`,
+  );
 }
 
 void main();
 ```
 
-- [ ] **Step 2: Fill in the real values to substitute**
+- [ ] **Step 2: Run the script**
 
-Open the source PDF and read the Dados Pessoais section. Replace the left-hand side of each `SUBSTITUICOES` entry with the exact string as it appears. Ask André for the PDF path — as of this writing it is `~/Downloads/historico_223116037-4.pdf`.
-
-- [ ] **Step 3: Run the script**
+Ask André for the PDF path — as of this writing it is `~/Downloads/historico_223116037-4.pdf`. Nothing needs to be filled in by hand: the script discovers what to redact.
 
 ```bash
 cd backend && npx ts-node scripts/dump-historico-fixture.ts ~/Downloads/historico_223116037-4.pdf
 ```
 
-Expected: `~1300 itens escritos em .../historico-itens.json`.
+Expected: a line reporting the item count, the destination, and `7 valores anonimizados`. If it throws `Não achei o valor do campo …`, the transcript's label differs from the one listed — read the real label out of the PDF and correct `CAMPOS_SENSIVEIS`'s `rotulo` (the label is not personal data; the value is). If it throws `valor(es) pessoal(is) sobreviveram`, stop and report it — do not work around it.
 
-- [ ] **Step 4: Verify the fixture carries no personal data**
+- [ ] **Step 3: Verify the fixture carries no personal data**
+
+The script already refuses to write a leaking fixture, so this is the independent check by shape rather than by value:
 
 ```bash
-cd backend && grep -c "ANDRE\|223116037\|49c587ba37" src/sigaa-engine/parsers/__fixtures__/historico-itens.json
+cd backend && grep -cE "[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|[0-9]{10}, \(SSP" src/sigaa-engine/parsers/__fixtures__/historico-itens.json
 ```
 
-Expected: `0`. If it prints anything else, a substitution string did not match the PDF exactly — fix it and re-run Step 3. **Do not commit until this prints 0.**
+Expected: `2` — the two fictional values (`111.222.333-44` and `9999999999, (SSP/BA)`) and nothing else. Confirm the two matches are exactly those:
 
-Then sanity-check the shape:
+```bash
+cd backend && grep -oE "[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|[0-9]{10}, \(SSP/BA\)" src/sigaa-engine/parsers/__fixtures__/historico-itens.json | sort -u
+```
+
+Expected: exactly `111.222.333-44` and `9999999999, (SSP/BA)`. **Any other value means real data is in the fixture — do not commit.**
+
+- [ ] **Step 4: Sanity-check the shape**
 
 ```bash
 cd backend && node -e "const i=require('./src/sigaa-engine/parsers/__fixtures__/historico-itens.json'); console.log(i.length, 'itens,', new Set(i.map(x=>x.pagina)).size, 'páginas'); console.log(i.filter(x=>/^\d{4}\.\d$/.test(x.texto) && x.x<60).length, 'âncoras de linha')"
