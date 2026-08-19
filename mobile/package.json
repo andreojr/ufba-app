@@ -15,10 +15,13 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo-google-fonts/poppins": "^0.4.1",
+    "@expo-google-fonts/source-code-pro": "^0.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-google-signin/google-signin": "^16.1.4",
+    "cpf-cnpj-validator": "^2.1.2",
     "expo": "~54.0.0",
     "expo-constants": "~18.0.14",
     "expo-dev-client": "~6.0.21",
@@ -55,6 +58,9 @@
     "typescript": "~5.9.2"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|cpf-cnpj-validator)"
+    ]
   }
 }

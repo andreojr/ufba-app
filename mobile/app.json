@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Gradline",
-    "slug": "mobile",
+    "slug": "gradline",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,7 @@
       "package": "com.gradline.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#18181B"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -27,7 +27,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#18181B"
         }
       ],
       "@react-native-google-signin/google-signin",
