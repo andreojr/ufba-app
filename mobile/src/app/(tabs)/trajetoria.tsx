@@ -415,19 +415,23 @@ function ReadyTrajetoria({
           )}
         </View>
 
-        <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-2.5">
-          {/* The percentage is the one number on this card meant to be read at
-              a glance — a heading, not body text, is what makes it the thing
-              the eye lands on first. */}
-          <Typography.Heading type="h4" className="text-accent">
-            {percentual}% do curso concluído
-          </Typography.Heading>
+        <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-3.5">
           <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
             <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
           </View>
-          <Typography.Paragraph type="body-xs" color="muted">
-            {faltantes === 1 ? "falta 1 matéria" : `faltam ${faltantes} matérias`}
-          </Typography.Paragraph>
+          <View className="flex-row items-center justify-between">
+            <Typography.Paragraph type="body-xs" color="muted">
+              {/* Only the number itself is emphasised — the sentence around it
+                  stays body text, same as "faltam N matérias" beside it. */}
+              <Typography.Paragraph type="body-sm" weight="bold">
+                {percentual}%
+              </Typography.Paragraph>{" "}
+              do curso concluído
+            </Typography.Paragraph>
+            <Typography.Paragraph type="body-xs" color="muted">
+              {faltantes === 1 ? "falta 1 matéria" : `faltam ${faltantes} matérias`}
+            </Typography.Paragraph>
+          </View>
         </View>
       </View>
 

@@ -22,13 +22,15 @@ const ALTURA_PADRAO = 120;
 const LARGURA_MINIMA = 280;
 // Wide enough that a point's floating label doesn't crowd its neighbour.
 const ESPACO_POR_PONTO = 56;
-// Light on x: points shouldn't sit flush against the chart's edge, but
-// nothing more is needed there. Generous on y: the CR's own value floats
-// diagonally just above each point (see COR_VALOR below), and margem 0 would
-// clip that label — right at the highest point, exactly where its value most
-// matters — against the chart's own top edge.
-const MARGEM_X = 8;
-const MARGEM_Y = 28;
+// The first/last point's floating value tilts -45° from roughly its own x
+// position, which pushes its rendered (rotated) box further left than the
+// point itself — margem 8 wasn't enough and the label clipped off the
+// chart's left edge. Y stays only as generous as the label's own height
+// needs: this margin is pixels taken directly out of `altura`, and with the
+// chart this short (~70px), every pixel spent here is a pixel the line
+// itself doesn't get to move in — the real reason the line was reading flat.
+const MARGEM_X = 20;
+const MARGEM_Y = 14;
 // As tight as the domain math allows without pinning the line to the very
 // edges: the CR series already moves in small steps, and any padding beyond
 // this buries that movement in dead space instead of letting it fill the
@@ -95,7 +97,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
               style={{
                 position: "absolute",
                 left: coordenada.x - 12,
-                top: coordenada.y - 24,
+                top: coordenada.y - 15,
                 fontSize: 10,
                 fontWeight: "600",
                 color: COR_VALOR,
