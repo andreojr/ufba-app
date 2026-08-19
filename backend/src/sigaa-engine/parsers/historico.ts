@@ -286,6 +286,156 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
   return cursados;
 }
 
+// "Componentes Curriculares Obrigatórios Pendentes:20" — the count is glued to
+// the title, with no separating space.
+const TITULO_PENDENTES_PATTERN = /Componentes Curriculares Obrigatórios Pendentes:(\d+)/;
+
+const COLUNAS_PENDENTES = {
+  codigo: [30, 110],
+  nome: [110, 440],
+  anotacao: [440, 500],
+  cargaHoraria: [500, 580],
+} as const;
+
+/** "60 h" and "0h" both appear — the space is not reliable. */
+function horas(bruto: string): number {
+  const match = /(\d+)\s*h/i.exec(bruto);
+  return match ? Number(match[1]) : 0;
+}
+
+function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
+  const titulo = itens.find((i) => TITULO_PENDENTES_PATTERN.test(i.texto));
+  if (!titulo) {
+    // Not "nothing is pending" — an unread section. A transcript with nothing
+    // left prints the title with ":0", so the anchor is there either way, and
+    // returning [] here would let the count invariant satisfy itself with the
+    // zero it derives from this same absent anchor.
+    throw new Error(
+      'Histórico não reconhecido: não achei a seção de componentes pendentes.',
+    );
+  }
+
+  const daPagina = itens.filter((i) => i.pagina === titulo.pagina);
+  const proximaSecao = daPagina
+    .filter((i) => i.y < titulo.y && /^(Equival[êe]ncias|Observa[çc][õo]es)/.test(i.texto))
+    .sort((a, b) => b.y - a.y)[0];
+
+  const naSecao = daPagina.filter(
+    (i) => i.y < titulo.y - 5 && i.y > (proximaSecao ? proximaSecao.y : 45),
+  );
+
+  // One row per distinct baseline. Grouping by y is enough here: unlike the
+  // cursados table there is no second line per row.
+  const linhas = [...new Set(naSecao.map((i) => Math.round(i.y * 2) / 2))].sort(
+    (a, b) => b - a,
+  );
+
+  const pendentes: ComponentePendente[] = [];
+  for (const y of linhas) {
+    const codigo = celula(naSecao, COLUNAS_PENDENTES.codigo, y);
+    const nome = celula(naSecao, COLUNAS_PENDENTES.nome, y);
+    if (!codigo || !nome || /^C[óo]digo$/i.test(codigo)) {
+      continue; // header row, or a stray footer line
+    }
+    pendentes.push({
+      codigo,
+      nome,
+      cargaHoraria: horas(celula(naSecao, COLUNAS_PENDENTES.cargaHoraria, y)),
+      matriculado: /matriculado/i.test(celula(naSecao, COLUNAS_PENDENTES.anotacao, y)),
+    });
+  }
+
+  return pendentes;
+}
+
+const LINHAS_CARGA = ['Exigido', 'Integralizado', 'Pendente'] as const;
+
+/**
+ * The workload matrix: three rows (exigido/integralizado/pendente) by four
+ * columns (obrigatórias/optativos/complementares/total). Read by row label,
+ * then by x order — the four values of a row are the only items on its y.
+ */
+function parseCargaHoraria(itens: ItemTexto[]): Historico['cargaHoraria'] {
+  const valores: Record<string, number[]> = {};
+
+  for (const rotulo of LINHAS_CARGA) {
+    const item = itens.find((i) => i.texto === rotulo || i.texto === `${rotulo}:`);
+    if (!item) {
+      throw new Error(
+        `Histórico não reconhecido: não achei a linha "${rotulo}" do quadro de carga horária.`,
+      );
+    }
+    valores[rotulo] = itens
+      .filter(
+        (i) =>
+          i.pagina === item.pagina &&
+          Math.abs(i.y - item.y) <= 1.5 &&
+          i.x > item.x &&
+          /\d+\s*h/i.test(i.texto),
+      )
+      .sort((a, b) => a.x - b.x)
+      .map((i) => horas(i.texto));
+
+    if (valores[rotulo].length !== 4) {
+      throw new Error(
+        `Histórico não reconhecido: a linha "${rotulo}" do quadro tem ` +
+          `${valores[rotulo].length} valores, esperava 4.`,
+      );
+    }
+  }
+
+  const coluna = (indice: number): ResumoCargaHoraria => ({
+    exigida: valores.Exigido[indice],
+    integralizada: valores.Integralizado[indice],
+    pendente: valores.Pendente[indice],
+  });
+
+  return {
+    obrigatorias: coluna(0),
+    optativas: coluna(1),
+    complementares: coluna(2),
+    total: coluna(3),
+  };
+}
+
+/** Free-form lines under a section title, in reading order. */
+function linhasDaSecao(itens: ItemTexto[], tituloPattern: RegExp): string[] {
+  const titulo = itens.find((i) => tituloPattern.test(i.texto));
+  if (!titulo) {
+    return [];
+  }
+  const daPagina = itens.filter((i) => i.pagina === titulo.pagina);
+  const proxima = daPagina
+    .filter(
+      (i) =>
+        i.y < titulo.y - 5 &&
+        /^(Equival[êe]ncias|Observa[çc][õo]es|Para verificar)/.test(i.texto),
+    )
+    .sort((a, b) => b.y - a.y)[0];
+
+  const naSecao = daPagina.filter(
+    (i) => i.y < titulo.y - 2 && i.y > (proxima ? proxima.y : 45),
+  );
+
+  const porLinha = new Map<number, ItemTexto[]>();
+  for (const item of naSecao) {
+    const chave = Math.round(item.y * 2) / 2;
+    porLinha.set(chave, [...(porLinha.get(chave) ?? []), item]);
+  }
+
+  return [...porLinha.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, itensDaLinha]) =>
+      itensDaLinha
+        .sort((a, b) => a.x - b.x)
+        .map((i) => i.texto)
+        .join(' ')
+        .replace(/^-\s*/, '')
+        .trim(),
+    )
+    .filter((linha) => linha !== '');
+}
+
 const EMITIDO_EM_PATTERN = /Emitido em:\s*(\d{2}\/\d{2}\/\d{4})/;
 // "2030.1 / 2033.1" — padrão e máximo on one line.
 const PRAZOS_PATTERN = /(\d{4}\.\d)\s*\/\s*(\d{4}\.\d)/;
@@ -320,15 +470,10 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
       iap: numeroOuNulo(valorAoLadoDe(itens, 'IAP:')),
     },
     cursados: parseCursados(itens),
-    pendentesObrigatorios: [],
-    cargaHoraria: {
-      obrigatorias: { exigida: 0, integralizada: 0, pendente: 0 },
-      optativas: { exigida: 0, integralizada: 0, pendente: 0 },
-      complementares: { exigida: 0, integralizada: 0, pendente: 0 },
-      total: { exigida: 0, integralizada: 0, pendente: 0 },
-    },
-    equivalencias: [],
-    observacoes: [],
+    pendentesObrigatorios: parsePendentes(itens),
+    cargaHoraria: parseCargaHoraria(itens),
+    equivalencias: linhasDaSecao(itens, /^Equival[êe]ncias/),
+    observacoes: linhasDaSecao(itens, /^Observa[çc][õo]es/),
   };
 }
 

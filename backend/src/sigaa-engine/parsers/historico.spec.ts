@@ -144,4 +144,63 @@ describe('parseHistorico', () => {
       expect(SITUACOES).toContain(componente.situacao);
     }
   });
+
+  it('parses every pending obligatory component', () => {
+    const { pendentesObrigatorios } = parseHistorico(itens);
+
+    expect(pendentesObrigatorios).toHaveLength(20);
+  });
+
+  it('flags a pending component that is being taken right now', () => {
+    const { pendentesObrigatorios } = parseHistorico(itens);
+
+    // The section annotates these with "Matriculado"; the screen must keep them
+    // out of the planning pool.
+    expect(pendentesObrigatorios.filter((p) => p.matriculado)).toHaveLength(4);
+  });
+
+  it('keeps both ENADE rows, which share a code but not a name', () => {
+    const { pendentesObrigatorios } = parseHistorico(itens);
+    const enade = pendentesObrigatorios.filter((p) => p.codigo === 'ENADE');
+
+    // Code alone is not a key here — this is why the natural key carries nome.
+    expect(enade).toHaveLength(2);
+    expect(new Set(enade.map((p) => p.nome)).size).toBe(2);
+    expect(enade.every((p) => p.cargaHoraria === 0)).toBe(true);
+  });
+
+  it('parses the workload matrix, including the totals the document asserts', () => {
+    const { cargaHoraria } = parseHistorico(itens);
+
+    expect(cargaHoraria.obrigatorias).toEqual({
+      exigida: 3150,
+      integralizada: 2100,
+      pendente: 1050,
+    });
+    expect(cargaHoraria.optativas).toEqual({
+      exigida: 360,
+      integralizada: 0,
+      pendente: 360,
+    });
+    expect(cargaHoraria.complementares).toEqual({
+      exigida: 100,
+      integralizada: 0,
+      pendente: 100,
+    });
+    expect(cargaHoraria.total).toEqual({
+      exigida: 3610,
+      integralizada: 2100,
+      pendente: 1510,
+    });
+  });
+
+  it('carries equivalências and observações through as raw lines', () => {
+    const { equivalencias, observacoes } = parseHistorico(itens);
+
+    // Free-form text the screen may show verbatim; parsing them into structure
+    // buys nothing today.
+    expect(equivalencias).toHaveLength(1);
+    expect(equivalencias[0]).toContain('através de');
+    expect(observacoes.length).toBeGreaterThanOrEqual(3);
+  });
 });
