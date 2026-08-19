@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TrajetoriaTab from "@/app/(tabs)/trajetoria";
-import { getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -112,6 +112,20 @@ function trajetoria(historico: Partial<Historico>): TrajetoriaResponse {
   };
 }
 
+/**
+ * Pull-to-refresh, which has no fireEvent path in RTL v14: the UNSAFE_*ByType
+ * queries are gone from both `screen` and the render result, and a
+ * RefreshControl never enters the queryable tree — it stays a prop on the
+ * ScrollView host node. Calling the handler is not a vacuous assertion: unwire
+ * the RefreshControl and `onRefresh` is undefined, so this throws.
+ */
+async function puxarParaAtualizar(): Promise<void> {
+  const scroll = screen.getByTestId("trajetoria-scroll");
+  await act(async () => {
+    await scroll.props.refreshControl.props.onRefresh();
+  });
+}
+
 beforeEach(() => {
   // `status` is load-bearing, not decoration: useAuth returns a discriminated
   // union and the screen reads accessToken only on the "signedIn" variant, so
@@ -178,6 +192,8 @@ describe("Trajetória", () => {
     // Two decimals: the CR, not a grade — formatarNota would print 8,2 here.
     expect(await screen.findByText("8,16")).toBeTruthy();
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
+    // Thousands separated the pt-BR way, as the design printed them.
+    expect(screen.getByText("2.100/3.610 h")).toBeTruthy();
   });
 
   it("distinguishes a failed grade from an identical passing one", async () => {
@@ -223,6 +239,131 @@ describe("Trajetória", () => {
     // The disclosure and the button are still there: a failed sync explains
     // itself, it does not blank the screen.
     expect(screen.getByText(/O que fica guardado/i)).toBeTruthy();
+    consoleWarn.mockRestore();
+  });
+
+  it("does not tell the student to retry a failure that will fail identically", async () => {
+    // A transcript the parser refuses arrives as a bare 500. Retrying it loops,
+    // so the copy must not send the student round again.
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+    jest
+      .mocked(postTrajetoriaSync)
+      .mockRejectedValue(new ApiError("Internal server error", 500));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await act(async () => {
+      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
+    });
+
+    expect(screen.getByText(/Pode ser um problema no documento/i)).toBeTruthy();
+    expect(screen.getByText(/baixar o PDF em Documentos/i)).toBeTruthy();
+    expect(screen.queryByText(/Tente novamente/i)).toBeNull();
+    // The raw backend message never reaches the student.
+    expect(screen.queryByText(/Internal server error/i)).toBeNull();
+    consoleWarn.mockRestore();
+  });
+
+  it("keeps the shared wording for the failures a retry really does fix", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+    jest.mocked(postTrajetoriaSync).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await act(async () => {
+      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
+    });
+
+    expect(screen.getByText(/Credenciais inválidas/i)).toBeTruthy();
+    expect(screen.queryByText(/Pode ser um problema no documento/i)).toBeNull();
+    consoleWarn.mockRestore();
+  });
+
+  it("clears a past sync failure once a load succeeds", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+    jest.mocked(postTrajetoriaSync).mockRejectedValue(new ApiError("Boom", 500));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await act(async () => {
+      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
+    });
+    expect(screen.getByText(/não deu para sincronizar/i)).toBeTruthy();
+
+    // The refresh repaints real data; a stale failure sitting under it would
+    // contradict what the student is now reading.
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+    await puxarParaAtualizar();
+
+    expect(screen.getByText("Em curso")).toBeTruthy();
+    expect(screen.queryByText(/não deu para sincronizar/i)).toBeNull();
+    consoleWarn.mockRestore();
+  });
+
+  it("keeps the moves the student made across a pull-to-refresh", async () => {
+    // A plain GET is not a re-sync: nothing about the plan changed, so watching
+    // a move revert with no feedback would read as a bug.
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
+    );
+
+    await render(<TrajetoriaTab />);
+    expect(await screen.findByText("a cursar · 1")).toBeTruthy();
+
+    const opcoes = screen.getAllByText("2026.2");
+    await act(async () => {
+      fireEvent.press(opcoes[opcoes.length - 1]);
+    });
+    expect(screen.getByText("1 matéria")).toBeTruthy();
+
+    await puxarParaAtualizar();
+
+    expect(screen.getByText("1 matéria")).toBeTruthy();
+    expect(screen.getByText("Tudo planejado.")).toBeTruthy();
+  });
+
+  it("drops the moves after a re-sync, where the server's plan is the authority", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
+    );
+    jest.mocked(postTrajetoriaSync).mockResolvedValue(
+      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
+    );
+
+    await render(<TrajetoriaTab />);
+    expect(await screen.findByText("a cursar · 1")).toBeTruthy();
+
+    const opcoes = screen.getAllByText("2026.2");
+    await act(async () => {
+      fireEvent.press(opcoes[opcoes.length - 1]);
+    });
+    expect(screen.getByText("1 matéria")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Sincronizar"));
+    });
+
+    // Back in the pool: the re-scrape replaced the transcript the move was made
+    // against, and it came back with an empty plan.
+    expect(screen.getByText("a cursar · 1")).toBeTruthy();
+    expect(screen.queryByText("1 matéria")).toBeNull();
+  });
+
+  it("shows the error card with a retry that reloads when the fetch fails", async () => {
+    jest.mocked(getTrajetoria).mockRejectedValueOnce(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar de novo"));
+    });
+
+    expect(screen.getByText("Em curso")).toBeTruthy();
+    expect(screen.queryByText("Credenciais inválidas")).toBeNull();
     consoleWarn.mockRestore();
   });
 

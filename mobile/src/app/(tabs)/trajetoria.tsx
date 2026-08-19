@@ -6,7 +6,7 @@ import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
-import { getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { HISTORICO_STAGES } from "@/lib/download-progress";
 import { gradeColor } from "@/lib/mock-data";
@@ -57,6 +57,28 @@ function rotuloPeriodo(emCurso: boolean, desatualizado: boolean): string {
   return desatualizado ? "Aguardando notas" : "Em curso";
 }
 
+/**
+ * Sync failures need one message the shared helper cannot give. A transcript
+ * the parser refuses — for breaking the document's own invariants — comes back
+ * as a bare 500, indistinguishable from a server hiccup but deterministic:
+ * "Tente novamente" would send the student round a loop that fails identically
+ * every time. So anything other than the two statuses the shared helper names
+ * gets copy that promises no retry and points at the one thing that still
+ * works, the PDF download on the Documentos tab.
+ *
+ * Bad credentials, rate limits and a dead connection keep the shared wording —
+ * those really are retryable, and they are the same failures everywhere else.
+ */
+function descreverErroSync(error: unknown): string {
+  // A status at all means a response came back, which is the only case where
+  // the document itself can be what failed.
+  const status = error instanceof ApiError ? error.status : undefined;
+  if (status !== undefined && status !== 401 && status !== 429) {
+    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Documentos.";
+  }
+  return describeApiError(error);
+}
+
 /** The saved plan, in the shape the zones read. Unplaced items stay out of it. */
 function planoSalvo(plano: ItemPlano[]): Plano {
   return Object.fromEntries(
@@ -72,8 +94,9 @@ export default function TrajetoriaTab(): JSX.Element {
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
   // Moves the student made in this session, on top of the plan the server sent.
-  // Persisting them is a later task, so a reload legitimately drops them — but
-  // a re-sync must drop them too, since the server's plan is the authority.
+  // Persisting them is a later task, so leaving the screen drops them — but a
+  // refresh must not, since nothing about the plan changed. Only a re-sync
+  // clears them, and there the server's plan is the authority.
   const [movimentos, setMovimentos] = useState<Plano>({});
   const [refreshing, setRefreshing] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
@@ -98,7 +121,9 @@ export default function TrajetoriaTab(): JSX.Element {
       fetchedAt: new Date(resposta.fetchedAt),
       plano: resposta.plano,
     });
-    setMovimentos({});
+    // Fresh data on screen must not keep a stale failure under it contradicting
+    // what the student is now reading.
+    setErroSync(null);
   }, []);
 
   // Reading the stored trajectory needs no SIGAA credential — the JWT already
@@ -155,11 +180,15 @@ export default function TrajetoriaTab(): JSX.Element {
           senha: credentials.senha,
         }),
       );
+      // Only here: a re-sync replaces the transcript the moves were made
+      // against, and the plan the server sent back is the authority. A plain
+      // refresh must leave them be — see onRefresh.
+      setMovimentos({});
     } catch (error) {
       console.warn("Failed to sync trajetória", error);
       // The state deliberately survives the failure: a student looking at last
       // term's grades should keep seeing them when a re-sync fails.
-      setErroSync(describeApiError(error));
+      setErroSync(descreverErroSync(error));
     } finally {
       setSincronizando(false);
     }
@@ -179,6 +208,7 @@ export default function TrajetoriaTab(): JSX.Element {
     <View className="flex-1 bg-background">
       <AppBar title="Minha trajetória" />
       <ScrollView
+        testID="trajetoria-scroll"
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
         showsVerticalScrollIndicator={false}
@@ -321,8 +351,11 @@ function ReadyTrajetoria({
             <Typography.Paragraph type="body-xs" color="muted">
               Carga horária
             </Typography.Paragraph>
+            {/* Four-digit hour counts are the normal case, and a pt-BR reader
+                expects the thousands dot the design printed: "2.100/3.610 h". */}
             <Typography.Heading type="h5">
-              {total.integralizada}/{total.exigida} h
+              {total.integralizada.toLocaleString("pt-BR")}/{total.exigida.toLocaleString("pt-BR")}{" "}
+              h
             </Typography.Heading>
           </View>
         </View>
