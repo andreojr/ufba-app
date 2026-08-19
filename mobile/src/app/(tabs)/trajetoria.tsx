@@ -418,11 +418,11 @@ function ReadyTrajetoria({
                 <Typography.Paragraph type="body-xs" color="muted">
                   Carga horária
                 </Typography.Paragraph>
-                {/* Four-digit hour counts are the normal case, and a pt-BR reader
-                    expects the thousands dot the design printed: "2.100/3.610 h". */}
-                <Typography.Heading type="h5">
-                  {total.integralizada.toLocaleString("pt-BR")}/
-                  {total.exigida.toLocaleString("pt-BR")} h
+                {/* Just the hours done — the total is fixed at the end of the
+                    progress bar below, not repeated here. Same heading size
+                    as the CR tab's value: one card, one standard of emphasis. */}
+                <Typography.Heading type="h3">
+                  {total.integralizada.toLocaleString("pt-BR")} h
                 </Typography.Heading>
               </View>
               <BarChart barras={barrasCargaHoraria} altura={70} />
@@ -430,10 +430,16 @@ function ReadyTrajetoria({
           )}
         </View>
 
-        <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-3.5">
+        <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-1.5">
           <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
             <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
           </View>
+          {/* The course's total requirement, fixed at the bar's own end — it
+              doesn't change tab to tab, so it isn't repeated in the value
+              above like it used to be. */}
+          <Typography.Paragraph type="body-xs" color="muted" align="end">
+            {total.exigida.toLocaleString("pt-BR")} h
+          </Typography.Paragraph>
           <View className="flex-row items-center justify-between">
             <Typography.Paragraph type="body-xs" color="muted">
               {/* Only the number itself is emphasised — the sentence around it

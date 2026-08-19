@@ -225,15 +225,19 @@ describe("Trajetória", () => {
     // formatarNota would print 8,2 here.
     expect(await screen.findByText("8,16")).toBeTruthy();
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
+    // The course's total requirement is fixed at the end of the progress bar
+    // regardless of tab — visible even before switching to Carga Horária.
+    expect(screen.getByText("3.610 h")).toBeTruthy();
     // The main card shows only one of the two stats at a time.
-    expect(screen.queryByText("2.100/3.610 h")).toBeNull();
+    expect(screen.queryByText("2.100 h")).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByText("Carga Horária"));
     });
 
-    // Thousands separated the pt-BR way, as the design printed them.
-    expect(screen.getByText("2.100/3.610 h")).toBeTruthy();
+    // Just the hours done, pt-BR thousands separator — the total moved to
+    // the progress bar and isn't repeated here anymore.
+    expect(screen.getByText("2.100 h")).toBeTruthy();
     expect(screen.queryByText("8,16")).toBeNull();
     // The progress row is shared by both tabs, not tied to either stat.
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
