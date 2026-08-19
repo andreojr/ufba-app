@@ -975,7 +975,13 @@ function horas(bruto: string): number {
 function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
   const titulo = itens.find((i) => TITULO_PENDENTES_PATTERN.test(i.texto));
   if (!titulo) {
-    return [];
+    // Not "nothing is pending" — an unread section. A transcript with nothing
+    // left prints the title with ":0", so the anchor is there either way, and
+    // returning [] here would let the count invariant satisfy itself with the
+    // zero it derives from this same absent anchor.
+    throw new Error(
+      'Histórico não reconhecido: não achei a seção de componentes pendentes.',
+    );
   }
 
   const daPagina = itens.filter((i) => i.pagina === titulo.pagina);
@@ -2400,6 +2406,7 @@ Everything the screen computes rather than reads, as pure functions — the reas
 ```ts
 import {
   agruparPorSemestre,
+  formatarCoeficiente,
   formatarNota,
   historicoDesatualizado,
   percentualConcluido,
@@ -2463,6 +2470,20 @@ describe("formatarNota", () => {
 
   it("renders a missing grade as an em dash", () => {
     expect(formatarNota(null)).toBe("—");
+  });
+});
+
+describe("formatarCoeficiente", () => {
+  it("keeps two decimals, not the grade formatter's one", () => {
+    // The transcript prints the CR at four decimals (8.1597). One decimal
+    // would round it to 8,2 and throw away a digit students compare against
+    // their own arithmetic; four is noise on a summary card.
+    expect(formatarCoeficiente(8.1597)).toBe("8,16");
+    expect(formatarCoeficiente(10)).toBe("10,00");
+  });
+
+  it("renders an absent coefficient as an em dash", () => {
+    expect(formatarCoeficiente(null)).toBe("—");
   });
 });
 
@@ -2620,6 +2641,15 @@ export function formatarNota(nota: number | null): string {
 }
 
 /**
+ * The CR on the summary card. Two decimals, not the one `formatarNota` gives a
+ * grade: the transcript prints the coefficient at four (8.1597), and rounding
+ * it to 8,2 discards a digit students check against their own arithmetic.
+ */
+export function formatarCoeficiente(valor: number | null): string {
+  return valor === null ? "—" : valor.toFixed(2).replace(".", ",");
+}
+
+/**
  * The chip next to a grade. Null for APR, which needs none — every other
  * situação changes how the number beside it should be read, and a 4,0 that was
  * failed must not look identical to a 4,0 that was passed.
@@ -2685,7 +2715,7 @@ export function historicoDesatualizado(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd mobile && npm test -- trajetoria.test.ts`
-Expected: PASS, 17 tests.
+Expected: PASS, 19 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2718,7 +2748,7 @@ Follow the load-state pattern already in `app/(tabs)/index.tsx`: a `LoadState` u
 `create: mobile/src/__tests__/trajetoria.test.tsx`:
 
 ```tsx
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TrajetoriaTab from "@/app/(tabs)/trajetoria";
 import { getTrajetoria, postTrajetoriaSync } from "@/lib/api";
@@ -2872,7 +2902,7 @@ describe("Trajetória", () => {
     jest.mocked(postTrajetoriaSync).mockRejectedValue(new Error("SIGAA fora do ar"));
 
     render(<TrajetoriaTab />);
-    (await screen.findByText(/sincronizar histórico/i)).props.onPress?.();
+    fireEvent.press(await screen.findByText(/sincronizar histórico/i));
 
     await waitFor(() => {
       expect(screen.getByText(/não deu para sincronizar/i)).toBeTruthy();
@@ -2901,7 +2931,7 @@ type LoadState =
   | { status: "ready"; historico: Historico; fetchedAt: Date; plano: ItemPlano[] };
 ```
 
-- Summary card: `formatarNota(historico.indices.cr)` for the coefficient (it is the CR, not the IAP — the IAP is a 0–1 index this screen does not show), `cargaHoraria.total.integralizada` / `.exigida` for the hours, `percentualConcluido(cargaHoraria.total)` for the bar width and its caption, and `poolPlanejavel(pendentesObrigatorios).length` for "faltam N matérias".
+- Summary card: `formatarCoeficiente(historico.indices.cr)` for the coefficient — the CR, not the IAP (a 0–1 index this screen does not show), and `formatarCoeficiente` rather than `formatarNota`, which rounds to the one decimal a grade wants, `cargaHoraria.total.integralizada` / `.exigida` for the hours, `percentualConcluido(cargaHoraria.total)` for the bar width and its caption, and `poolPlanejavel(pendentesObrigatorios).length` for "faltam N matérias".
 - Periods: `agruparPorSemestre(historico.cursados)`, with `emCurso` driving the existing `tone === "now"` styling and the "Em curso" / "Concluído" badge.
 - Each component row keeps its name, code and `formatarNota(nota)` coloured by the existing `gradeColor`. The situação chip is the one genuinely new piece of UI — it reuses the badge styling already in the period header:
 
