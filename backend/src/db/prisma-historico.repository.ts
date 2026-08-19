@@ -56,7 +56,9 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
       where: { userId },
       include: {
         componentes: { orderBy: [{ semestre: 'asc' }, { codigo: 'asc' }] },
-        pendentes: { orderBy: { codigo: 'asc' } },
+        // codigo alone is not unique: the ENADE pendente rows share a código
+        // under two different nomes, so nome breaks the tie deterministically.
+        pendentes: { orderBy: [{ codigo: 'asc' }, { nome: 'asc' }] },
       },
     });
 
@@ -133,10 +135,13 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
     };
   }
 
-  async reconciliarPlano(userId: string, codigosPendentes: string[]): Promise<void> {
-    // A plan item whose component left the pending list has been completed.
+  async reconciliarPlano(userId: string, codigosConcluidos: string[]): Promise<void> {
+    // Positive derivation: `in`, not `notIn` — see the interface doc for why
+    // "not currently pending" is the wrong predicate. `in: []` deletes
+    // nothing, so a student with no concluded components this sync is safe
+    // by construction.
     await this.prisma.planoItem.deleteMany({
-      where: { userId, codigo: { notIn: codigosPendentes } },
+      where: { userId, codigo: { in: codigosConcluidos } },
     });
   }
 }

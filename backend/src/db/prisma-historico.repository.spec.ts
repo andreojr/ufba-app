@@ -37,7 +37,7 @@ function historicoMinimo(): Historico {
 }
 
 describe('PrismaHistoricoRepository', () => {
-  it('replaces the previous snapshot inside a single transaction', async () => {
+  it('replaces the previous snapshot inside a single transaction, touching no plano row', async () => {
     const operacoes: string[] = [];
     const tx = {
       historico: {
@@ -47,6 +47,14 @@ describe('PrismaHistoricoRepository', () => {
         create: jest.fn(async () => {
           operacoes.push('create');
         }),
+      },
+      // Exposed so a stray call is an assertion failure, not just a TypeError
+      // the test happens not to hit: salvar must never touch planoItem, since
+      // the plan is authored data that has to outlive the snapshot.
+      planoItem: {
+        deleteMany: jest.fn(),
+        create: jest.fn(),
+        upsert: jest.fn(),
       },
     };
     const prisma = {
@@ -59,19 +67,62 @@ describe('PrismaHistoricoRepository', () => {
     // otherwise a failure mid-write leaves two documents' rows mixed together.
     expect(operacoes).toEqual(['delete', 'create']);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.planoItem.deleteMany).not.toHaveBeenCalled();
+    expect(tx.planoItem.create).not.toHaveBeenCalled();
+    expect(tx.planoItem.upsert).not.toHaveBeenCalled();
   });
 
-  it('drops only the plan items whose component is no longer pending', async () => {
+  it('reads back exactly what salvar wrote', async () => {
+    const historico = historicoMinimo();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let dadosCriados: any;
+    const tx = {
+      historico: {
+        deleteMany: jest.fn(async () => undefined),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        create: jest.fn(async (args: any) => {
+          dadosCriados = args.data;
+        }),
+      },
+    };
+    const prismaEscrita = {
+      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+    } as unknown as PrismaService;
+
+    await new PrismaHistoricoRepository(prismaEscrita).salvar('user-1', historico);
+
+    // Feeds buscar's fake findUnique the exact payload salvar's create()
+    // received — a round trip through the real mapping code on both sides,
+    // not two mappings independently asserted against the same fixture.
+    const prismaLeitura = {
+      historico: {
+        findUnique: jest.fn(async () => ({
+          ...dadosCriados,
+          componentes: dadosCriados.componentes.create,
+          pendentes: dadosCriados.pendentes.create,
+          fetchedAt: new Date('2026-08-19T03:35:00Z'),
+        })),
+      },
+      planoItem: { findMany: jest.fn(async () => []) },
+    } as unknown as PrismaService;
+
+    const salva = await new PrismaHistoricoRepository(prismaLeitura).buscar('user-1');
+
+    expect(salva?.historico).toEqual(historico);
+  });
+
+  it('drops only the plan items whose component actually concluded', async () => {
     const deleteMany = jest.fn(async () => ({ count: 1 }));
     const prisma = { planoItem: { deleteMany } } as unknown as PrismaService;
 
     await new PrismaHistoricoRepository(prisma).reconciliarPlano('user-1', [
-      'MATA59',
-      'MATA60',
+      'FISD36',
     ]);
 
+    // `in`, not `notIn`: an empty concluded list (nothing finished this sync)
+    // must delete nothing, which `in: []` guarantees and `notIn: []` does not.
     expect(deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', codigo: { notIn: ['MATA59', 'MATA60'] } },
+      where: { userId: 'user-1', codigo: { in: ['FISD36'] } },
     });
   });
 

@@ -641,4 +641,4 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
   return historico;
 }
 
-export { SITUACOES, NATUREZAS };
+export { SITUACOES, NATUREZAS, SITUACOES_INTEGRALIZADAS };

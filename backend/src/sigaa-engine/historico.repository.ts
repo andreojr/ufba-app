@@ -25,9 +25,17 @@ export interface HistoricoRepository {
   buscar(userId: string): Promise<TrajetoriaSalva | null>;
 
   /**
-   * Drops plan items whose component is no longer pending: it has been
-   * completed. Called after `salvar`, since the plan is authored data that has
-   * to outlive the snapshot it was built from.
+   * Drops plan items whose component is named in `codigosConcluidos`.
+   *
+   * Deliberately a positive list, not "everything not currently pending":
+   * `pendentesObrigatorios` is legitimately empty for a student with nothing
+   * obrigatório left (final term, or only optativas/complementares
+   * outstanding), and a user-chosen optativa's plan row never had a pending
+   * row to begin with — "not pending" would delete both on every routine
+   * sync. Only a component that actually finished (see
+   * `SITUACOES_INTEGRALIZADAS` in `parsers/historico.ts`) is grounds for
+   * dropping a plan row. Called after `salvar`, since the plan is authored
+   * data that has to outlive the snapshot it was built from.
    */
-  reconciliarPlano(userId: string, codigosPendentes: string[]): Promise<void>;
+  reconciliarPlano(userId: string, codigosConcluidos: string[]): Promise<void>;
 }

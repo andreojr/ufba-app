@@ -1,8 +1,20 @@
+import { Logger } from '@nestjs/common';
 import { HistoricoService } from './historico.service';
 import type { HistoricoRepository, TrajetoriaSalva } from './historico.repository';
 import type { Historico } from './parsers/historico';
 
 const CREDENCIAIS = { login: '209900011', senha: 'segredo' };
+
+// Silences HistoricoService's own success log: real output, not a mock
+// artefact, but this suite has no interest in asserting on it and the
+// standing requirement is pristine test output.
+let logSpy: jest.SpyInstance;
+beforeAll(() => {
+  logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+});
+afterAll(() => {
+  logSpy.mockRestore();
+});
 
 function historicoFalso(): Historico {
   return {
@@ -12,7 +24,32 @@ function historicoFalso(): Historico {
     prazoConclusaoPadrao: '2030.1',
     prazoConclusaoMaximo: '2033.1',
     indices: { cr: 8.1597, iap: 0.8434 },
-    cursados: [],
+    cursados: [
+      // Concluded: grants integralized hours, so it belongs in the
+      // reconciliation's positive list.
+      {
+        semestre: '2023.1',
+        natureza: 'OB',
+        codigo: 'FISD36',
+        nome: 'FÍSICA',
+        cargaHoraria: 60,
+        nota: 6.8,
+        situacao: 'APR',
+        docente: null,
+      },
+      // Not concluded: reprovado grants no hours, so its código must NOT
+      // appear in reconciliarPlano's list even though it is also not pending.
+      {
+        semestre: '2023.2',
+        natureza: 'OB',
+        codigo: 'MATA37',
+        nome: 'CÁLCULO',
+        cargaHoraria: 60,
+        nota: 3.0,
+        situacao: 'REP',
+        docente: null,
+      },
+    ],
     pendentesObrigatorios: [
       { codigo: 'MATA59', nome: 'REDES', cargaHoraria: 60, matriculado: true },
       { codigo: 'MATA60', nome: 'BANCO DE DADOS', cargaHoraria: 60, matriculado: false },
@@ -59,7 +96,7 @@ describe('HistoricoService', () => {
     expect(repositorio.salvar).toHaveBeenCalledWith('user-1', expect.any(Object));
   });
 
-  it('reconciles the plan against the freshly parsed pending list', async () => {
+  it('reconciles the plan against components that actually concluded, not the pending list', async () => {
     const repositorio = repositorioFalso();
     repositorio.buscar.mockResolvedValue({
       historico: historicoFalso(),
@@ -75,10 +112,10 @@ describe('HistoricoService', () => {
     );
     await service.sync('user-1', CREDENCIAIS);
 
-    expect(repositorio.reconciliarPlano).toHaveBeenCalledWith('user-1', [
-      'MATA59',
-      'MATA60',
-    ]);
+    // FISD36 (APR) concluded and should be dropped from the plan if present;
+    // MATA37 (REP) did not, so it must be absent even though it is also not
+    // pending; MATA59/MATA60 are still pending and must never appear here.
+    expect(repositorio.reconciliarPlano).toHaveBeenCalledWith('user-1', ['FISD36']);
   });
 
   it('persists nothing when the parser rejects the document', async () => {
