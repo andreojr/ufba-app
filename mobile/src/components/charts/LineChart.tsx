@@ -96,8 +96,8 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
               key={indice}
               style={{
                 position: "absolute",
-                left: coordenada.x - 12,
-                top: coordenada.y - 21,
+                left: coordenada.x - 2,
+                top: coordenada.y - 28,
                 fontSize: 10,
                 fontWeight: "600",
                 color: COR_VALOR,
