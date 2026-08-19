@@ -6,5 +6,5 @@ export function configureGoogleSignin(): void {
     throw new Error("EXPO_PUBLIC_GOOGLE_CLIENT_ID is not configured");
   }
 
-  GoogleSignin.configure({ webClientId });
+  GoogleSignin.configure({ webClientId, hostedDomain: "ufba.br" });
 }

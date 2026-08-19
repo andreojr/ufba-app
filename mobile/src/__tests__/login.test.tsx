@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 import { useAuth } from "@/lib/auth-context";
+import { ApiError } from "@/lib/api";
 
 import LoginScreen from "@/app/login";
 
@@ -11,6 +12,7 @@ jest.mock("@react-native-google-signin/google-signin", () => ({
   GoogleSignin: {
     hasPlayServices: jest.fn(),
     signIn: jest.fn(),
+    signOut: jest.fn(),
   },
   isSuccessResponse: (response: unknown) =>
     (response as { type?: string })?.type === "success",
@@ -22,11 +24,24 @@ jest.mock("@react-native-google-signin/google-signin", () => ({
 
 const mockToastShow = jest.fn();
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+// @expo/vector-icons transitively requires expo-font -> expo-asset, which isn't
+// hoisted to the root node_modules in this project's install layout. Stub it out
+// for this unit test rather than exercising the real font-loading module graph.
+jest.mock("@expo/vector-icons", () => {
+  const { Text } = jest.requireActual("react-native");
+  return { Ionicons: () => <Text /> };
+});
+
 jest.mock("heroui-native", () => {
   const { Text, TouchableOpacity } = jest.requireActual("react-native");
 
   return {
     useToast: () => ({ toast: { show: mockToastShow } }),
+    useThemeColor: () => "#A78BFA",
     Button: ({ children, onPress, isDisabled }: any) => (
       <TouchableOpacity onPress={onPress} disabled={isDisabled} accessibilityRole="button">
         {typeof children === "string" ? <Text>{children}</Text> : children}
@@ -35,6 +50,7 @@ jest.mock("heroui-native", () => {
     Spinner: () => <Text>loading</Text>,
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
+      Paragraph: ({ children }: any) => <Text>{children}</Text>,
     },
   };
 });
@@ -97,5 +113,52 @@ describe("LoginScreen", () => {
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
     expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it("shows the UFBA domain toast and skips signIn when the Google account is outside @ufba.br", async () => {
+    mockedGoogleSignin.signIn.mockResolvedValue({
+      type: "success",
+      data: { idToken: "some-id-token", user: { email: "pessoa@gmail.com" } },
+    } as never);
+
+    const { getByRole } = await render(<LoginScreen />);
+    await act(async () => {
+      fireEvent.press(getByRole("button"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+    expect(mockToastShow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "danger",
+        description: expect.stringContaining("@ufba.br"),
+      }),
+    );
+    expect(signIn).not.toHaveBeenCalled();
+    expect(mockedGoogleSignin.signOut).toHaveBeenCalled();
+  });
+
+  it("shows the UFBA domain toast when the backend rejects the login with a 403", async () => {
+    mockedGoogleSignin.signIn.mockResolvedValue({
+      type: "success",
+      data: { idToken: "some-id-token", user: { email: "aluno@ufba.br" } },
+    } as never);
+    signIn.mockRejectedValue(
+      new ApiError("Apenas contas @ufba.br podem entrar no Gradline", 403),
+    );
+
+    const { getByRole } = await render(<LoginScreen />);
+    await act(async () => {
+      fireEvent.press(getByRole("button"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+    expect(mockToastShow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "danger",
+        description: expect.stringContaining("@ufba.br"),
+      }),
+    );
   });
 });

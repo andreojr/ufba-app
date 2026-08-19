@@ -1,52 +1,378 @@
-import { Button, Card, Typography, useThemeColor } from "heroui-native";
-import type { JSX } from "react";
-import { View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
-function HeroUILogo({ tintColor }: { tintColor: string }): JSX.Element {
-  return (
-    <Svg width={90} height={30} viewBox="0 0 140 44" fill="none">
-      <Path
-        d="M0.677734 11.3847V24.0405C0.677734 24.6387 0.985209 25.1946 1.49107 25.5109L10.1195 30.9067C11.2693 31.6257 12.7586 30.796 12.7586 29.4363V18.7981C12.7586 18.186 13.0803 17.6194 13.605 17.3074L18.8683 14.1785V41.4437C18.8683 42.7988 20.3486 43.6293 21.4988 42.9195L30.4044 37.4229C30.9152 37.1076 31.2264 36.549 31.2264 35.9471V9.76484C31.2264 8.41634 29.759 7.58483 28.6085 8.28139L18.8683 14.1785V2.55643C18.8683 1.21158 17.408 0.379537 16.2574 1.06878L1.51927 9.89703C0.997365 10.2097 0.677734 10.7747 0.677734 11.3847Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M63.8763 24.0707C63.8763 20.4817 62.4078 18.8253 59.4709 18.8253C56.1076 18.8253 53.7391 21.0799 53.7391 26.1412V37.7363H47.6756V5.52769H53.7391V17.3069C55.2075 14.9142 57.6234 13.7179 60.9394 13.7179C66.5764 13.7179 69.8924 17.1688 69.8924 22.9664V37.7363H63.8763V24.0707Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M84.8996 38.4725C77.3677 38.4725 72.5832 33.5952 72.5832 26.0952C72.5832 18.6872 77.3203 13.7179 84.8996 13.7179C93.0947 13.7179 97.5475 19.5154 96.3158 27.6596H78.6467C78.9783 31.5247 81.252 33.7333 84.8996 33.7333C87.8839 33.7333 89.684 32.2149 90.1577 30.6964H96.1737C95.2263 35.2057 91.0577 38.4725 84.8996 38.4725ZM78.7888 23.6566H90.4419C90.3945 20.4817 88.3102 18.3191 84.7574 18.3191C81.5836 18.3191 79.3572 20.1596 78.7888 23.6566Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M99.6225 20.3437C99.6225 16.5246 101.754 14.4541 105.828 14.4541H113.597V19.4234H105.686V37.7363H99.6225V20.3437Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M126.863 38.4725C119.189 38.4725 114.31 33.5492 114.31 26.0952C114.31 18.6412 119.189 13.7179 126.863 13.7179C134.442 13.7179 139.322 18.6412 139.322 26.0952C139.322 33.5492 134.442 38.4725 126.863 38.4725ZM126.863 33.4572C130.653 33.4572 133.163 30.5584 133.163 26.0952C133.163 21.632 130.653 18.6872 126.863 18.6872C123.026 18.6872 120.515 21.632 120.515 26.0952C120.515 30.5584 123.026 33.4572 126.863 33.4572Z"
-        fill={tintColor}
-      />
-    </Svg>
-  );
+import { AppBar } from "@/components/AppBar";
+import { AppIcon } from "@/components/AppIcon";
+import { LocationBadge } from "@/components/LocationBadge";
+import { UfbaCrest } from "@/components/UfbaCrest";
+import { describeApiError } from "@/lib/api-errors";
+import { postSchedule } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import {
+  formatMinutes,
+  getCurrentWeekDays,
+  pickNextClass,
+  buildWeekSchedule,
+  SCHEDULE_PALETTE,
+  type ScheduleBlock,
+} from "@/lib/sigaa-schedule";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { useSigaaLink } from "@/lib/sigaa-link-context";
+import type { Turma } from "@/lib/types";
+
+const EMPTY_WEEK: ScheduleBlock[][] = [[], [], [], [], []];
+
+// Grid covers the earliest (7h00) through the latest (22h10) possible SIGAA
+// class slot, at the same 18px/hour density the design mockup used.
+const GRID_START_MIN = 420;
+const GRID_END_MIN = 1330;
+const PX_PER_MIN = 18 / 60;
+const SCHEDULE_GRID_HEIGHT = (GRID_END_MIN - GRID_START_MIN) * PX_PER_MIN;
+const HOUR_MARKS = [7, 9, 11, 13, 15, 17, 19, 21];
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; week: ScheduleBlock[][]; semestre: string | null; loadedAt: Date };
+
+function relativeFreshness(loadedAt: Date, now: Date): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - loadedAt.getTime()) / 60_000));
+  if (minutes < 1) return "agora mesmo";
+  if (minutes === 1) return "há 1 min";
+  return `há ${minutes} min`;
 }
 
 export default function HomeTab(): JSX.Element {
-  const themeColorForeground = useThemeColor("foreground");
+  const auth = useAuth();
+  const sigaaLink = useSigaaLink();
+  const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+
+  const days = useMemo(() => getCurrentWeekDays(), []);
+  const todayIndex = days.findIndex((d) => d.isToday);
+  const [selectedDay, setSelectedDay] = useState(todayIndex === -1 ? 0 : todayIndex);
+
+  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
+  const [gridWidth, setGridWidth] = useState(0);
+  const mutedColor = useThemeColor("muted");
+
+  const loadSchedule = useCallback(
+    async (silent = false) => {
+      if (!accessToken) {
+        return;
+      }
+      const credentials = await getSigaaCredentials();
+      if (!credentials) {
+        setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua semana." });
+        return;
+      }
+
+      if (!silent) {
+        setState({ status: "loading" });
+      }
+      try {
+        const turmas: Turma[] = await postSchedule(accessToken, credentials);
+        setState({
+          status: "ready",
+          week: buildWeekSchedule(turmas),
+          semestre: turmas[0]?.semestre ?? null,
+          loadedAt: new Date(),
+        });
+      } catch (error) {
+        console.warn("Failed to load SIGAA schedule", error);
+        setState({ status: "error", message: describeApiError(error) });
+      }
+    },
+    [accessToken],
+  );
+
+  useEffect(() => {
+    if (sigaaLink.status === "linked" && accessToken) {
+      loadSchedule();
+    } else if (sigaaLink.status === "unlinked") {
+      setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua semana." });
+    }
+  }, [sigaaLink.status, accessToken, loadSchedule]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadSchedule(true);
+    setRefreshing(false);
+  }, [loadSchedule]);
+
+  const week = state.status === "ready" ? state.week : EMPTY_WEEK;
+  const daySchedule = week[selectedDay] ?? [];
+
+  const nextClass = useMemo(() => {
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const startIndex = todayIndex === -1 ? 0 : todayIndex;
+    const startMinutes = todayIndex === -1 ? 0 : nowMinutes;
+    return pickNextClass(week, startIndex, startMinutes);
+  }, [week, todayIndex]);
+
+  // Percentage-based left/width can't carry a fixed-px gap (no calc() in RN
+  // styles), so the columns are laid out in real pixels once we know the
+  // grid's measured width — a small horizontal gap between day columns reads
+  // better than the old vertical gap, which made no sense for back-to-back
+  // classes with no actual break in time.
+  const COLUMN_GAP = 4;
+  const columnWidth = gridWidth > 0 ? gridWidth / 5 : 0;
+
+  const blocks = useMemo(
+    () =>
+      week.flatMap((entries, dayIndex) =>
+        entries.map((entry) => {
+          const colors = SCHEDULE_PALETTE[entry.colorIndex];
+          const top = (entry.inicioMin - GRID_START_MIN) * PX_PER_MIN;
+          // No vertical shrink here — back-to-back classes should touch,
+          // since there's genuinely no gap between them in time.
+          const height = (entry.fimMin - entry.inicioMin) * PX_PER_MIN;
+          return {
+            key: entry.key,
+            label: (entry.codigo ?? entry.nome).slice(0, 8),
+            color: colors.fg,
+            style: {
+              position: "absolute" as const,
+              left: dayIndex * columnWidth + COLUMN_GAP / 2,
+              width: Math.max(columnWidth - COLUMN_GAP, 0),
+              top,
+              height,
+              borderRadius: 8,
+              padding: 3,
+              backgroundColor: colors.fill,
+              opacity: dayIndex === selectedDay ? 1 : 0.45,
+            },
+          };
+        }),
+      ),
+    [week, selectedDay, columnWidth],
+  );
 
   return (
-    <View className="flex-1 bg-background justify-center px-6">
-      <Card className="items-center gap-8">
-        <HeroUILogo tintColor={themeColorForeground} />
-        <Typography.Paragraph className="text-center">
-          A modern BAGUI for React Native, preconfigured with HeroUI Native, Uniwind, and Expo
-          Router. Edit{" "}
-          <Typography.Paragraph className="font-semibold">
-            app/(tabs)/index.tsx
-          </Typography.Paragraph>{" "}
-          and watch it reload.
-        </Typography.Paragraph>
-        <Button className="w-full">Get started</Button>
-      </Card>
+    <View className="flex-1 bg-background">
+      <AppBar title="Início" initials="AC" />
+      <ScrollView
+        className="flex-1 px-6"
+        contentContainerClassName="gap-4 pb-6"
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View className="gap-1">
+          <Typography.Heading type="h4">Sua semana</Typography.Heading>
+          <View className="flex-row items-center gap-1.5">
+            <View
+              className={`w-1.5 h-1.5 rounded-full ${
+                state.status === "error" ? "bg-danger" : "bg-success"
+              }`}
+            />
+            <Typography.Paragraph type="body-xs" color="muted">
+              {state.status === "ready"
+                ? `Atualizado ${relativeFreshness(state.loadedAt, new Date())}${
+                    state.semestre ? ` · ${state.semestre}` : ""
+                  }`
+                : state.status === "loading"
+                  ? "Carregando…"
+                  : "Sem dados"}
+            </Typography.Paragraph>
+          </View>
+        </View>
+
+        {state.status === "loading" && (
+          <View className="rounded-3xl bg-surface-secondary p-8 items-center gap-2">
+            <Spinner />
+            <Typography.Paragraph type="body-sm" color="muted">
+              Buscando sua semana no SIGAA…
+            </Typography.Paragraph>
+          </View>
+        )}
+
+        {state.status === "error" && (
+          <View className="rounded-3xl bg-surface-secondary p-6 items-center gap-3">
+            <AppIcon name="IconWarningCircle" size={28} color={mutedColor} />
+            <Typography.Paragraph type="body-sm" color="muted" align="center">
+              {state.message}
+            </Typography.Paragraph>
+            {sigaaLink.status === "linked" && (
+              <Button variant="outline" size="sm" onPress={() => loadSchedule()}>
+                <Button.Label>Tentar de novo</Button.Label>
+              </Button>
+            )}
+          </View>
+        )}
+
+        {state.status === "ready" && (
+          <>
+            <View className="rounded-3xl bg-accent p-4 gap-3">
+              {nextClass ? (
+                <>
+                  <View className="flex-row items-center gap-2">
+                    <View className="rounded-full bg-white/20 px-2.5 py-1">
+                      <Typography.Paragraph type="body-xs" className="text-white" weight="medium">
+                        {nextClass.dayIndex === todayIndex ? "Agora" : days[nextClass.dayIndex].label}
+                      </Typography.Paragraph>
+                    </View>
+                    <Typography.Paragraph type="body-sm" className="flex-1 text-white" weight="medium">
+                      {formatMinutes(nextClass.block.inicioMin)} –{" "}
+                      {formatMinutes(nextClass.block.fimMin)}
+                    </Typography.Paragraph>
+                    <AppIcon name="IconCaretRight" size={16} color="rgba(250,250,250,0.7)" />
+                  </View>
+                  <View className="gap-0.5">
+                    <Typography.Heading type="h5" className="text-white">
+                      {nextClass.block.nome}
+                    </Typography.Heading>
+                    <Typography.Paragraph type="body-sm" className="text-white/80">
+                      {nextClass.block.codigo ?? "—"}
+                      {nextClass.block.predio ? ` · ${nextClass.block.predio}` : ""}
+                      {nextClass.block.sala ? ` · sala ${nextClass.block.sala}` : ""}
+                    </Typography.Paragraph>
+                  </View>
+                </>
+              ) : (
+                <Typography.Paragraph type="body-sm" className="text-white">
+                  Nenhuma aula agendada essa semana.
+                </Typography.Paragraph>
+              )}
+            </View>
+
+            <View className="rounded-3xl bg-surface-secondary p-4 gap-3">
+              <View className="flex-row gap-2">
+                {/* Spacer matching the hour-label gutter below, so the day
+                    buttons land exactly over their grid columns. */}
+                <View style={{ width: 26 }} />
+                <View className="flex-1 flex-row">
+                  {days.map((day, index) => {
+                    const isSelected = index === selectedDay;
+                    return (
+                      <Pressable
+                        key={day.key}
+                        onPress={() => setSelectedDay(index)}
+                        style={{ width: columnWidth || undefined, flexGrow: columnWidth ? 0 : 1 }}
+                        className={`items-center gap-0.5 py-2 rounded-2xl ${
+                          isSelected ? "bg-surface-tertiary" : ""
+                        }`}
+                      >
+                        <Typography.Paragraph
+                          type="body-xs"
+                          className={isSelected ? undefined : "text-muted"}
+                        >
+                          {day.label}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph type="body-sm" weight="medium">
+                          {day.num}
+                        </Typography.Paragraph>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="flex-row gap-2">
+                <View style={{ width: 26, height: SCHEDULE_GRID_HEIGHT }}>
+                  {HOUR_MARKS.map((hour) => (
+                    <Typography.Paragraph
+                      key={hour}
+                      type="body-xs"
+                      color="muted"
+                      style={{
+                        position: "absolute",
+                        top: (hour * 60 - GRID_START_MIN) * PX_PER_MIN - 8,
+                      }}
+                    >
+                      {hour < 10 ? `0${hour}` : hour}
+                    </Typography.Paragraph>
+                  ))}
+                </View>
+                <View
+                  style={{ flex: 1, height: SCHEDULE_GRID_HEIGHT, position: "relative" }}
+                  onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+                >
+                  {HOUR_MARKS.map((hour, index) => (
+                    <View
+                      key={hour}
+                      className="absolute left-0 right-0 h-px bg-white/5"
+                      style={{
+                        top: (hour * 60 - GRID_START_MIN) * PX_PER_MIN,
+                        opacity: index === 0 ? 0 : 1,
+                      }}
+                    />
+                  ))}
+                  <View
+                    className="absolute bottom-0 top-0 bg-white/[0.04] rounded-lg"
+                    style={{ left: selectedDay * columnWidth, width: columnWidth }}
+                  />
+                  {blocks.map((block) => (
+                    <View key={block.key} style={block.style}>
+                      <Typography.Paragraph type="body-xs" style={{ color: block.color, fontSize: 9 }}>
+                        {block.label}
+                      </Typography.Paragraph>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <View className="gap-2.5">
+              <Typography.Paragraph weight="medium">{days[selectedDay].full}</Typography.Paragraph>
+              {daySchedule.length === 0 ? (
+                <View className="rounded-2xl bg-surface-secondary py-5 items-center">
+                  <Typography.Paragraph type="body-sm" color="muted">
+                    Nenhuma aula neste dia.
+                  </Typography.Paragraph>
+                </View>
+              ) : (
+                daySchedule.map((entry) => (
+                  <View
+                    key={entry.key}
+                    className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-start gap-3"
+                  >
+                    <View
+                      className="w-1 self-stretch rounded-full"
+                      style={{ backgroundColor: SCHEDULE_PALETTE[entry.colorIndex].bar, minHeight: 36 }}
+                    />
+                    <View className="w-14">
+                      <Typography.Paragraph type="body-sm" weight="medium">
+                        {formatMinutes(entry.inicioMin)}
+                      </Typography.Paragraph>
+                      <Typography.Paragraph type="body-xs" color="muted">
+                        {formatMinutes(entry.fimMin)}
+                      </Typography.Paragraph>
+                    </View>
+                    <View className="flex-1 gap-0.5">
+                      <Typography.Paragraph weight="medium">{entry.nome}</Typography.Paragraph>
+                      <View className="flex-row items-center gap-1.5">
+                        {entry.codigo && (
+                          <Typography.Paragraph type="body-xs" color="muted">
+                            {entry.codigo} ·
+                          </Typography.Paragraph>
+                        )}
+                        <LocationBadge
+                          predio={entry.predio}
+                          sala={entry.sala}
+                          localOriginal={entry.localOriginal}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
+
+        <View className="gap-2 pt-1">
+          <Button variant="outline" size="lg" className="w-full flex-row gap-2.5">
+            <UfbaCrest size={22} />
+            <Button.Label>Abrir o SIGAA</Button.Label>
+            <AppIcon name="IconArrowSquareOut" size={18} color={mutedColor} />
+          </Button>
+          <Typography.Paragraph type="body-xs" color="muted" align="center">
+            Abre já logado. Você não digita nada.
+          </Typography.Paragraph>
+        </View>
+      </ScrollView>
     </View>
   );
 }

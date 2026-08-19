@@ -23,6 +23,7 @@ describe("configureGoogleSignin", () => {
 
     expect(mockedGoogleSignin.configure).toHaveBeenCalledWith({
       webClientId: "test-client-id",
+      hostedDomain: "ufba.br",
     });
   });
 

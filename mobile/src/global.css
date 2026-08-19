@@ -6,3 +6,50 @@
 /* End-user path: heroui-native lives in the project's node_modules, one
    level up from this src/global.css file. */
 @source '../node_modules/heroui-native/lib';
+
+/* Gradline brand accent (purple), replacing HeroUI Native's default blue.
+   Every `accent`/`accent-soft` class — and the default `Button` variant —
+   derives from this single token instead of the hex values hardcoded across
+   the mockup screens. See https://heroui.com/docs/native/getting-started/theming */
+@layer theme {
+  @variant light {
+    --accent: #7c3aed;
+    --accent-foreground: #fafafa;
+    --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
+  }
+
+  @variant dark {
+    --accent: #7c3aed;
+    --accent-foreground: #fafafa;
+    --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
+  }
+}
+
+/* Expose --accent-shade to Tailwind (bg-accent-shade/text-accent-shade classes,
+   and useCSSVariable('--color-accent-shade') for native color props) following
+   https://heroui.com/docs/native/getting-started/theming#adding-custom-colors */
+@theme inline {
+  --color-accent-shade: var(--accent-shade);
+}
+
+/* Poppins, loaded via @expo-google-fonts/poppins in the root layout — matches
+   the design's typography and the font-weight variables every HeroUI Native
+   component reads (`--font-normal/-medium/-semibold/-bold`). Without these,
+   the vars resolve to nothing and every "medium"/"semibold" text (buttons,
+   headings, list items...) silently falls back to a thin system font. */
+@theme {
+  --font-normal: "Poppins_400Regular";
+  --font-medium: "Poppins_500Medium";
+  --font-semibold: "Poppins_600SemiBold";
+  --font-bold: "Poppins_700Bold";
+}
+
+/* Every HeroUI Native `Input` renders its text through this literal class
+   name (see node_modules/heroui-native/src/components/input/input.styles.ts).
+   Overriding it here — after `@import "heroui-native/styles"` above — applies
+   the monospace font to every Input in the app, not just the ones we
+   remember to style by hand. Loaded via @expo-google-fonts/source-code-pro
+   in the root layout. */
+.input__input {
+  font-family: "SourceCodePro_400Regular";
+}
