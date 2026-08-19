@@ -17,6 +17,7 @@
 - Domain names in pt-BR (`ComponenteCursado`, `parseHistorico`, `cargaHoraria`), matching the existing parsers. Code comments in English, and they explain **why**, not what.
 - New backend dependency: **`pdf-parse@^2.4.5`** exactly. It is the only file allowed to know a PDF is involved (`parsers/historico-texto.ts`).
 - **Never extract, log, or persist CPF, RG, or date/place of birth.** The matrícula is already on `User`; the rest is sensitive data no screen uses.
+- **The screen discloses this before the first sync**, naming both sides — what is kept (matérias, notas, carga horária) and what is discarded (CPF, RG, nascimento). A generic "nothing sensitive is stored" is not acceptable copy: it would be false by omission, since grades are stored. Task 13 tests the copy; Task 3 tests that the parser keeps it true.
 - **No parsing decision may depend on `fontName`'s value.** pdfjs reports `fontFamily: "sans-serif"` for all three of the transcript's fonts, and the only distinguishing handle is a per-document generated id (`g_d0_f3`). Verified against the real document. `fontName` is carried for debugging only.
 - Column x-bands need tolerance: columns drift ~3 pt between pages. Never compare an x for equality.
 - Section boundaries come from **text anchors**, never page positions — the legend spills onto the last page and the footer's y shifts between pages.
@@ -2790,6 +2791,21 @@ describe("Trajetória", () => {
     expect(screen.queryByText("7,84")).toBeNull();
   });
 
+  it("discloses what is kept and what is discarded before the first sync", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+
+    render(<TrajetoriaTab />);
+
+    // Both halves, not just the reassuring one: grades ARE stored, and a
+    // disclosure that only said "nothing sensitive is kept" would be false by
+    // omission. This is the user-facing end of the same requirement Task 3
+    // asserts from the parser's end.
+    expect(await screen.findByText(/O que fica guardado/i)).toBeTruthy();
+    expect(screen.getByText(/matérias, notas e carga horária/i)).toBeTruthy();
+    expect(screen.getByText(/O que não fica/i)).toBeTruthy();
+    expect(screen.getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
+  });
+
   it("shows the coefficient and progress once synced", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue({
       fetchedAt: "2026-08-19T03:35:00.000Z",
@@ -2913,7 +2929,9 @@ type LoadState =
 </Typography.Paragraph>
 ```
 
-- Fallback state, for a user who has never synced:
+- Fallback state, for a user who has never synced. The disclosure sits **above** the button, not below it: pressing sync is the moment the user hands us a document carrying their CPF, RG and date of birth, so what we keep and what we discard has to be readable before the press, not after.
+
+  Note the copy names both sides. A bare "não guardamos nada sensível" would be false by omission — grades and workload *are* stored, which is the entire point of the screen.
 
 ```tsx
 <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
@@ -2922,6 +2940,23 @@ type LoadState =
     Vamos buscar seu histórico escolar no SIGAA e montar sua trajetória. Leva
     alguns segundos.
   </Typography.Paragraph>
+
+  <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
+    <Typography.Paragraph type="body-xs" color="muted">
+      <Typography.Paragraph type="body-xs" weight="medium">
+        O que fica guardado:{" "}
+      </Typography.Paragraph>
+      suas matérias, notas e carga horária — é o que monta esta tela.
+    </Typography.Paragraph>
+    <Typography.Paragraph type="body-xs" color="muted">
+      <Typography.Paragraph type="body-xs" weight="medium">
+        O que não fica:{" "}
+      </Typography.Paragraph>
+      CPF, RG e data de nascimento. Eles estão no documento, mas são
+      descartados na leitura e nunca chegam ao banco.
+    </Typography.Paragraph>
+  </View>
+
   <Button onPress={sincronizar} isDisabled={sincronizando}>
     {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
   </Button>
@@ -2933,7 +2968,7 @@ type LoadState =
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd mobile && npm test -- trajetoria.test.tsx`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Drop the now-unused mocks**
 

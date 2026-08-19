@@ -301,6 +301,26 @@ that looks plausible.
 - The real transcript PDF does not enter the repository, in any form —
   see Testing.
 
+**Disclosure, before the first sync.** The sync button is the moment the
+user hands us a document containing their CPF, RG and date of birth, so
+the fallback state states what we keep and what we discard *before* they
+press it — not buried in a policy page, and not after the fact.
+
+The copy has to name both sides. "We don't store anything sensitive"
+would be false by omission: we do store grades, components and workload,
+which is the whole point of the screen, and a user who read that
+sentence would reasonably conclude otherwise. What is true and worth
+saying is the asymmetry:
+
+> **O que fica guardado:** suas matérias, notas e carga horária — é o
+> que monta esta tela.
+> **O que não fica:** CPF, RG e data de nascimento. Eles estão no
+> documento, mas são descartados na leitura e nunca chegam ao banco.
+
+This is a claim the parser has to keep true, which is why Task 3's spec
+asserts the parsed object carries no CPF-shaped string. The disclosure
+and that test are the same requirement seen from two ends.
+
 ## Testing
 
 TDD, parser first. Co-located specs, one behaviour per `it`, matching
