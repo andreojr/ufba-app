@@ -335,6 +335,49 @@ const FORMAS_PERMITIDAS: { nome: string; forma: RegExp; permitidos: string[] }[]
 ];
 
 
+/** A docente line ends in its workload: "Dr. FULANO DE TAL (60h)". */
+const DOCENTE_SUFIXO = /\(\s*\d+\s*h\s*\)\s*$/i;
+
+/**
+ * The equivalências line shares that suffix but names components, not a person:
+ * "Cumpriu GENG0032 - CIÊNCIAS DO AMBIENTE (60h) através de ENG269 - ...". It has
+ * to survive untouched, because Task 5's spec asserts on its text.
+ */
+const EQUIVALENCIA_MARCA = /através de/i;
+
+/** Optional academic title, preserved so the parser still meets the variety it handles. */
+const TITULO_DOCENTE = /^((?:Dr|Dra|MSc|Me|Esp|Prof|Profa)\.\s*)/i;
+
+/**
+ * Invented professors. A pool rather than one name so distinct real docentes stay
+ * distinct in the fixture — nothing asserts on that, but a fixture where every
+ * course shares one professor misrepresents the document's shape.
+ */
+const NOMES_FICTICIOS = [
+  'ANA PEREIRA LIMA',
+  'BRUNO CARDOSO MELO',
+  'CARLA NUNES ROCHA',
+  'DIEGO ALVES PINTO',
+  'ELISA MOURA BRAGA',
+  'FABIO TEIXEIRA SOUZA',
+  'GISELE RAMOS DUARTE',
+  'HENRIQUE VIEIRA COSTA',
+];
+
+/** Splits a docente line into its parts, or null when the item is not one. */
+function partesDoDocente(
+  texto: string,
+): { titulo: string; nome: string; sufixo: string } | null {
+  if (!DOCENTE_SUFIXO.test(texto) || EQUIVALENCIA_MARCA.test(texto)) {
+    return null;
+  }
+  const sufixo = DOCENTE_SUFIXO.exec(texto)?.[0] ?? '';
+  const semSufixo = texto.slice(0, texto.length - sufixo.length);
+  const titulo = TITULO_DOCENTE.exec(semSufixo)?.[1] ?? '';
+  const nome = semSufixo.slice(titulo.length).trim();
+  return nome ? { titulo, nome, sufixo } : null;
+}
+
 /** The value painted beside `rotulo`: same y, next item to the right. */
 function valorAoLadoDe(itens: ItemTexto[], rotulo: string): string | null {
   const label = itens.find((i) => i.texto === rotulo || i.texto.startsWith(rotulo));
@@ -405,12 +448,36 @@ async function main(): Promise<void> {
   // that happens to contain it as a substring.
   substituicoes.sort((a, b) => b.real.length - a.real.length);
 
-  const anonimos = itens.map((item) => {
+  const comValoresTrocados = itens.map((item) => {
     let texto = item.texto;
     for (const { real, ficticio } of substituicoes) {
       texto = texto.split(real).join(ficticio);
     }
     return { ...item, texto };
+  });
+
+  // Docente names are a category the two gates below cannot see: gate 1 only knows
+  // values discovered by label, and every shape in gate 2 is a numeric code. A real
+  // person's name passes both — which is how 43 of them once reached a committed
+  // fixture. They are redacted here, by the same shape rule the parser itself uses
+  // to tell a docente line from a wrapped component name.
+  const porDocente = new Map<string, string>();
+  const anonimos = comValoresTrocados.map((item) => {
+    const partes = partesDoDocente(item.texto);
+    if (!partes) {
+      return item;
+    }
+
+    let ficticio = porDocente.get(partes.nome);
+    if (!ficticio) {
+      const indice = porDocente.size;
+      const base = NOMES_FICTICIOS[indice % NOMES_FICTICIOS.length];
+      const volta = Math.floor(indice / NOMES_FICTICIOS.length);
+      ficticio = volta === 0 ? base : `${base} ${volta + 1}`;
+      porDocente.set(partes.nome, ficticio);
+    }
+
+    return { ...item, texto: `${partes.titulo}${ficticio} ${partes.sufixo}`.trim() };
   });
 
   const serializado = JSON.stringify(anonimos, null, 2);
@@ -439,6 +506,18 @@ async function main(): Promise<void> {
     }
   }
 
+  // Gate 3: every docente line must now name an invented professor. Same
+  // discovery-independent principle as gate 2, applied to the category gate 2's
+  // numeric shapes cannot express.
+  for (const item of anonimos) {
+    const partes = partesDoDocente(item.texto);
+    if (partes && !NOMES_FICTICIOS.some((nome) => partes.nome.startsWith(nome))) {
+      throw new Error(
+        'Uma linha de docente não nomeia um professor fictício. Fixture NÃO escrita.',
+      );
+    }
+  }
+
   const destino = join(
     __dirname,
     '..',
@@ -451,7 +530,7 @@ async function main(): Promise<void> {
   writeFileSync(destino, `${serializado}\n`);
   console.log(
     `${anonimos.length} itens escritos em ${destino} ` +
-      `(${substituicoes.length} valores anonimizados)`,
+      `(${substituicoes.length} valores e ${porDocente.size} docentes anonimizados)`,
   );
 }
 
@@ -466,7 +545,7 @@ Ask André for the PDF path — as of this writing it is `~/Downloads/historico_
 cd backend && npx ts-node scripts/dump-historico-fixture.ts ~/Downloads/historico_223116037-4.pdf
 ```
 
-Expected: a line reporting the item count, the destination, and `7 valores anonimizados`. If it throws `Não achei o valor do campo …`, the transcript's label differs from the one listed — read the real label out of the PDF and correct `CAMPOS_SENSIVEIS`'s `rotulo` (the label is not personal data; the value is). If it throws `valor(es) pessoal(is) sobreviveram`, stop and report it — do not work around it.
+Expected: a line reporting the item count, the destination, and `7 valores e 43 docentes anonimizados`. If it throws `Não achei o valor do campo …`, the transcript's label differs from the one listed — read the real label out of the PDF and correct `CAMPOS_SENSIVEIS`'s `rotulo` (the label is not personal data; the value is). If it throws `valor(es) pessoal(is) sobreviveram` or `não nomeia um professor fictício`, stop and report it — do not work around it.
 
 - [ ] **Step 3: Verify the fixture carries no personal data**
 
@@ -483,6 +562,24 @@ cd backend && grep -oE "[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|[0-9]{10}, \(SSP/B
 ```
 
 Expected: exactly `111.222.333-44` and `9999999999, (SSP/BA)`. **Any other value means real data is in the fixture — do not commit.**
+
+Then the docente check, which is the one an earlier version of this task missed entirely — 43 real professor names reached a committed fixture because neither gate could see a category that is neither a label-discovered value nor a numeric shape:
+
+```bash
+cd backend && node -e "
+const itens = require('./src/sigaa-engine/parsers/__fixtures__/historico-itens.json');
+const SUF = /\(\s*\d+\s*h\s*\)\s*\$/i;
+const nomes = new Set(
+  itens.map((i) => i.texto)
+    .filter((t) => SUF.test(t) && !/através de/i.test(t))
+    .map((t) => t.replace(SUF, '').replace(/^(?:Dr|Dra|MSc|Me|Esp|Prof|Profa)\.\s*/i, '').trim()),
+);
+console.log([...nomes].sort().join('\n'));
+console.log('distintos:', nomes.size);
+"
+```
+
+Expected: only names drawn from `NOMES_FICTICIOS` (with a numeric suffix where the pool wrapped). **Any name not in that pool is a real person — do not commit.**
 
 - [ ] **Step 4: Sanity-check the shape**
 
@@ -552,7 +649,22 @@ describe('parseHistorico', () => {
     const historico = parseHistorico(itens);
 
     expect(historico.emitidoEm).toBe('2026-08-19');
-    expect(historico.codigoVerificacao).toMatch(/^[0-9a-z]{10}$/);
+  });
+
+  it('does not carry the document authenticity token', () => {
+    const historico = parseHistorico(itens);
+
+    // The footer's verification code is deliberately not parsed. Together with a
+    // matrícula and an issue date it lets anyone fetch the real transcript from
+    // SIGAA's public verification page, and no screen has any use for it — so
+    // storing it would be liability without purpose, and would contradict what
+    // the sync screen tells the student we keep.
+    //
+    // Two assertions, not a shape match: a bare /[0-9a-z]{10}/ over the
+    // serialised object matches the object's own key names ("obrigatorias" is
+    // twelve lowercase letters) and would fail on perfectly good data.
+    expect(Object.keys(historico)).not.toContain('codigoVerificacao');
+    expect(JSON.stringify(historico)).not.toContain('aaaa1111bb');
   });
 
   it('never surfaces the personal data the screen has no use for', () => {
@@ -637,7 +749,6 @@ export interface ResumoCargaHoraria {
 export interface Historico {
   /** ISO date, so a client can build a Date without guessing day/month order. */
   emitidoEm: string;
-  codigoVerificacao: string;
   curriculo: string;
   periodoLetivoAtual: number;
   prazoConclusaoPadrao: string;
@@ -711,7 +822,6 @@ function paraIso(dataBr: string): string {
 }
 
 const EMITIDO_EM_PATTERN = /Emitido em:\s*(\d{2}\/\d{2}\/\d{4})/;
-const CODIGO_VERIFICACAO_PATTERN = /código de verificação:\s*([0-9a-z]+)/i;
 // "2030.1 / 2033.1" — padrão e máximo on one line.
 const PRAZOS_PATTERN = /(\d{4}\.\d)\s*\/\s*(\d{4}\.\d)/;
 
@@ -729,12 +839,10 @@ function casarEmAlgumItem(itens: ItemTexto[], pattern: RegExp): RegExpExecArray 
 
 export function parseHistorico(itens: ItemTexto[]): Historico {
   const emitidoEm = paraIso(casarEmAlgumItem(itens, EMITIDO_EM_PATTERN)[1]);
-  const codigoVerificacao = casarEmAlgumItem(itens, CODIGO_VERIFICACAO_PATTERN)[1];
   const prazos = casarEmAlgumItem(itens, PRAZOS_PATTERN);
 
   return {
     emitidoEm,
-    codigoVerificacao,
     curriculo: exigirValor(itens, 'Currículo:'),
     periodoLetivoAtual: Number(exigirValor(itens, 'Período Letivo Atual:')),
     prazoConclusaoPadrao: prazos[1],
@@ -762,7 +870,7 @@ export { SITUACOES, NATUREZAS };
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.spec`
-Expected: PASS, 4 tests. If `Currículo:` or `Período Letivo Atual:` throws, the label in the fixture differs — inspect it with the command in Task 2 Step 4 and adjust the label string, not the helper.
+Expected: PASS, 5 tests. If `Currículo:` or `Período Letivo Atual:` throws, the label in the fixture differs — inspect it with the command in Task 2 Step 4 and adjust the label string, not the helper.
 
 - [ ] **Step 5: Commit**
 
@@ -1471,7 +1579,6 @@ Then append:
 model Historico {
   userId             String   @id @map("user_id")
   emitidoEm          DateTime @map("emitido_em")
-  codigoVerificacao  String   @map("codigo_verificacao")
   curriculo          String
   periodoLetivoAtual Int      @map("periodo_letivo_atual")
   prazoPadrao        String   @map("prazo_padrao")
@@ -1665,7 +1772,6 @@ import type { Historico } from '../sigaa-engine/parsers/historico';
 function historicoMinimo(): Historico {
   return {
     emitidoEm: '2026-08-19',
-    codigoVerificacao: 'aaaa1111bb',
     curriculo: 'G20251 - 2025.2',
     periodoLetivoAtual: 8,
     prazoConclusaoPadrao: '2030.1',
@@ -1784,7 +1890,6 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
         data: {
           userId,
           emitidoEm: new Date(historico.emitidoEm),
-          codigoVerificacao: historico.codigoVerificacao,
           curriculo: historico.curriculo,
           periodoLetivoAtual: historico.periodoLetivoAtual,
           prazoPadrao: historico.prazoConclusaoPadrao,
@@ -1842,7 +1947,6 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
       ),
       historico: {
         emitidoEm: registro.emitidoEm.toISOString().slice(0, 10),
-        codigoVerificacao: registro.codigoVerificacao,
         curriculo: registro.curriculo,
         periodoLetivoAtual: registro.periodoLetivoAtual,
         prazoConclusaoPadrao: registro.prazoPadrao,
@@ -1969,7 +2073,6 @@ const CREDENCIAIS = { login: '209900011', senha: 'segredo' };
 function historicoFalso(): Historico {
   return {
     emitidoEm: '2026-08-19',
-    codigoVerificacao: 'aaaa1111bb',
     curriculo: 'G20251 - 2025.2',
     periodoLetivoAtual: 8,
     prazoConclusaoPadrao: '2030.1',
@@ -2465,7 +2568,6 @@ export interface ResumoCargaHoraria {
 
 export interface Historico {
   emitidoEm: string;
-  codigoVerificacao: string;
   curriculo: string;
   periodoLetivoAtual: number;
   prazoConclusaoPadrao: string;

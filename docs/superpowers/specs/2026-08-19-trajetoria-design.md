@@ -306,6 +306,40 @@ that looks plausible.
 
 - CPF, RG, and date/place of birth are read past, never extracted and
   never stored.
+- **The footer's verification code is not extracted either.** It is the
+  document's authenticity token: with a matrícula and an issue date, it
+  fetches the real transcript from SIGAA's public verification page. An
+  earlier draft of this spec persisted it in a `codigo_verificacao`
+  column, which was liability with no purpose — no screen reads it, no
+  derivation uses it, and keeping it would contradict what the sync
+  screen tells the student we store. Task 3's specs assert the parsed
+  object does not carry it.
+
+  It still has to be redacted out of the committed test fixture, which
+  is a dump of every text run in the PDF and therefore contains the
+  footer whether we parse it or not.
+- **Docente names are redacted from the fixture too.** The transcript
+  prints an instructor's full name beside every course row — 43 distinct
+  people in the sample document. The spike raised this and left it open,
+  noting the names are arguably public professional data; leaving it
+  open is what let 43 of them into a committed fixture before a reviewer
+  caught it. The decision is now recorded rather than implied: they are
+  replaced with invented professors, because the parser's tests assert
+  on the *shape* of a docente line and never on its content, so keeping
+  real names buys nothing and costs a category of doubt.
+
+  The parser itself still reads `docente` into the domain and persists
+  it — that is the student's own course record, and the screen may show
+  who taught a course. Redaction is about the committed test fixture,
+  not about the feature.
+
+**A category the value-based gates cannot see.** The fixture script
+gates on values it discovered by label and on shapes personal data
+takes. A person's name is neither: not discoverable from the Dados
+Pessoais labels, and not expressible as a numeric shape. That is
+precisely why the docente names passed both gates. Any future field of
+that kind needs its own gate; two gates that share a blind spot are one
+gate.
 - Storing academic data server-side follows the existing precedent:
   `updateSigaaProfile` already persists matrícula, curso and período de
   ingresso for every user. `syncMode` governs the *password*, not
