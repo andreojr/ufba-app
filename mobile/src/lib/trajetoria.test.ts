@@ -10,6 +10,7 @@ import {
   percentualConcluido,
   poolPlanejavel,
   rotuloSituacao,
+  rotulosPorAno,
   somarCargaHoraria,
   zonasDePlanejamento,
 } from "./trajetoria";
@@ -293,6 +294,20 @@ describe("impactoNoCr", () => {
   it("returns null when removing the component would leave nothing graded", () => {
     const cursados = [componente({ codigo: "MATA37", nota: 8 })];
     expect(impactoNoCr(cursados, "MATA37")).toBeNull();
+  });
+});
+
+describe("rotulosPorAno", () => {
+  it("labels only the first term of each year, blanking the rest", () => {
+    expect(rotulosPorAno(["2024.1", "2024.2", "2025.1"])).toEqual(["2024", "", "2025"]);
+  });
+
+  it("labels the sole term of a lone year", () => {
+    expect(rotulosPorAno(["2026.1"])).toEqual(["2026"]);
+  });
+
+  it("returns nothing for an empty series", () => {
+    expect(rotulosPorAno([])).toEqual([]);
   });
 });
 

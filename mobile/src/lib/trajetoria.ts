@@ -145,6 +145,25 @@ function crPonderado(cursados: ComponenteCursado[]): number | null {
 }
 
 /**
+ * The x-axis labels for a chart with one point per term: only the first term
+ * of each year gets its year as a label, every later term in that year gets
+ * an empty string. Two labelled points side by side ("2024" next to "2024")
+ * would read as two different years — this is what keeps the axis showing
+ * each year exactly once, at the term where it starts.
+ */
+export function rotulosPorAno(semestresOrdenados: string[]): string[] {
+  const vistos = new Set<string>();
+  return semestresOrdenados.map((semestre) => {
+    const ano = semestre.slice(0, 4);
+    if (vistos.has(ano)) {
+      return "";
+    }
+    vistos.add(ano);
+    return ano;
+  });
+}
+
+/**
  * The CR line chart's series: for each term in `semestresOrdenados`, the CR
  * computed from every graded component up to and including that term — not
  * just that term's own grades, since the CR itself is defined as a running

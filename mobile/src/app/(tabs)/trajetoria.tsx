@@ -27,6 +27,7 @@ import {
   percentualConcluido,
   poolPlanejavel,
   rotuloSituacao,
+  rotulosPorAno,
   somarCargaHoraria,
   zonasDePlanejamento,
   type AnoTrajetoria,
@@ -338,9 +339,14 @@ function ReadyTrajetoria({
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
 
   const semestresOrdenados = periodos.map((periodo) => periodo.semestre);
+  const rotulosAno = rotulosPorAno(semestresOrdenados);
   const crPorPeriodo = calcularCrAcumulado(historico.cursados, semestresOrdenados);
-  const cargaHorariaPorPeriodo = periodos.map((periodo) => ({
-    rotulo: periodo.semestre,
+  const pontosCr = crPorPeriodo.map((ponto, indice) => ({
+    rotulo: rotulosAno[indice],
+    valor: ponto.cr,
+  }));
+  const barrasCargaHoraria = periodos.map((periodo, indice) => ({
+    rotulo: rotulosAno[indice],
     valor: somarCargaHoraria(periodo.componentes),
   }));
 
@@ -356,29 +362,47 @@ function ReadyTrajetoria({
 
   return (
     <>
+      <Tabs value={insight} onValueChange={(valor) => setInsight(valor as Insight)} variant="secondary">
+        <Tabs.List>
+          <Tabs.Indicator />
+          <Tabs.Trigger value="cr">
+            <Tabs.Label>CR</Tabs.Label>
+          </Tabs.Trigger>
+          <Tabs.Trigger value="cargaHoraria">
+            <Tabs.Label>Carga Horária</Tabs.Label>
+          </Tabs.Trigger>
+        </Tabs.List>
+      </Tabs>
+
       <View className="rounded-3xl bg-surface-secondary p-4 gap-3.5">
-        <View className="flex-row items-stretch gap-4">
-          <View className="flex-1 gap-0.5">
-            <Typography.Paragraph type="body-xs" color="muted">
-              Coeficiente
-            </Typography.Paragraph>
-            <Typography.Heading type="h5">
-              {formatarCoeficiente(historico.indices.cr)}
-            </Typography.Heading>
+        {insight === "cr" ? (
+          <View className="gap-2">
+            <View className="gap-0.5">
+              <Typography.Paragraph type="body-xs" color="muted">
+                Coeficiente
+              </Typography.Paragraph>
+              <Typography.Heading type="h5">
+                {formatarCoeficiente(historico.indices.cr)}
+              </Typography.Heading>
+            </View>
+            <LineChart pontos={pontosCr} altura={70} />
           </View>
-          <View className="w-px bg-white/10" />
-          <View className="flex-[1.3] gap-0.5">
-            <Typography.Paragraph type="body-xs" color="muted">
-              Carga horária
-            </Typography.Paragraph>
-            {/* Four-digit hour counts are the normal case, and a pt-BR reader
-                expects the thousands dot the design printed: "2.100/3.610 h". */}
-            <Typography.Heading type="h5">
-              {total.integralizada.toLocaleString("pt-BR")}/{total.exigida.toLocaleString("pt-BR")}{" "}
-              h
-            </Typography.Heading>
+        ) : (
+          <View className="gap-2">
+            <View className="gap-0.5">
+              <Typography.Paragraph type="body-xs" color="muted">
+                Carga horária
+              </Typography.Paragraph>
+              {/* Four-digit hour counts are the normal case, and a pt-BR reader
+                  expects the thousands dot the design printed: "2.100/3.610 h". */}
+              <Typography.Heading type="h5">
+                {total.integralizada.toLocaleString("pt-BR")}/
+                {total.exigida.toLocaleString("pt-BR")} h
+              </Typography.Heading>
+            </View>
+            <BarChart barras={barrasCargaHoraria} altura={70} />
           </View>
-        </View>
+        )}
         <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
           <View className="h-full rounded-full bg-accent" style={{ width: `${percentual}%` }} />
         </View>
@@ -411,43 +435,12 @@ function ReadyTrajetoria({
         {erro}
       </View>
 
-      <Tabs value={insight} onValueChange={(valor) => setInsight(valor as Insight)} variant="secondary">
-        <Tabs.List>
-          <Tabs.Indicator />
-          <Tabs.Trigger value="cr">
-            <Tabs.Label>CR</Tabs.Label>
-          </Tabs.Trigger>
-          <Tabs.Trigger value="cargaHoraria">
-            <Tabs.Label>Carga Horária</Tabs.Label>
-          </Tabs.Trigger>
-        </Tabs.List>
-
-        <Tabs.Content value="cr">
-          <View className="gap-4 pt-4">
-            <LineChart
-              pontos={crPorPeriodo.map((ponto) => ({ rotulo: ponto.semestre, valor: ponto.cr }))}
-            />
-            <LinhaDoTempo
-              anos={anos}
-              desatualizado={desatualizado}
-              insight="cr"
-              cursados={historico.cursados}
-            />
-          </View>
-        </Tabs.Content>
-
-        <Tabs.Content value="cargaHoraria">
-          <View className="gap-4 pt-4">
-            <BarChart barras={cargaHorariaPorPeriodo} />
-            <LinhaDoTempo
-              anos={anos}
-              desatualizado={desatualizado}
-              insight="cargaHoraria"
-              cursados={historico.cursados}
-            />
-          </View>
-        </Tabs.Content>
-      </Tabs>
+      <LinhaDoTempo
+        anos={anos}
+        desatualizado={desatualizado}
+        insight={insight}
+        cursados={historico.cursados}
+      />
 
       <View className="gap-5">
         {/* Everything around the planner now reads as the student's real

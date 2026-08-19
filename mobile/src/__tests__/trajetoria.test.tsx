@@ -221,11 +221,22 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    // Two decimals: the CR, not a grade — formatarNota would print 8,2 here.
+    // The CR tab is the default: two decimals, the CR, not a grade —
+    // formatarNota would print 8,2 here.
     expect(await screen.findByText("8,16")).toBeTruthy();
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
+    // The main card shows only one of the two stats at a time.
+    expect(screen.queryByText("2.100/3.610 h")).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Carga Horária"));
+    });
+
     // Thousands separated the pt-BR way, as the design printed them.
     expect(screen.getByText("2.100/3.610 h")).toBeTruthy();
+    expect(screen.queryByText("8,16")).toBeNull();
+    // The progress row is shared by both tabs, not tied to either stat.
+    expect(screen.getByText(/58% do curso/i)).toBeTruthy();
   });
 
   it("distinguishes a failed grade from an identical passing one", async () => {
@@ -494,10 +505,11 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    // Year header groups 2025.1 and 2025.2 together — MATRICULADO is 2026.1,
-    // its own year.
-    expect(await screen.findByText("2025")).toBeTruthy();
-    expect(screen.getByText("2026")).toBeTruthy();
+    // Year header groups 2025.1 with 2026.1's own year — one appears at least
+    // twice (the grid's own header, plus the CR chart's x-axis label), which
+    // is exactly the point: the chart only labels a year once too.
+    expect(await screen.findAllByText("2025")).not.toHaveLength(0);
+    expect(screen.getAllByText("2026")).not.toHaveLength(0);
 
     // MATA37's 8 sits above the CR computed without it (6): a positive pull.
     expect(screen.getByText("↑ 1,00")).toBeTruthy();
