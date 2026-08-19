@@ -318,19 +318,27 @@ const FORMAS_PERMITIDAS: { nome: string; forma: RegExp; permitidos: string[] }[]
 ];
 
 /**
- * Items joined per painted line, so a phrase split across text runs still
- * matches. The footer's "código de verificação:" wraps mid-phrase, which is why
- * matching item by item finds nothing.
+ * Each page's text as one string in reading order: top to bottom, left to right.
+ *
+ * Deliberately not per line. The footer's "código de verificação:" and the code
+ * itself sit on two different physical lines about 8pt apart, so grouping items
+ * by y finds the phrase on neither of them. Joining a whole page in reading
+ * order makes any wrapped phrase contiguous again, wherever it happens to wrap —
+ * which is the property this needs, since the wrap position is a property of the
+ * deploy's page width and not something to encode.
  */
-function linhasReconstruidas(itens: ItemTexto[]): string[] {
-  const porLinha = new Map<string, ItemTexto[]>();
+function paginasEmOrdemDeLeitura(itens: ItemTexto[]): string[] {
+  const porPagina = new Map<number, ItemTexto[]>();
   for (const item of itens) {
-    const chave = `${item.pagina}:${Math.round(item.y * 2) / 2}`;
-    porLinha.set(chave, [...(porLinha.get(chave) ?? []), item]);
+    porPagina.set(item.pagina, [...(porPagina.get(item.pagina) ?? []), item]);
   }
-  return [...porLinha.values()].map((linha) =>
-    linha
-      .sort((a, b) => a.x - b.x)
+
+  return [...porPagina.values()].map((pagina) =>
+    pagina
+      // y descending because the PDF origin is bottom-left: a larger y is
+      // further up the page. Rounded so items painted on one line, whose y can
+      // differ by hundredths, sort by x among themselves instead of interleaving.
+      .sort((a, b) => Math.round(b.y * 2) - Math.round(a.y * 2) || a.x - b.x)
       .map((i) => i.texto)
       .join(' '),
   );
@@ -384,10 +392,11 @@ async function main(): Promise<void> {
     substituicoes.push({ real, ficticio });
   }
 
-  // Against reconstructed lines, not individual items: the footer's phrase wraps
-  // across two runs, so no single item contains "código de verificação: <code>".
+  // Against whole pages in reading order, not individual items and not single
+  // lines: the footer's phrase wraps onto a second physical line, so neither an
+  // item nor a line ever contains "código de verificação: <code>" entire.
   let achouCodigo = false;
-  for (const linha of linhasReconstruidas(itens)) {
+  for (const linha of paginasEmOrdemDeLeitura(itens)) {
     const match = CODIGO_VERIFICACAO_PATTERN.exec(linha);
     if (match) {
       substituicoes.push({ real: match[1], ficticio: 'aaaa1111bb' });
