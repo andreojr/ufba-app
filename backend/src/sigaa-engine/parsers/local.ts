@@ -38,6 +38,30 @@ function stripAccents(text: string): string {
 }
 
 /**
+ * Some SIGAA "Local" entries name a room without its building (e.g. "Smart
+ * Class III"), so a naive parse mistakes the room name for the predio. This
+ * is campus-layout knowledge, not something derivable from the text itself —
+ * add an entry here whenever another such room surfaces.
+ */
+const KNOWN_ROOM_ONLY_PREFIXES: { prefix: string; predio: string }[] = [
+  { prefix: 'smart class', predio: 'PAF II' },
+];
+
+function normalizeKnownRoom(info: LocalInfo): LocalInfo {
+  if (!info.predio) {
+    return info;
+  }
+  const normalizedPredio = stripAccents(info.predio).toLowerCase();
+  const known = KNOWN_ROOM_ONLY_PREFIXES.find((entry) =>
+    normalizedPredio.startsWith(entry.prefix),
+  );
+  if (!known) {
+    return info;
+  }
+  return { predio: known.predio, sala: info.predio, localOriginal: info.localOriginal };
+}
+
+/**
  * Pattern A: per-day distinct location, e.g.
  * "Ter PAF I/Qui Smart Class III" — abbreviated day name + free-text
  * location, one segment per day, joined by "/". No sala is split out here
@@ -118,13 +142,14 @@ export function parseLocal(
   if (perDay) {
     const result: Record<string, LocalInfo> = {};
     for (const day of days) {
-      result[day] = perDay[day] ?? fallback;
+      result[day] = normalizeKnownRoom(perDay[day] ?? fallback);
     }
     return result;
   }
 
-  const uniform =
-    tryFixedPredioSalaPattern(local) ?? tryPredioOnlyPattern(local) ?? fallback;
+  const uniform = normalizeKnownRoom(
+    tryFixedPredioSalaPattern(local) ?? tryPredioOnlyPattern(local) ?? fallback,
+  );
   const result: Record<string, LocalInfo> = {};
   for (const day of days) {
     result[day] = uniform;
