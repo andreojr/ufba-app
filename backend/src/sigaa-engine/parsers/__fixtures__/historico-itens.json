@@ -1,0 +1,4384 @@
+[
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 744.19,
+    "texto": "Histórico Escolar - Emitido em: 19/08/2026 às 03:35",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 712.23,
+    "texto": "Nome:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 67.68000000000002,
+    "y": 712.23,
+    "texto": "MARIA DA SILVA SANTOS",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 264.99,
+    "y": 726.88,
+    "texto": "Dados Pessoais",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 686.23,
+    "texto": "Nacionalidade:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 97.03200000000004,
+    "y": 686.23,
+    "texto": "BRASILEIRO",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 673.23,
+    "texto": "Nº do documento com órgão expedidor:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 185.328,
+    "y": 673.23,
+    "texto": "9999999999, (SSP/BA)",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 660.23,
+    "texto": "Nº do CPF:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 84.38400000000003,
+    "y": 660.23,
+    "texto": "111.222.333-44",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 699.23,
+    "texto": "Data de Nascimento:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 118.81600000000003,
+    "y": 699.23,
+    "texto": "15/03/2001",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 416.3,
+    "y": 698.23,
+    "texto": "Local de Nascimento:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 504.33999999999975,
+    "y": 698.23,
+    "texto": "CIDADE FICTICIA/BA",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 233.24,
+    "y": 644.88,
+    "texto": "Dados do Vínculo do Discente",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 124,
+    "y": 621.88,
+    "texto": "ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR - BACHARELADO - PRESENCIAL - N",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 432,
+    "y": 520.23,
+    "texto": "2030.1 / 2033.1",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 621.88,
+    "texto": "Curso:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 576.23,
+    "texto": "Currículo:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 548.23,
+    "texto": "Ingresso:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 534.23,
+    "texto": "Forma de Ingresso:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 280.62,
+    "y": 520.23,
+    "texto": "Prazo para Conclusão (Padrão / Máximo):",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 576.23,
+    "texto": "G20251 - 2025.2",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 562.23,
+    "texto": "Reconhecimento do Curso:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 562.23,
+    "texto": "111, 04/02/2021. D.O.U.: 05/02/2021",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 604.23,
+    "texto": "Status:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 604.23,
+    "texto": "ATIVO",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 520.23,
+    "texto": "Período Letivo Atual:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 492.23,
+    "texto": "Prorrogações:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 35,
+    "y": 478.23,
+    "texto": "Conclusão:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 464.23,
+    "texto": "Tipo Saída:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 339.06,
+    "y": 450.23,
+    "texto": "Data da Colação de Grau:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 434,
+    "y": 450.23,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 385.88,
+    "y": 548.23,
+    "texto": "Perfil Inicial:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 432,
+    "y": 548.23,
+    "texto": "0",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 520.23,
+    "texto": "8",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 150,
+    "y": 464.23,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 152,
+    "y": 478.23,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 492.23,
+    "texto": "3 períodos letivos",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 436.89,
+    "texto": "Trabalho de Conclusão de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 427.57,
+    "texto": "Curso:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 150,
+    "y": 433.73,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 409,
+    "y": 586.88,
+    "texto": "IAP:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 428.512,
+    "y": 586.88,
+    "texto": "0.8434",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 498,
+    "y": 586.88,
+    "texto": "CR:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 515.9999999999999,
+    "y": 586.88,
+    "texto": "8.1597",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 437.54,
+    "y": 599.72,
+    "texto": "Índices Acadêmicos",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 590.23,
+    "texto": "Ênfase:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 506.23,
+    "texto": "Nenhum",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 506.23,
+    "texto": "Suspensões:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 450.23,
+    "texto": "Data da Conclusão:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 150,
+    "y": 450.23,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 590.23,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 34,
+    "y": 418.57,
+    "texto": "Data da Expedição do Diploma:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 548.23,
+    "texto": "2023.1 - 14/03/2023",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 149,
+    "y": 534.23,
+    "texto": "Sisu",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 150,
+    "y": 418.57,
+    "texto": "-",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 242.59,
+    "y": 802.57,
+    "texto": "UFBA - Universidade Federal da Bahia",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 194.8,
+    "y": 790.57,
+    "texto": "Rua Augusto Viana, s/n - Canela - Salvador/BA - CEP 40110-909",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 158.82,
+    "y": 778.57,
+    "texto": "DOCUMENTO OFICIAL, SUJEITO A AJUSTES DEVIDO À MIGRAÇÃO DE SISTEMA.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 224.8,
+    "y": 769.26,
+    "texto": "Havendo divergências, prevalecem os registros",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 253.26,
+    "y": 759.95,
+    "texto": "consolidados pela Universidade.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 438.93,
+    "y": 708.85,
+    "texto": "Matrícula:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 504.9540000000001,
+    "y": 708.85,
+    "texto": "209900011",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 197.48,
+    "y": 368.38,
+    "texto": "Componentes Curriculares Cursados/Cursando",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 40.74,
+    "y": 347.77,
+    "texto": "Semestre",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 243,
+    "y": 347.42,
+    "texto": "Componente Curricular",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 533,
+    "y": 347.42,
+    "texto": "Situação",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 486.67,
+    "y": 347.42,
+    "texto": "CH",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 506.83,
+    "y": 347.42,
+    "texto": "Nota",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 330.08,
+    "texto": "2023.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 333.57,
+    "texto": "FÍSICA GERAL TEÓRICA I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 326.58,
+    "texto": "Dr. ANA PEREIRA LIMA (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 330.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 330.08,
+    "texto": "FISD36",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 330.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 330.08,
+    "texto": "6.8",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 330.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 315.08,
+    "texto": "2023.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 318.57,
+    "texto": "FÍSICA GERAL EXPERIMENTAL I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 311.58,
+    "texto": "Dr. BRUNO CARDOSO MELO (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 315.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 315.08,
+    "texto": "FISD42",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 315.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 315.08,
+    "texto": "8.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 315.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 300.08,
+    "texto": "2023.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 303.57,
+    "texto": "GEOMETRIA ANALÍTICA",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 296.58,
+    "texto": "MSc. CARLA NUNES ROCHA (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 300.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 300.08,
+    "texto": "MATA01",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 300.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 506.69,
+    "y": 300.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 300.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 285.08,
+    "texto": "2023.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 288.57,
+    "texto": "CÁLCULO A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 281.58,
+    "texto": "Dr. DIEGO ALVES PINTO (90h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 285.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 285.08,
+    "texto": "MATA02",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 285.08,
+    "texto": "90",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 285.08,
+    "texto": "9.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 285.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 270.08,
+    "texto": "2023.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 273.57,
+    "texto": "QUIMICA GERAL",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 266.58,
+    "texto": "ELISA MOURA BRAGA (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 270.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 93.94,
+    "y": 270.08,
+    "texto": "QUI029",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 270.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 270.08,
+    "texto": "7.6",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 270.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 255.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 258.57,
+    "texto": "SISTEMAS LÓGICOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 251.58,
+    "texto": "FABIO TEIXEIRA SOUZA (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 255.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92,
+    "y": 255.08,
+    "texto": "ENGC26",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 255.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 255.08,
+    "texto": "8.6",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 255.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 240.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 243.57,
+    "texto": "INTRODUÇÃO À ENGENHARIA DE COMPUTAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 236.58,
+    "texto": "FABIO TEIXEIRA SOUZA (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 240.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 91.8,
+    "y": 240.08,
+    "texto": "ENGG51",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 240.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 506.69,
+    "y": 240.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 240.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 225.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 228.57,
+    "texto": "FÍSICA GERAL TEÓRICA II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 221.58,
+    "texto": "GISELE RAMOS DUARTE (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 225.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 225.08,
+    "texto": "FISD34",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 225.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 225.08,
+    "texto": "8.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 225.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 210.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 213.57,
+    "texto": "FÍSICA GERAL EXPERIMENTAL II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 206.58,
+    "texto": "Dr. HENRIQUE VIEIRA COSTA (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 210.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 210.08,
+    "texto": "FISD41",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 210.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 210.08,
+    "texto": "8.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 210.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 195.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 198.57,
+    "texto": "CÁLCULO B",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 191.58,
+    "texto": "MSc. ANA PEREIRA LIMA 2 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 195.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 195.08,
+    "texto": "MATA03",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 195.08,
+    "texto": "90",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 195.08,
+    "texto": "9.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 195.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 180.08,
+    "texto": "2023.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 183.57,
+    "texto": "ÁLGEBRA LINEAR A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 176.58,
+    "texto": "Dr. BRUNO CARDOSO MELO 2 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 180.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 180.08,
+    "texto": "MATA07",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 180.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 180.08,
+    "texto": "9.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 180.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 165.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 168.57,
+    "texto": "TECNOLOGIA DOS MATERIAIS PARA A ENGENHARIA ELÉTRICA",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 161.58,
+    "texto": "Dr. CARLA NUNES ROCHA 2 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 533.45,
+    "y": 165.08,
+    "texto": "TRANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.19,
+    "y": 165.08,
+    "texto": "ENGA47",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 165.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 511.17,
+    "y": 165.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 150.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 153.57,
+    "texto": "ELETRÔNICA DIGITAL",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 146.58,
+    "texto": "Dr. DIEGO ALVES PINTO 2 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 150.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92,
+    "y": 150.08,
+    "texto": "ENGC40",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 150.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 150.08,
+    "texto": "8.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 150.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 135.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 138.57,
+    "texto": "FÍSICA GERAL TEÓRICA III",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 131.58,
+    "texto": "Dr. ELISA MOURA BRAGA 2 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 135.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 135.08,
+    "texto": "FISD37",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 135.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 135.08,
+    "texto": "9.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 135.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 120.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 123.57,
+    "texto": "FÍSICA GERAL EXPERIMENTAL III",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 116.58,
+    "texto": "Dr. FABIO TEIXEIRA SOUZA 2 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 120.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 94.14,
+    "y": 120.08,
+    "texto": "FISD40",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 120.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 120.08,
+    "texto": "8.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 120.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 105.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 108.57,
+    "texto": "CÁLCULO C",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 101.58,
+    "texto": "Dr. GISELE RAMOS DUARTE 2 (90h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 105.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 105.08,
+    "texto": "MATA04",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 105.08,
+    "texto": "90",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 105.08,
+    "texto": "7.9",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 105.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 90.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 93.57,
+    "texto": "INTRODUÇÃO À LÓGICA DE PROGRAMAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 86.58,
+    "texto": "Dr. HENRIQUE VIEIRA COSTA 2 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 90.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 90.08,
+    "texto": "MATA37",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 90.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 506.69,
+    "y": 90.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 90.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 75.08,
+    "texto": "2024.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 78.57,
+    "texto": "MATEMÁTICA DISCRETA II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 71.58,
+    "texto": "Dr. ANA PEREIRA LIMA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 533.45,
+    "y": 75.08,
+    "texto": "TRANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.38,
+    "y": 75.08,
+    "texto": "MATA97",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 75.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 511.17,
+    "y": 75.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 41.3,
+    "y": 60.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 63.57,
+    "texto": "ADMINISTRACAO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 129,
+    "y": 56.58,
+    "texto": "Dra. BRUNO CARDOSO MELO 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 1,
+    "x": 538.3,
+    "y": 60.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 92.39,
+    "y": 60.08,
+    "texto": "ADM012",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 487.11,
+    "y": 60.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 508.64,
+    "y": 60.08,
+    "texto": "7.8",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 73.94,
+    "y": 60.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 549.28,
+    "y": 34.57,
+    "texto": "3",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 472.05,
+    "y": 34.57,
+    "texto": "Página",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 512.28,
+    "y": 34.57,
+    "texto": "1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 527.55,
+    "y": 34.57,
+    "texto": "de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 39.5,
+    "texto": "Para verificar sua autenticidade entre em https://sigaa.ufba.br/sigaa/documentos informando a matrícula, data de emissão e o código de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 1,
+    "x": 33,
+    "y": 31.35,
+    "texto": "verificação: aaaa1111bb",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 242.59,
+    "y": 792.57,
+    "texto": "UFBA - Universidade Federal da Bahia",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 194.8,
+    "y": 780.57,
+    "texto": "Rua Augusto Viana, s/n - Canela - Salvador/BA - CEP 40110-909",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 34,
+    "y": 730.19,
+    "texto": "Histórico Escolar - Emitido em: 19/08/2026 às 03:35",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 95,
+    "y": 715.23,
+    "texto": "MARIA DA SILVA SANTOS",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 34,
+    "y": 715.23,
+    "texto": "Nome:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 412,
+    "y": 715.23,
+    "texto": "Matrícula:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 449.3439999999999,
+    "y": 715.23,
+    "texto": "209900011",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 158.82,
+    "y": 768.57,
+    "texto": "DOCUMENTO OFICIAL, SUJEITO A AJUSTES DEVIDO À MIGRAÇÃO DE SISTEMA.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 224.8,
+    "y": 759.26,
+    "texto": "Havendo divergências, prevalecem os registros",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 253.26,
+    "y": 749.95,
+    "texto": "consolidados pela Universidade.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 197.48,
+    "y": 693.38,
+    "texto": "Componentes Curriculares Cursados/Cursando",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 40.74,
+    "y": 672.77,
+    "texto": "Semestre",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 243,
+    "y": 672.42,
+    "texto": "Componente Curricular",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 533,
+    "y": 672.42,
+    "texto": "Situação",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 486.67,
+    "y": 672.42,
+    "texto": "CH",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 506.83,
+    "y": 672.42,
+    "texto": "Nota",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 655.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 658.57,
+    "texto": "CIÊNCIAS DO AMBIENTE",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 651.58,
+    "texto": "MSc. CARLA NUNES ROCHA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 655.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.58,
+    "y": 655.08,
+    "texto": "ENG269",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 655.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 655.08,
+    "texto": "8.6",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 74.33,
+    "y": 655.08,
+    "texto": "EB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 640.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 643.57,
+    "texto": "MECÂNICA DOS SÓLIDOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 636.58,
+    "texto": "DIEGO ALVES PINTO 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 640.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 640.08,
+    "texto": "ENGC30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 640.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 640.08,
+    "texto": "5.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 640.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 625.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 628.57,
+    "texto": "ANÁLISE DE CIRCUITOS I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 621.58,
+    "texto": "Dr. ELISA MOURA BRAGA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 625.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 625.08,
+    "texto": "ENGC32",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 625.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 625.08,
+    "texto": "7.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 625.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 610.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 613.57,
+    "texto": "SISTEMAS MICROPROCESSADOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 606.58,
+    "texto": "Dr. DIEGO ALVES PINTO 2 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 610.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 610.08,
+    "texto": "ENGC50",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 610.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 610.08,
+    "texto": "8.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 610.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 595.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 598.57,
+    "texto": "MÉTODOS ESTATÍSTICOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 591.58,
+    "texto": "Dra. FABIO TEIXEIRA SOUZA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 595.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.77,
+    "y": 595.08,
+    "texto": "MAT236",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 595.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 595.08,
+    "texto": "5.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 595.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 580.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 583.57,
+    "texto": "PROGRAMAÇÃO ORIENTADA A OBJETOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 576.58,
+    "texto": "Dra. GISELE RAMOS DUARTE 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 580.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 580.08,
+    "texto": "MATA55",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 580.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 580.08,
+    "texto": "8.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 580.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 565.08,
+    "texto": "2024.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 568.57,
+    "texto": "MATEMÁTICA DISCRETA II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 561.58,
+    "texto": "Dr. ANA PEREIRA LIMA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 565.08,
+    "texto": "REP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 565.08,
+    "texto": "MATA97",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 565.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 565.08,
+    "texto": "4.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 550.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 553.57,
+    "texto": "SINAIS E SISTEMAS I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 546.58,
+    "texto": "Dr. HENRIQUE VIEIRA COSTA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 550.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 550.08,
+    "texto": "ENGC24",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 550.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 550.08,
+    "texto": "7.7",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 550.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 535.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 538.57,
+    "texto": "DISPOSITIVOS ELETRÔNICOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 531.58,
+    "texto": "Dr. ANA PEREIRA LIMA 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 533.45,
+    "y": 535.08,
+    "texto": "TRANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 535.08,
+    "texto": "ENGC41",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 535.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 535.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 520.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 523.57,
+    "texto": "LABORATÓRIO INTEGRADO I-A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 516.58,
+    "texto": "Dr. BRUNO CARDOSO MELO 4 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 520.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 520.08,
+    "texto": "ENGG52",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 520.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 506.69,
+    "y": 520.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 520.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 505.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 508.57,
+    "texto": "METODOLOGIA E EXPRESSÃO DO CONHECIMENTO CIENTÍFICO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 501.58,
+    "texto": "CARLA NUNES ROCHA 4 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 505.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 505.08,
+    "texto": "ENGG62",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 505.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 505.08,
+    "texto": "8.6",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 505.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 490.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 493.57,
+    "texto": "PROGRAMAÇÃO DE SOFTWARE BÁSICO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 486.58,
+    "texto": "DIEGO ALVES PINTO 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 533.45,
+    "y": 490.08,
+    "texto": "TRANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 490.08,
+    "texto": "MATA49",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 490.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 490.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 475.08,
+    "texto": "2025.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 478.57,
+    "texto": "ENGENHARIA DE SOFTWARE I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 471.58,
+    "texto": "Dr. ELISA MOURA BRAGA 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 475.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 475.08,
+    "texto": "MATA62",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 475.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 475.08,
+    "texto": "7.6",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 475.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 460.08,
+    "texto": "2025.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 463.57,
+    "texto": "FENÔMENOS DE TRANSPORTES I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 456.58,
+    "texto": "Dr. FABIO TEIXEIRA SOUZA 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 460.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.58,
+    "y": 460.08,
+    "texto": "ENG370",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 460.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 460.08,
+    "texto": "8.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 460.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 445.08,
+    "texto": "2025.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 448.57,
+    "texto": "SINAIS E SISTEMAS II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 441.58,
+    "texto": "Dr. GISELE RAMOS DUARTE 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 445.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 445.08,
+    "texto": "ENGC33",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 445.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 445.08,
+    "texto": "7.8",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 445.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 430.08,
+    "texto": "2025.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 433.57,
+    "texto": "INTERFACE HOMEM-MÁQUINA",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 426.58,
+    "texto": "Dr. HENRIQUE VIEIRA COSTA 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 430.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 430.08,
+    "texto": "ENGG58",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 430.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 430.08,
+    "texto": "8.5",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 430.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 415.08,
+    "texto": "2025.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 418.57,
+    "texto": "CÁLCULO NUMÉRICO I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 411.58,
+    "texto": "Dr. ANA PEREIRA LIMA 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 415.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.77,
+    "y": 415.08,
+    "texto": "MAT174",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 415.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 506.69,
+    "y": 415.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 415.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 400.08,
+    "texto": "2025.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 403.57,
+    "texto": "ESTRUTURAS DE DADOS E ALGORITMOS I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 396.58,
+    "texto": "Dr. BRUNO CARDOSO MELO 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 400.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 400.08,
+    "texto": "MATA40",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 400.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 400.08,
+    "texto": "8.3",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 400.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 385.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 388.57,
+    "texto": "ANALISE DE CIRCUITOS II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 381.58,
+    "texto": "Dr. ELISA MOURA BRAGA 3 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 385.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 385.08,
+    "texto": "ENGC25",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 385.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 385.08,
+    "texto": "5.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 385.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 370.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 373.57,
+    "texto": "DISPOSITIVOS ELETRÔNICOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 366.58,
+    "texto": "Dr. ANA PEREIRA LIMA 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 370.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 370.08,
+    "texto": "ENGC41",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 370.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 370.08,
+    "texto": "7.8",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 370.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 355.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 358.57,
+    "texto": "PROCESSAMENTO DIGITAL DE SINAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 351.58,
+    "texto": "Dr. CARLA NUNES ROCHA 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 355.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92,
+    "y": 355.08,
+    "texto": "ENGC63",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 355.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 355.08,
+    "texto": "8.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 355.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 340.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 343.57,
+    "texto": "LABORATÓRIO INTEGRADO II-A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 336.58,
+    "texto": "Dr. HENRIQUE VIEIRA COSTA 4 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 340.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 340.08,
+    "texto": "ENGG53",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 340.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 506.69,
+    "y": 340.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 340.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 325.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 328.57,
+    "texto": "PROGRAMAÇÃO DE SOFTWARE BÁSICO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 321.58,
+    "texto": "DIEGO ALVES PINTO 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 325.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 325.08,
+    "texto": "MATA49",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 325.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 508.64,
+    "y": 325.08,
+    "texto": "9.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 325.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 310.08,
+    "texto": "2026.1",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 313.57,
+    "texto": "ANÁLISE E PROJETO DE ALGORITMOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 306.58,
+    "texto": "Dr. DIEGO ALVES PINTO 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 538.3,
+    "y": 310.08,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 310.08,
+    "texto": "MATA52",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 310.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 506.69,
+    "y": 310.08,
+    "texto": "10.0",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 310.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 295.08,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 298.57,
+    "texto": "LABORATÓRIO INTEGRADO III-A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 291.58,
+    "texto": "Dr. CARLA NUNES ROCHA 5 (30h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 295.08,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 295.08,
+    "texto": "ENGG54",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 295.08,
+    "texto": "30",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 295.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 295.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 280.08,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 283.57,
+    "texto": "PROJETO DE CIRCUITOS INTEGRADOS DIGITAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 276.58,
+    "texto": "Dr. BRUNO CARDOSO MELO 4 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 280.08,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 280.08,
+    "texto": "ENGG56",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 280.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 280.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 280.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 265.08,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 268.57,
+    "texto": "VISÃO COMPUTACIONAL",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 261.58,
+    "texto": "Dr. ELISA MOURA BRAGA 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 265.08,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 265.08,
+    "texto": "ENGG64",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 265.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 265.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 265.08,
+    "texto": "OP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 250.08,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 253.57,
+    "texto": "TÓPICOS ESPECIAIS EM ENGENHARIA DE COMPUTAÇÃO I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 246.58,
+    "texto": "Dr. CARLA NUNES ROCHA 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 250.08,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 91.8,
+    "y": 250.08,
+    "texto": "ENGG67",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 250.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 250.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 250.08,
+    "texto": "OP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 235.08,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 238.57,
+    "texto": "SISTEMAS OPERACIONAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 231.58,
+    "texto": "FABIO TEIXEIRA SOUZA 5 (60h)",
+    "fontName": "g_d0_f3"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 235.08,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 235.08,
+    "texto": "MATA58",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 235.08,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 235.08,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 235.08,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 41.3,
+    "y": 221.58,
+    "texto": "2026.2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 129,
+    "y": 221.58,
+    "texto": "REDES DE COMPUTADORES I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 535.58,
+    "y": 221.58,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 92.38,
+    "y": 221.58,
+    "texto": "MATA59",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 487.11,
+    "y": 221.58,
+    "texto": "60",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 511.17,
+    "y": 221.58,
+    "texto": "--",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 73.94,
+    "y": 221.58,
+    "texto": "OB",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 276.44,
+    "y": 205.04,
+    "texto": "Legenda",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 41.16,
+    "y": 188.92,
+    "texto": "OP Optativo",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 95.99,
+    "y": 188.92,
+    "texto": "EB Equivalente Obrigatório",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 198.82,
+    "y": 188.92,
+    "texto": "EP Equivalente a Optativo",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 304.66,
+    "y": 188.92,
+    "texto": "LV Livre",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 370.83,
+    "y": 188.92,
+    "texto": "OB Obrigatório",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 455.82,
+    "y": 188.92,
+    "texto": "EC Equivalente a Complementar",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 47.83,
+    "y": 175.42,
+    "texto": "SIGLA",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 94.67600000000004,
+    "y": 175.42,
+    "texto": "SIGNIFICADO",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 2,
+    "x": 50.83,
+    "y": 165.42,
+    "texto": "APR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 165.42,
+    "texto": "Aprovado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 48.5,
+    "y": 156.42,
+    "texto": "CANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 156.42,
+    "texto": "Cancelado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 50,
+    "y": 147.42,
+    "texto": "DISP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 147.42,
+    "texto": "Dispensado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 48.5,
+    "y": 138.42,
+    "texto": "MATR",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 138.42,
+    "texto": "Matriculado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 50.83,
+    "y": 129.42,
+    "texto": "REP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 129.42,
+    "texto": "Reprovado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 49,
+    "y": 120.42,
+    "texto": "REPF",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 120.42,
+    "texto": "Reprovado por Falta",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 46.5,
+    "y": 111.42,
+    "texto": "REPMF",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 111.42,
+    "texto": "Reprovado por Média e Falta",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 46.67,
+    "y": 102.42,
+    "texto": "TRANC",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 102.42,
+    "texto": "Trancado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 46.83,
+    "y": 93.42,
+    "texto": "TRANS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 93.42,
+    "texto": "Transferido",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 45.33,
+    "y": 84.42,
+    "texto": "INCORP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 101.34800000000007,
+    "y": 84.42,
+    "texto": "Incorporado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 549.28,
+    "y": 34.57,
+    "texto": "3",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 472.05,
+    "y": 34.57,
+    "texto": "Página",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 512.28,
+    "y": 34.57,
+    "texto": "2",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 527.55,
+    "y": 34.57,
+    "texto": "de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 33,
+    "y": 39.5,
+    "texto": "Para verificar sua autenticidade entre em https://sigaa.ufba.br/sigaa/documentos informando a matrícula, data de emissão e o código de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 2,
+    "x": 33,
+    "y": 31.35,
+    "texto": "verificação: aaaa1111bb",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 242.59,
+    "y": 792.57,
+    "texto": "UFBA - Universidade Federal da Bahia",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 194.8,
+    "y": 780.57,
+    "texto": "Rua Augusto Viana, s/n - Canela - Salvador/BA - CEP 40110-909",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 34,
+    "y": 730.19,
+    "texto": "Histórico Escolar - Emitido em: 19/08/2026 às 03:35",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 95,
+    "y": 715.23,
+    "texto": "MARIA DA SILVA SANTOS",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 34,
+    "y": 715.23,
+    "texto": "Nome:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 412,
+    "y": 715.23,
+    "texto": "Matrícula:",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 449.3439999999999,
+    "y": 715.23,
+    "texto": "209900011",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 158.82,
+    "y": 768.57,
+    "texto": "DOCUMENTO OFICIAL, SUJEITO A AJUSTES DEVIDO À MIGRAÇÃO DE SISTEMA.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 224.8,
+    "y": 759.26,
+    "texto": "Havendo divergências, prevalecem os registros",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 253.26,
+    "y": 749.95,
+    "texto": "consolidados pela Universidade.",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 29,
+    "y": 266.57,
+    "texto": "Observações:",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 30.946,
+    "y": 257.65,
+    "texto": "- Semestre 2024.1 definido como atípico (www.ufba.br/Resolucoes/5861)",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 30.946,
+    "y": 241.65,
+    "texto": "- Semestre 2025.2 definido como atípico conforme Resolução CONSEPE 03/2025 ( Art.1º §3º)",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 30.946,
+    "y": 225.65,
+    "texto": "- Semestre 2026.1 definido como atípico conforme Resolução CONSEPE 01/2026 ( Art.4º )",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 168.03,
+    "y": 562.54,
+    "texto": "Componentes Curriculares Obrigatórios Pendentes:20",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 273.41,
+    "y": 547.58,
+    "texto": "Componente Curricular",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 530.45,
+    "y": 547.58,
+    "texto": "CH",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 61.95,
+    "y": 547.58,
+    "texto": "Código",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 535.58,
+    "texto": "TECNOLOGIA DOS MATERIAIS PARA A ENGENHARIA ELÉTRICA",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.19,
+    "y": 535.58,
+    "texto": "ENGA47",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 535.58,
+    "texto": "30 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 523.58,
+    "texto": "MATEMÁTICA DISCRETA II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 523.58,
+    "texto": "MATA97",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 523.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 511.58,
+    "texto": "LÓGICA PARA COMPUTAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 511.58,
+    "texto": "MATA47",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 511.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 499.58,
+    "texto": "PROJETO DE CIRCUITOS INTEGRADOS DIGITAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 59.8,
+    "y": 499.58,
+    "texto": "ENGG56",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 465.91,
+    "y": 499.58,
+    "texto": "Matriculado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 499.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 487.58,
+    "texto": "REDES DE COMPUTADORES I",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 487.58,
+    "texto": "MATA59",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 465.91,
+    "y": 487.58,
+    "texto": "Matriculado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 487.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 475.58,
+    "texto": "LABORATÓRIO INTEGRADO III-A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 59.8,
+    "y": 475.58,
+    "texto": "ENGG54",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 465.91,
+    "y": 475.58,
+    "texto": "Matriculado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 475.58,
+    "texto": "30 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 463.58,
+    "texto": "SISTEMAS OPERACIONAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 463.58,
+    "texto": "MATA58",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 465.91,
+    "y": 463.58,
+    "texto": "Matriculado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 463.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 451.58,
+    "texto": "TEORIA DA COMPUTAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 451.58,
+    "texto": "MATA51",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 451.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 439.58,
+    "texto": "COMPILADORES",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 439.58,
+    "texto": "MATA61",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 439.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 427.58,
+    "texto": "SISTEMAS DE TEMPO REAL",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.38,
+    "y": 427.58,
+    "texto": "MATA82",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 427.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 415.58,
+    "texto": "LABORATÓRIO INTEGRADO IV-A",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 59.8,
+    "y": 415.58,
+    "texto": "ENGG57",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 415.58,
+    "texto": "30 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 403.58,
+    "texto": "PROGRAMAÇÃO EM TEMPO REAL PARA SISTEMAS EMBARCADOS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60,
+    "y": 403.58,
+    "texto": "ENGD33",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 403.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 391.58,
+    "texto": "ECONOMIA E FINANÇAS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 60.58,
+    "y": 391.58,
+    "texto": "ECO151",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 391.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 379.58,
+    "texto": "REDES INDUSTRIAIS",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 59.8,
+    "y": 379.58,
+    "texto": "ENGG55",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 379.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 367.58,
+    "texto": "TRABALHO DE CONCLUSÃO DE CURSO EM ENGENHARIA DE COMPUTAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 55.91,
+    "y": 367.58,
+    "texto": "GENG0044",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 367.58,
+    "texto": "15 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 355.58,
+    "texto": "ESTÁGIO EM ENGENHARIA DE COMPUTAÇÃO",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 55.91,
+    "y": 355.58,
+    "texto": "GENG0011",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 526.74,
+    "y": 355.58,
+    "texto": "210 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 343.58,
+    "texto": "TRABALHO DE CONCLUSÃO DO CURSO DE ENG DE COMPUTAÇÃO II",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 55.91,
+    "y": 343.58,
+    "texto": "GENG0090",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 343.58,
+    "texto": "15 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 331.58,
+    "texto": "LEGISLAÇÃO SOCIAL",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 57.47,
+    "y": 331.58,
+    "texto": "GDIR0012",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 528.69,
+    "y": 331.58,
+    "texto": "60 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 319.58,
+    "texto": "ENADE INGRESSANTE PENDENTE",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 61.94,
+    "y": 319.58,
+    "texto": "ENADE",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 530.64,
+    "y": 319.58,
+    "texto": "0 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 120.892,
+    "y": 307.58,
+    "texto": "ENADE CONCLUINTE PENDENTE",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 61.94,
+    "y": 307.58,
+    "texto": "ENADE",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 530.64,
+    "y": 307.58,
+    "texto": "0 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 30,
+    "y": 291.57,
+    "texto": "Equivalências:",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 31,
+    "y": 278.58,
+    "texto": "Cumpriu GENG0032 - CIÊNCIAS DO AMBIENTE (60h) através de ENG269 - CIÊNCIAS DO AMBIENTE (60h)",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 48.96,
+    "y": 612.58,
+    "texto": "Integralizado",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 54.02,
+    "y": 596.58,
+    "texto": "Pendente",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 57.52,
+    "y": 628.58,
+    "texto": "Exigido",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 495.3,
+    "y": 628.58,
+    "texto": "3610 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 495.3,
+    "y": 612.58,
+    "texto": "2100 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 495.3,
+    "y": 596.58,
+    "texto": "1510 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 176.91,
+    "y": 660.54,
+    "texto": "Carga Horária e Créditos Integralizados/Pendentes",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 498.22,
+    "y": 644.58,
+    "texto": "Total",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 365.35,
+    "y": 644.58,
+    "texto": "Complementares",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 263.22,
+    "y": 644.58,
+    "texto": "Optativos",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 144.94,
+    "y": 644.58,
+    "texto": "Obrigatórias",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 153.3,
+    "y": 628.58,
+    "texto": "3150 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 269.24,
+    "y": 628.58,
+    "texto": "360 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 383.24,
+    "y": 628.58,
+    "texto": "100 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 387.14,
+    "y": 612.58,
+    "texto": "0 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 383.24,
+    "y": 596.58,
+    "texto": "100 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 273.14,
+    "y": 612.58,
+    "texto": "0 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 269.24,
+    "y": 596.58,
+    "texto": "360 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 153.3,
+    "y": 612.58,
+    "texto": "2100 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 153.3,
+    "y": 596.58,
+    "texto": "1050 h",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 276.44,
+    "y": 695.04,
+    "texto": "Legenda",
+    "fontName": "g_d0_f2"
+  },
+  {
+    "pagina": 3,
+    "x": 48.17,
+    "y": 682.42,
+    "texto": "CUMP",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 101.34800000000007,
+    "y": 682.42,
+    "texto": "Cumpriu",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 549.28,
+    "y": 55.57,
+    "texto": "3",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 472.05,
+    "y": 55.57,
+    "texto": "Página",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 512.28,
+    "y": 55.57,
+    "texto": "3",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 527.55,
+    "y": 55.57,
+    "texto": "de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 33,
+    "y": 56.5,
+    "texto": "Para verificar sua autenticidade entre em https://sigaa.ufba.br/sigaa/documentos informando a matrícula, data de emissão e o código de",
+    "fontName": "g_d0_f1"
+  },
+  {
+    "pagina": 3,
+    "x": 33,
+    "y": 48.35,
+    "texto": "verificação: aaaa1111bb",
+    "fontName": "g_d0_f1"
+  }
+]
