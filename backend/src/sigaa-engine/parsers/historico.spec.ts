@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseHistorico } from './historico';
+import { parseHistorico, SITUACOES } from './historico';
 import type { ItemTexto } from './historico-texto';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'historico-itens.json');
@@ -75,5 +75,73 @@ describe('parseHistorico', () => {
     // privacy section. This asserts the shape stays free of them.
     expect(Object.keys(historico)).not.toContain('cpf');
     expect(JSON.stringify(historico)).not.toMatch(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
+  });
+
+  it('parses every component row in the table', () => {
+    const { cursados } = parseHistorico(itens);
+
+    expect(cursados).toHaveLength(49);
+  });
+
+  it('parses a plain approved row end to end', () => {
+    const { cursados } = parseHistorico(itens);
+    const fisica = cursados.find((c) => c.codigo === 'FISD36');
+
+    expect(fisica).toEqual({
+      semestre: '2023.1',
+      natureza: 'OB',
+      codigo: 'FISD36',
+      nome: expect.stringContaining('FÍSICA'),
+      cargaHoraria: 60,
+      nota: 6.8,
+      situacao: 'APR',
+      docente: expect.stringContaining('(60h)'),
+    });
+  });
+
+  it('reports a null natureza when the column emits no item at all', () => {
+    const { cursados } = parseHistorico(itens);
+    const trancados = cursados.filter((c) => c.situacao === 'TRANC');
+
+    // Trancamento rows leave the natureza column empty — not "-", absent.
+    expect(trancados.length).toBeGreaterThan(0);
+    expect(trancados.every((c) => c.natureza === null)).toBe(true);
+  });
+
+  it('reports a null nota when the document prints "--"', () => {
+    const { cursados } = parseHistorico(itens);
+
+    for (const componente of cursados) {
+      if (componente.situacao === 'TRANC' || componente.situacao === 'MATR') {
+        expect(componente.nota).toBeNull();
+      }
+    }
+  });
+
+  it('reports a null docente when the row carries no docente line', () => {
+    const { cursados } = parseHistorico(itens);
+    const semDocente = cursados.filter((c) => c.docente === null);
+
+    // Exactly one row in the fixture has no docente. Its name must still parse:
+    // with no docente line the name sits on the baseline instead of above it.
+    expect(semDocente).toHaveLength(1);
+    expect(semDocente[0].nome).not.toBe('');
+  });
+
+  it('keeps both attempts when the same code recurs across semesters', () => {
+    const { cursados } = parseHistorico(itens);
+    const repetido = cursados.filter((c) => c.codigo === 'MATA97');
+
+    expect(repetido).toHaveLength(2);
+    expect(repetido.map((c) => c.situacao).sort()).toEqual(['REP', 'TRANC']);
+  });
+
+  it('gives every row a name and a recognised situação', () => {
+    const { cursados } = parseHistorico(itens);
+
+    for (const componente of cursados) {
+      expect(componente.nome).not.toBe('');
+      expect(SITUACOES).toContain(componente.situacao);
+    }
   });
 });

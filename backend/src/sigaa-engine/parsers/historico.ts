@@ -156,6 +156,136 @@ function paraIso(dataBr: string): string {
   return `${ano}-${mes}-${dia}`;
 }
 
+const SEMESTRE_PATTERN = /^\d{4}\.\d$/;
+
+/**
+ * A docente line ends in its workload — "Dr. FULANO DE TAL (60h)".
+ *
+ * This is how a docente line is told apart from a component name that wrapped
+ * onto a second line, and it is deliberately not a font check: pdfjs cannot
+ * tell us which of the transcript's fonts is the oblique one (they are not
+ * embedded, so all report `fontFamily: "sans-serif"`), and the only handle is a
+ * per-document generated id. Verified against the real document: this rule
+ * agrees with font-based classification on all 49 rows.
+ */
+const DOCENTE_SUFFIX_PATTERN = /\(\s*\d+\s*h\s*\)\s*$/i;
+
+/**
+ * Column x-bands of the component table, in points. Ranges rather than exact
+ * positions because columns drift ~3pt between pages.
+ */
+const COLUNAS = {
+  natureza: [65, 90],
+  codigo: [90, 125],
+  nome: [125, 480],
+  cargaHoraria: [480, 500],
+  nota: [500, 532],
+  situacao: [532, 580],
+} as const;
+
+const TITULO_CURSADOS = 'Componentes Curriculares Cursados/Cursando';
+
+function celula(itens: ItemTexto[], banda: readonly [number, number], y: number): string {
+  return itens
+    .filter(
+      (i) => i.x >= banda[0] && i.x < banda[1] && Math.abs(i.y - y) <= 1.5,
+    )
+    .sort((a, b) => a.x - b.x)
+    .map((i) => i.texto)
+    .join(' ');
+}
+
+function exigirSituacao(bruta: string, codigo: string): SituacaoComponente {
+  if (!SITUACOES.includes(bruta)) {
+    throw new Error(
+      `Histórico não reconhecido: situação "${bruta}" no componente ${codigo} ` +
+        'não está na legenda conhecida.',
+    );
+  }
+  return bruta as SituacaoComponente;
+}
+
+function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
+  const cursados: ComponenteCursado[] = [];
+
+  const paginas = [...new Set(itens.map((i) => i.pagina))].sort((a, b) => a - b);
+  for (const pagina of paginas) {
+    const daPagina = itens.filter((i) => i.pagina === pagina);
+
+    const titulo = daPagina.find((i) => i.texto.includes(TITULO_CURSADOS));
+    if (!titulo) {
+      continue;
+    }
+    // Bound the section by the next section's own anchor, never by a fixed y:
+    // the legend spills onto the following page and the footer's y shifts.
+    const legenda = daPagina.find((i) => i.texto === 'Legenda');
+    const naSecao = daPagina.filter(
+      (i) => i.y < titulo.y && i.y > (legenda ? legenda.y : 45),
+    );
+
+    // Every row is anchored by its own semestre at the left edge, which is why
+    // a row split across pages needs no special handling.
+    const ancoras = naSecao
+      .filter((i) => SEMESTRE_PATTERN.test(i.texto) && i.x < 60)
+      .sort((a, b) => b.y - a.y);
+
+    for (const ancora of ancoras) {
+      // The name sits 3.5pt above the baseline when a second line exists, and
+      // on the baseline when it does not — so the band has to cover both.
+      const acima = naSecao
+        .filter(
+          (i) =>
+            i.x >= COLUNAS.nome[0] &&
+            i.x < COLUNAS.nome[1] &&
+            i.y >= ancora.y - 1 &&
+            i.y <= ancora.y + 8,
+        )
+        .sort((a, b) => b.y - a.y || a.x - b.x);
+
+      const abaixo = naSecao
+        .filter(
+          (i) =>
+            i.x >= COLUNAS.nome[0] &&
+            i.x < COLUNAS.nome[1] &&
+            i.y < ancora.y - 1 &&
+            i.y >= ancora.y - 8,
+        )
+        .sort((a, b) => b.y - a.y || a.x - b.x);
+
+      const textoAbaixo = abaixo.map((i) => i.texto).join(' ');
+      const ehDocente = textoAbaixo !== '' && DOCENTE_SUFFIX_PATTERN.test(textoAbaixo);
+
+      const nome = [
+        acima.map((i) => i.texto).join(' '),
+        // Not a docente: the component name wrapped onto a second line.
+        ehDocente ? '' : textoAbaixo,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      const natureza = celula(naSecao, COLUNAS.natureza, ancora.y);
+      const codigo = celula(naSecao, COLUNAS.codigo, ancora.y);
+      const nota = celula(naSecao, COLUNAS.nota, ancora.y);
+
+      cursados.push({
+        semestre: ancora.texto,
+        natureza: NATUREZAS.includes(natureza)
+          ? (natureza as NaturezaComponente)
+          : null,
+        codigo,
+        nome,
+        cargaHoraria: Number(celula(naSecao, COLUNAS.cargaHoraria, ancora.y)),
+        nota: /^\d/.test(nota) ? Number(nota) : null,
+        situacao: exigirSituacao(celula(naSecao, COLUNAS.situacao, ancora.y), codigo),
+        docente: ehDocente ? textoAbaixo : null,
+      });
+    }
+  }
+
+  return cursados;
+}
+
 const EMITIDO_EM_PATTERN = /Emitido em:\s*(\d{2}\/\d{2}\/\d{4})/;
 // "2030.1 / 2033.1" — padrão e máximo on one line.
 const PRAZOS_PATTERN = /(\d{4}\.\d)\s*\/\s*(\d{4}\.\d)/;
@@ -189,7 +319,7 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
       cr: numeroOuNulo(valorAoLadoDe(itens, 'CR:')),
       iap: numeroOuNulo(valorAoLadoDe(itens, 'IAP:')),
     },
-    cursados: [],
+    cursados: parseCursados(itens),
     pendentesObrigatorios: [],
     cargaHoraria: {
       obrigatorias: { exigida: 0, integralizada: 0, pendente: 0 },
