@@ -1999,7 +1999,7 @@ export class HistoricoService {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npm test -- historico.service`
-Expected: PASS, 5 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2031,7 +2031,9 @@ import { TrajetoriaController } from './trajetoria.controller';
 import type { HistoricoService } from './historico.service';
 import type { TrajetoriaSalva } from './historico.repository';
 
-const USUARIO = { userId: 'user-1', email: 'maria@example.com' };
+// All three fields: RequestUser requires `name` too, and these specs pass the
+// object with no cast — matching sigaa.controller.spec.ts's convention.
+const USUARIO = { userId: 'user-1', email: 'maria@example.com', name: 'Maria' };
 
 function salvaFalsa(): TrajetoriaSalva {
   return {
@@ -2215,6 +2217,21 @@ git commit -m "feat(backend): expose GET /trajetoria and POST /trajetoria/sync"
 
 ```ts
 describe("trajetória endpoints", () => {
+  // Same boilerplate every other block in this file has. Without it the URL is
+  // unset by the time this block runs (the preceding block's afterEach restores
+  // it to the unset value it had at load time), so `request()` throws before
+  // reaching fetch — the first test would reject and the second would crash
+  // reading `fetchMock.mock.calls[0]` on a fetch that never happened.
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
   it("reports the unsynced state without throwing", async () => {
     global.fetch = jest.fn(async () => ({
       ok: true,
@@ -2394,7 +2411,7 @@ git commit -m "feat(mobile): add the trajetória API client"
 - Create: `mobile/src/lib/trajetoria.test.ts`
 
 **Interfaces:**
-- Consumes: `Historico`, `ComponentePendente`, `PeriodoLetivo` from `./types`.
+- Consumes: `ComponenteCursado`, `ComponentePendente`, `ResumoCargaHoraria` from `./types`, and `parseIsoDate` from `./periodo-letivo`.
 - Produces: `agruparPorSemestre`, `percentualConcluido`, `formatarNota`, `rotuloSituacao`, `poolPlanejavel`, `zonasDePlanejamento`, `historicoDesatualizado`, and the type `PeriodoTrajetoria`. Task 13 consumes all of them.
 
 Everything the screen computes rather than reads, as pure functions — the reason the screen itself needs no logic tests beyond its states.
@@ -2580,6 +2597,7 @@ Expected: FAIL — cannot find module `./trajetoria`.
 `create: mobile/src/lib/trajetoria.ts`:
 
 ```ts
+import { parseIsoDate } from "./periodo-letivo";
 import type { ComponenteCursado, ComponentePendente, ResumoCargaHoraria } from "./types";
 
 export interface PeriodoTrajetoria {
@@ -2707,7 +2725,13 @@ export function historicoDesatualizado(
   if (!fimDoPeriodo) {
     return false;
   }
-  const fim = new Date(fimDoPeriodo);
+  // parseIsoDate, never `new Date(string)`: the latter reads a bare YYYY-MM-DD
+  // as UTC midnight, which lands on the previous day in Brazil. types.ts
+  // documents this trap on PeriodoLetivo, and periodo-letivo.ts exists to avoid
+  // it. The tests here would not catch the difference — both sides of their
+  // comparisons are built the same way — but a real `fetchedAt` carries a real
+  // time of day and would not cancel out.
+  const fim = parseIsoDate(fimDoPeriodo);
   return agora > fim && fetchedAt < fim;
 }
 ```
@@ -2732,6 +2756,8 @@ git commit -m "feat(mobile): add trajetória derivations"
 - Modify: `mobile/src/app/(tabs)/trajetoria.tsx`
 - Create: `mobile/src/__tests__/trajetoria.test.tsx`
 - Modify: `mobile/src/lib/mock-data.ts`
+- Create: `mobile/src/components/DownloadProgressBar.tsx`
+- Modify: `mobile/src/app/(tabs)/documentos.tsx` (import the extracted component instead of its local copy)
 
 **Interfaces:**
 - Consumes: everything from Tasks 11 and 12.
@@ -2799,7 +2825,15 @@ jest.mock("heroui-native", () => {
 });
 
 beforeEach(() => {
-  jest.mocked(useAuth).mockReturnValue({ accessToken: "token" } as ReturnType<typeof useAuth>);
+  // `status` is load-bearing, not decoration: useAuth returns a discriminated
+  // union and the screen reads accessToken only on the "signedIn" variant, so
+  // omitting it leaves accessToken null and the screen stuck loading forever.
+  // Same shape home.test.tsx uses.
+  jest.mocked(useAuth).mockReturnValue({
+    status: "signedIn",
+    accessToken: "token",
+    user: { id: "user-1", email: "maria@example.com", name: "Maria" },
+  } as ReturnType<typeof useAuth>);
   jest.mocked(useSigaaLink).mockReturnValue({ status: "linked" } as ReturnType<
     typeof useSigaaLink
   >);
@@ -2916,7 +2950,23 @@ describe("Trajetória", () => {
 Run: `cd mobile && npm test -- trajetoria.test.tsx`
 Expected: FAIL — the screen still renders mock data and has no sync affordance.
 
-- [ ] **Step 3: Rewrite the screen**
+- [ ] **Step 3: Extract the shared progress bar**
+
+`DownloadProgressBar` already exists as a local component inside
+`mobile/src/app/(tabs)/documentos.tsx` (its `function DownloadProgressBar({ stages })`,
+plus the `useState`/`useEffect` that tick `downloadProgress(elapsedMs, stages)`). Two
+screens now need it, so move it rather than copy it:
+
+1. Create `mobile/src/components/DownloadProgressBar.tsx` holding that component
+   verbatim — same props, same interval, same JSX. Export it as a named export,
+   matching the other files in `mobile/src/components/`.
+2. Delete the local copy from `documentos.tsx` and import the extracted one. Its
+   `downloadProgress` / `ProgressStage` imports go away with it; `HISTORICO_STAGES`
+   and `ATESTADO_STAGES` stay, since `documentos.tsx` still picks between them.
+3. Run `cd mobile && npm test -- documentos.test` — it must still pass untouched.
+   That suite is the proof the move changed no behaviour.
+
+- [ ] **Step 3b: Rewrite the screen**
 
 `modify: mobile/src/app/(tabs)/trajetoria.tsx`:
 
@@ -2992,8 +3042,15 @@ type LoadState =
   <Button onPress={sincronizar} isDisabled={sincronizando}>
     {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
   </Button>
+
+  {/* The wait is ~40s of server-side scraping. A disabled button with a
+      changed label is not enough feedback for that long, and the calibrated
+      stage model for exactly this request already exists. */}
+  {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
 </View>
 ```
+
+Imports for the block above: `DownloadProgressBar` from `@/components/DownloadProgressBar` and `HISTORICO_STAGES` from `@/lib/download-progress`.
 
 - Error copy: "Não deu para sincronizar seu histórico." plus `describeApiError(error)` from `@/lib/api-errors`, the helper the home screen already uses.
 
