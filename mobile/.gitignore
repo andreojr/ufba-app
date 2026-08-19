@@ -42,3 +42,6 @@ yarn-error.*
 # Generated native folders
 /ios
 /android
+
+# Local run scripts
+run-android.pid

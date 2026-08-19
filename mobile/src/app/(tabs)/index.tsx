@@ -112,12 +112,11 @@ export default function HomeTab(): JSX.Element {
     return pickNextClass(week, startIndex, startMinutes);
   }, [week, todayIndex]);
 
-  // Percentage-based left/width can't carry a fixed-px gap (no calc() in RN
-  // styles), so the columns are laid out in real pixels once we know the
-  // grid's measured width — a small horizontal gap between day columns reads
-  // better than the old vertical gap, which made no sense for back-to-back
-  // classes with no actual break in time.
-  const COLUMN_GAP = 4;
+  // Columns are laid out in real measured pixels (not percentages) so the
+  // day-selector buttons above can share the exact same math and stay
+  // aligned with the grid — no gap between them, same as vertically, where
+  // back-to-back classes touch with no actual break in time either.
+  const COLUMN_GAP = 0;
   const columnWidth = gridWidth > 0 ? gridWidth / 5 : 0;
 
   const blocks = useMemo(
@@ -139,7 +138,6 @@ export default function HomeTab(): JSX.Element {
               width: Math.max(columnWidth - COLUMN_GAP, 0),
               top,
               height,
-              borderRadius: 8,
               padding: 3,
               backgroundColor: colors.fill,
               opacity: dayIndex === selectedDay ? 1 : 0.45,
@@ -300,7 +298,7 @@ export default function HomeTab(): JSX.Element {
                     />
                   ))}
                   <View
-                    className="absolute bottom-0 top-0 bg-white/[0.04] rounded-lg"
+                    className="absolute bottom-0 top-0 bg-white/[0.04]"
                     style={{ left: selectedDay * columnWidth, width: columnWidth }}
                   />
                   {blocks.map((block) => (
