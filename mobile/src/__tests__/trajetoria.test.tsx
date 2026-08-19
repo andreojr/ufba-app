@@ -300,6 +300,21 @@ describe("Trajetória", () => {
     consoleWarn.mockRestore();
   });
 
+  it("warns that planner placements are not saved yet", async () => {
+    // The planner is session-only state (`movimentos`), and nothing writes it
+    // back — but now that the periods, grades and coefficient around it are
+    // the student's real transcript, a moved card reads as saved unless the
+    // screen says otherwise.
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText(/Ainda não salva/i)).toBeTruthy();
+    expect(screen.getByText(/volta para onde estava/i)).toBeTruthy();
+  });
+
   it("keeps the moves the student made across a pull-to-refresh", async () => {
     // A plain GET is not a re-sync: nothing about the plan changed, so watching
     // a move revert with no feedback would read as a bug.

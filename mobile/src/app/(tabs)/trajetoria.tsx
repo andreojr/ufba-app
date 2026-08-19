@@ -441,6 +441,14 @@ function ReadyTrajetoria({
       ))}
 
       <View className="gap-5">
+        {/* Everything around the planner now reads as the student's real
+            transcript — the coefficient, the grades, the periods — so a
+            dragged card reads as saved too. It is not: `movimentos` is
+            session-only state, and nothing here writes it back. */}
+        <Typography.Paragraph type="body-xs" color="muted">
+          Ainda não salva: mudar uma matéria de período aqui vale só para esta
+          visita à tela — ao sair, ela volta para onde estava.
+        </Typography.Paragraph>
         {[...zonas, ZONA_SEM_PERIODO].map((zona) => {
           const semPeriodo = zona === ZONA_SEM_PERIODO;
           const componentes = pendentes.filter((pendente) => {

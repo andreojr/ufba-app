@@ -40,8 +40,7 @@ export function agruparPorSemestre(cursados: ComponenteCursado[]): PeriodoTrajet
     .map(([semestre, componentes]) => ({
       semestre,
       // A term holding an enrolled component is the one still running. Cheaper
-      // and more reliable than comparing dates, and it matches what the
-      // transcript itself asserts via periodoLetivoAtual.
+      // and more reliable than comparing dates.
       emCurso: componentes.some((c) => c.situacao === SITUACAO_MATRICULADO),
       componentes,
     }));
