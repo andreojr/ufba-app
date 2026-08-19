@@ -1,12 +1,13 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { GoogleTokenService, GoogleUserInfo } from './google-token.service';
+import { GoogleTokenService } from './google-token.service';
+import type { UserRecord, UserRepository } from '../users/user.repository';
 
 const ALLOWED_EMAIL_DOMAIN = '@ufba.br';
 
 export interface GradlineLoginResult {
   accessToken: string;
-  user: GoogleUserInfo;
+  user: UserRecord;
 }
 
 @Injectable()
@@ -14,19 +15,22 @@ export class AuthService {
   constructor(
     private readonly googleTokenService: GoogleTokenService,
     private readonly jwtService: JwtService,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async loginWithGoogle(idToken: string): Promise<GradlineLoginResult> {
-    const user = await this.googleTokenService.verify(idToken);
+    const googleUser = await this.googleTokenService.verify(idToken);
 
-    if (!user.email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)) {
+    if (!googleUser.email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)) {
       throw new ForbiddenException(
         'Apenas contas @ufba.br podem entrar no Gradline',
       );
     }
 
+    const user = await this.userRepository.upsertGoogleUser(googleUser);
+
     const accessToken = this.jwtService.sign({
-      sub: user.googleId,
+      sub: user.id,
       email: user.email,
       name: user.name,
     });

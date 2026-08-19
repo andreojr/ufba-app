@@ -1,2 +1,3 @@
 export const SIGAA_LINK_REPOSITORY = Symbol('SIGAA_LINK_REPOSITORY');
 export const AUDIT_LOGGER = Symbol('AUDIT_LOGGER');
+export const USER_REPOSITORY = Symbol('USER_REPOSITORY');

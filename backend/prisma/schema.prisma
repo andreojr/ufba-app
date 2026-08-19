@@ -13,7 +13,15 @@ model User {
   googleId  String   @unique @map("google_id")
   email     String   @unique
   name      String
+  avatarUrl String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
+
+  // Academic identity scraped opportunistically from the SIGAA portal home
+  // whenever the schedule is fetched (see parsers/discente-perfil.ts). All
+  // nullable: they only exist after the first successful schedule fetch.
+  matricula       String?
+  curso           String?
+  periodoIngresso String? @map("periodo_ingresso")
 
   sigaaLink       SigaaLink?
   auditLogEntries AuditLog[]

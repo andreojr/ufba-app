@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { DatabaseModule } from '../db/database.module';
+import { USER_REPOSITORY } from '../db/tokens';
+import { UserRepository } from '../users/user.repository';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleTokenService } from './google-token.service';
@@ -11,6 +14,7 @@ import { JwtStrategy } from './jwt.strategy';
   imports: [
     ConfigModule,
     PassportModule,
+    DatabaseModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -22,7 +26,15 @@ import { JwtStrategy } from './jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [
-    AuthService,
+    {
+      provide: AuthService,
+      inject: [GoogleTokenService, JwtService, USER_REPOSITORY],
+      useFactory: (
+        googleTokenService: GoogleTokenService,
+        jwtService: JwtService,
+        userRepository: UserRepository,
+      ) => new AuthService(googleTokenService, jwtService, userRepository),
+    },
     {
       provide: GoogleTokenService,
       inject: [ConfigService],
