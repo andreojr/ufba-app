@@ -1,11 +1,16 @@
 import {
+  agruparPorAno,
   agruparPorSemestre,
+  calcularCrAcumulado,
   formatarCoeficiente,
+  formatarImpacto,
   formatarNota,
   historicoDesatualizado,
+  impactoNoCr,
   percentualConcluido,
   poolPlanejavel,
   rotuloSituacao,
+  somarCargaHoraria,
   zonasDePlanejamento,
 } from "./trajetoria";
 import type { ComponenteCursado, ComponentePendente } from "./types";
@@ -181,5 +186,130 @@ describe("historicoDesatualizado", () => {
   it("flags the term stale from the first moment after it ends", () => {
     // 00:30 on 2026-07-16: one calendar day past `fim`.
     expect(historicoDesatualizado(emCurso, fim, new Date(2026, 6, 16, 0, 30))).toBe(true);
+  });
+});
+
+describe("agruparPorAno", () => {
+  it("groups periods by the year in their semestre, oldest first", () => {
+    const anos = agruparPorAno([
+      { semestre: "2025.1", emCurso: false, componentes: [] },
+      { semestre: "2025.2", emCurso: false, componentes: [] },
+      { semestre: "2026.1", emCurso: true, componentes: [] },
+    ]);
+
+    expect(anos.map((a) => a.ano)).toEqual(["2025", "2026"]);
+    expect(anos[0].periodos.map((p) => p.semestre)).toEqual(["2025.1", "2025.2"]);
+    expect(anos[1].periodos.map((p) => p.semestre)).toEqual(["2026.1"]);
+  });
+
+  it("keeps a lone period in its own year", () => {
+    const anos = agruparPorAno([{ semestre: "2024.2", emCurso: false, componentes: [] }]);
+    expect(anos).toEqual([{ ano: "2024", periodos: [{ semestre: "2024.2", emCurso: false, componentes: [] }] }]);
+  });
+});
+
+describe("somarCargaHoraria", () => {
+  it("sums the cargaHoraria of every component", () => {
+    expect(
+      somarCargaHoraria([componente({ cargaHoraria: 60 }), componente({ cargaHoraria: 68 })]),
+    ).toBe(128);
+  });
+
+  it("returns zero for an empty period", () => {
+    expect(somarCargaHoraria([])).toBe(0);
+  });
+});
+
+describe("calcularCrAcumulado", () => {
+  it("weights each term's grades by carga horária, same as the transcript's own CR", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ semestre: "2025.1", codigo: "MATA40", cargaHoraria: 60, nota: 6 }),
+    ];
+    const serie = calcularCrAcumulado(cursados, ["2025.1"]);
+    expect(serie).toEqual([{ semestre: "2025.1", cr: 7 }]);
+  });
+
+  it("accumulates grades across terms rather than resetting each one", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ semestre: "2025.2", codigo: "MATA40", cargaHoraria: 60, nota: 6 }),
+    ];
+    const serie = calcularCrAcumulado(cursados, ["2025.1", "2025.2"]);
+    expect(serie).toEqual([
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: 7 },
+    ]);
+  });
+
+  it("carries the previous value over a term with no graded component yet", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({
+        semestre: "2025.2",
+        codigo: "MATA55",
+        cargaHoraria: 68,
+        nota: null,
+        situacao: "MATR",
+      }),
+    ];
+    const serie = calcularCrAcumulado(cursados, ["2025.1", "2025.2"]);
+    expect(serie).toEqual([
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: 8 },
+    ]);
+  });
+
+  it("reports null while nothing has a grade yet", () => {
+    const serie = calcularCrAcumulado([], ["2025.1"]);
+    expect(serie).toEqual([{ semestre: "2025.1", cr: null }]);
+  });
+});
+
+describe("impactoNoCr", () => {
+  it("is positive when the component's grade sits above the CR without it", () => {
+    const cursados = [
+      componente({ codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ codigo: "MATA40", cargaHoraria: 60, nota: 6 }),
+    ];
+    // Full CR: 7. Without MATA37 (the 8): 6. Impact of MATA37: 7 - 6 = 1.
+    expect(impactoNoCr(cursados, "MATA37")).toBeCloseTo(1);
+  });
+
+  it("is negative when the component's grade sits below the CR without it", () => {
+    const cursados = [
+      componente({ codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ codigo: "MATA40", cargaHoraria: 60, nota: 6 }),
+    ];
+    // Without MATA40 (the 6): 8. Impact of MATA40: 7 - 8 = -1.
+    expect(impactoNoCr(cursados, "MATA40")).toBeCloseTo(-1);
+  });
+
+  it("returns null for a component without a grade", () => {
+    const cursados = [componente({ codigo: "MATA55", nota: null, situacao: "MATR" })];
+    expect(impactoNoCr(cursados, "MATA55")).toBeNull();
+  });
+
+  it("returns null when removing the component would leave nothing graded", () => {
+    const cursados = [componente({ codigo: "MATA37", nota: 8 })];
+    expect(impactoNoCr(cursados, "MATA37")).toBeNull();
+  });
+});
+
+describe("formatarImpacto", () => {
+  it("renders a positive impact with an upward arrow", () => {
+    expect(formatarImpacto(0.0842)).toBe("↑ 0,08");
+  });
+
+  it("renders a negative impact with a downward arrow, without a minus sign", () => {
+    expect(formatarImpacto(-0.031)).toBe("↓ 0,03");
+  });
+
+  it("renders no change as an em dash", () => {
+    expect(formatarImpacto(0)).toBe("—");
+  });
+
+  it("renders an absent impact as an em dash", () => {
+    expect(formatarImpacto(null)).toBe("—");
   });
 });

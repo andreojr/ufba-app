@@ -109,6 +109,94 @@ export function zonasDePlanejamento(
   return zonas;
 }
 
+export interface AnoTrajetoria {
+  ano: string;
+  periodos: PeriodoTrajetoria[];
+}
+
+/** Groups already-ordered periods by the year in their "AAAA.N" semestre. */
+export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
+  const porAno = new Map<string, PeriodoTrajetoria[]>();
+  for (const periodo of periodos) {
+    const ano = periodo.semestre.slice(0, 4);
+    porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
+  }
+  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos }));
+}
+
+/** Total carga horária of a set of components — a period's, most of the time. */
+export function somarCargaHoraria(componentes: ComponenteCursado[]): number {
+  return componentes.reduce((soma, c) => soma + c.cargaHoraria, 0);
+}
+
+/**
+ * The weighted-average formula the transcript's own CR is built from — see
+ * `historico.service.ts`'s `validarInvariantes` on the backend, which checks
+ * the printed CR against this same computation. Returns null when nothing in
+ * `cursados` has a grade yet.
+ */
+function crPonderado(cursados: ComponenteCursado[]): number | null {
+  const comNota = cursados.filter((c) => c.nota !== null);
+  const pesoTotal = somarCargaHoraria(comNota);
+  if (pesoTotal === 0) {
+    return null;
+  }
+  return comNota.reduce((soma, c) => soma + c.cargaHoraria * (c.nota as number), 0) / pesoTotal;
+}
+
+/**
+ * The CR line chart's series: for each term in `semestresOrdenados`, the CR
+ * computed from every graded component up to and including that term — not
+ * just that term's own grades, since the CR itself is defined as a running
+ * average across the whole trajectory. A term with nothing graded yet (a
+ * MATR-only period) simply carries the previous value forward.
+ */
+export function calcularCrAcumulado(
+  cursados: ComponenteCursado[],
+  semestresOrdenados: string[],
+): { semestre: string; cr: number | null }[] {
+  return semestresOrdenados.map((semestre, indice) => {
+    const ateAqui = semestresOrdenados.slice(0, indice + 1);
+    const acumulado = cursados.filter((c) => ateAqui.includes(c.semestre));
+    return { semestre, cr: crPonderado(acumulado) };
+  });
+}
+
+/**
+ * How much a single graded component moves the overall CR: the CR with every
+ * graded component, minus the CR computed with `codigo` left out. Positive
+ * means the component pulled the CR up, negative means it pulled it down.
+ *
+ * Null covers both cases with nothing meaningful to show: `codigo` itself has
+ * no grade (trancada/matriculada — it never entered the CR), or removing it
+ * would leave nothing graded at all to compare against.
+ */
+export function impactoNoCr(cursados: ComponenteCursado[], codigo: string): number | null {
+  const alvo = cursados.find((c) => c.codigo === codigo);
+  if (!alvo || alvo.nota === null) {
+    return null;
+  }
+  const completo = crPonderado(cursados);
+  const semAlvo = crPonderado(cursados.filter((c) => c.codigo !== codigo));
+  if (completo === null || semAlvo === null) {
+    return null;
+  }
+  return completo - semAlvo;
+}
+
+/**
+ * The arrow + number shown beside a graded component. No arrow for zero
+ * impact or nothing to show — an up or down arrow on a value that rounds to
+ * nothing would read as a change that isn't there.
+ */
+export function formatarImpacto(impacto: number | null): string {
+  if (impacto === null || impacto === 0) {
+    return "—";
+  }
+  const seta = impacto > 0 ? "↑" : "↓";
+  return `${seta} ${formatarCoeficiente(Math.abs(impacto))}`;
+}
+
 /**
  * Whether to nudge the student to re-sync: the transcript still shows
  * components in progress, and the term they belong to is already over.
