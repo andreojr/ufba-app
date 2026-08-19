@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { GoogleTokenInvalidError } from './google-token.service';
 
@@ -56,6 +57,24 @@ describe('AuthService.loginWithGoogle', () => {
 
     await expect(authService.loginWithGoogle('bad-token')).rejects.toThrow(
       GoogleTokenInvalidError,
+    );
+    expect(jwtService.sign).not.toHaveBeenCalled();
+  });
+
+  it('rejects Google accounts outside the @ufba.br domain without issuing a JWT', async () => {
+    const googleTokenService = fakeGoogleTokenService({
+      googleId: 'google-999',
+      email: 'pessoa@gmail.com',
+      name: 'Pessoa Qualquer',
+    });
+    const jwtService = fakeJwtService();
+    const authService = new AuthService(
+      googleTokenService as any,
+      jwtService as any,
+    );
+
+    await expect(authService.loginWithGoogle('some-id-token')).rejects.toThrow(
+      ForbiddenException,
     );
     expect(jwtService.sign).not.toHaveBeenCalled();
   });
