@@ -238,6 +238,68 @@ function exigirNumeroCelula(bruto: string, codigo: string): number {
   return Number(bruto);
 }
 
+/**
+ * "--" is a legitimate null — trancado and matriculado rows genuinely print no
+ * grade — but a cell that *looks* numeric and fails to parse is not the same
+ * thing. That shape is reachable: a run split across two text items (e.g.
+ * "6.8" painted as "6" and ".8", joined by `celula`'s space) or a comma
+ * decimal both start with a digit and both yield `NaN` from a bare
+ * `Number(...)`. Because `NaN !== null`, a silent `NaN` here used to enter the
+ * `comNota` set and turn `crCalculado` into `NaN`, which the recomputed-CR
+ * invariant then failed to catch — the one check that is this branch's
+ * strongest evidence the parser read the right columns at all.
+ */
+function notaOuNula(bruto: string, codigo: string): number | null {
+  if (!/^\d/.test(bruto)) {
+    return null;
+  }
+  const numero = Number(bruto);
+  if (!Number.isFinite(numero)) {
+    throw new Error(
+      `Histórico não reconhecido: nota "${bruto}" no componente ${codigo} não é um número.`,
+    );
+  }
+  return numero;
+}
+
+/**
+ * Every page carries this exact footer line — the anchor `parseCursados`,
+ * `parsePendentes` and `linhasDaSecao` all fall back to when the thing they
+ * are actually looking for (a legend, the next section) is not on this page,
+ * because what they are bounding spills onto a following one instead.
+ *
+ * Never a fixed y: the footer's own y drifts by page — ~39.5pt on pages 1–2
+ * of the real document, ~56.5pt on page 3 — which is exactly why a magic
+ * `y: 45` sentinel used to stand in its place. That sentinel does not even
+ * bound what it looks like it bounds: page 3's footer sits *above* 45, so the
+ * same fallback applied there would have pulled the footer — verification
+ * token included — straight into the section.
+ */
+const RODAPE_PATTERN = /^Para verificar sua autenticidade/;
+
+/**
+ * The lower boundary shared by all three page-scoped, free-form lookups
+ * below: the thing's own specific closing marker if this page carries it,
+ * else the page's footer line. Neither present means an unread page
+ * structure — throwing here, rather than falling back to a fixed y, is what
+ * keeps the three call sites from being able to disagree about what a missing
+ * anchor means.
+ */
+function limiteInferior(
+  daPagina: ItemTexto[],
+  ancoraEspecifica: ItemTexto | undefined,
+  contexto: string,
+): number {
+  const ancora = ancoraEspecifica ?? daPagina.find((i) => RODAPE_PATTERN.test(i.texto));
+  if (!ancora) {
+    throw new Error(
+      `Histórico não reconhecido: não achei o limite inferior de ${contexto}. ` +
+        'O layout do documento pode ter mudado.',
+    );
+  }
+  return ancora.y;
+}
+
 function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
   const cursados: ComponenteCursado[] = [];
 
@@ -253,7 +315,9 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
     // the legend spills onto the following page and the footer's y shifts.
     const legenda = daPagina.find((i) => i.texto === 'Legenda');
     const naSecao = daPagina.filter(
-      (i) => i.y < titulo.y && i.y > (legenda ? legenda.y : 45),
+      (i) =>
+        i.y < titulo.y &&
+        i.y > limiteInferior(daPagina, legenda, 'da seção de componentes cursados'),
     );
 
     // Every row is anchored by its own semestre at the left edge, which is why
@@ -310,7 +374,7 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
           celula(naSecao, COLUNAS.cargaHoraria, ancora.y),
           codigo,
         ),
-        nota: /^\d/.test(nota) ? Number(nota) : null,
+        nota: notaOuNula(nota, codigo),
         situacao: exigirSituacao(celula(naSecao, COLUNAS.situacao, ancora.y), codigo),
         docente: ehDocente ? textoAbaixo : null,
       });
@@ -371,7 +435,9 @@ function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
     .sort((a, b) => b.y - a.y)[0];
 
   const naSecao = daPagina.filter(
-    (i) => i.y < titulo.y - 5 && i.y > (proximaSecao ? proximaSecao.y : 45),
+    (i) =>
+      i.y < titulo.y - 5 &&
+      i.y > limiteInferior(daPagina, proximaSecao, 'da seção de componentes pendentes'),
   );
 
   // One row per distinct baseline. Grouping by y is enough here: unlike the
@@ -460,25 +526,22 @@ function linhasDaSecao(itens: ItemTexto[], tituloPattern: RegExp): string[] {
   const daPagina = itens.filter((i) => i.pagina === titulo.pagina);
   const proxima = daPagina
     .filter(
-      (i) =>
-        i.y < titulo.y - 5 &&
-        /^(Equival[êe]ncias|Observa[çc][õo]es|Para verificar)/.test(i.texto),
+      (i) => i.y < titulo.y - 5 && /^(Equival[êe]ncias|Observa[çc][õo]es)/.test(i.texto),
     )
     .sort((a, b) => b.y - a.y)[0];
 
-  if (!proxima) {
-    // No magic fallback y here: on the observações section this is the only
-    // thing standing between the section and the footer below it, which
-    // carries the verification token. A layout the anchor regex stops
-    // matching must fail loud, not silently widen the section down to the
-    // footer.
-    throw new Error(
-      'Histórico não reconhecido: não achei o limite inferior de uma seção de ' +
-        'texto livre (equivalências/observações). O layout do documento pode ter mudado.',
-    );
-  }
+  // `limiteInferior` falls back to the footer line itself when neither the
+  // next section nor a legend is on this page — on the observações section
+  // that footer is the only thing standing between it and the verification
+  // token beneath it, so an unrecognised layout must fail loud here rather
+  // than silently widen the section down into it.
+  const fim = limiteInferior(
+    daPagina,
+    proxima,
+    'de uma seção de texto livre (equivalências/observações)',
+  );
 
-  const naSecao = daPagina.filter((i) => i.y < titulo.y - 2 && i.y > proxima.y);
+  const naSecao = daPagina.filter((i) => i.y < titulo.y - 2 && i.y > fim);
 
   const porLinha = new Map<number, ItemTexto[]>();
   for (const item of naSecao) {
@@ -594,7 +657,10 @@ function validarInvariantes(historico: Historico, totalPendentesDeclarado: numbe
       comNota.reduce((soma, c) => soma + c.cargaHoraria * (c.nota as number), 0) /
       pesoTotal;
 
-    if (Math.abs(crCalculado - historico.indices.cr) > 0.0001) {
+    // `Math.abs(NaN - x) > 0.0001` is `false`, so a non-finite `crCalculado`
+    // (a NaN grade slipping through, most obviously) would otherwise pass this
+    // check silently instead of failing the one invariant meant to catch it.
+    if (!Number.isFinite(crCalculado) || Math.abs(crCalculado - historico.indices.cr) > 0.0001) {
       throw new Error(
         `Histórico inconsistente: o CR recalculado (${crCalculado.toFixed(4)}) ` +
           `não bate com o do documento (${historico.indices.cr}).`,
@@ -627,7 +693,11 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
     cursados: parseCursados(itens),
     pendentesObrigatorios: parsePendentes(itens),
     cargaHoraria: parseCargaHoraria(itens),
-    equivalencias: linhasDaSecao(itens, /^Equival[êe]ncias/),
+    // Symmetric on purpose: equivalências sits above the footer just as
+    // observações does, and is unreachable by it only because it is always
+    // bounded above by observações on the real document. A net that guards one
+    // gate and not its twin is how this branch's worst finding happened.
+    equivalencias: semTokenDeVerificacao(linhasDaSecao(itens, /^Equival[êe]ncias/)),
     observacoes: semTokenDeVerificacao(linhasDaSecao(itens, /^Observa[çc][õo]es/)),
   };
 

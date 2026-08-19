@@ -216,6 +216,50 @@ describe('parseHistorico', () => {
     expect(() => parseHistorico(adulterado)).toThrow(/situação/i);
   });
 
+  it('throws when a nota cell parses to a non-finite number', () => {
+    // A plausible PDF shape: "6.8" painted as two text runs ("6" and ".8")
+    // inside the nota x-band, exactly as `celula` would join them back with a
+    // space ("6 .8"). That starts with a digit but is not a number — it must
+    // throw, not persist a NaN that would silently disable the CR invariant
+    // below (NaN !== null, so it would enter `comNota`, and
+    // `Math.abs(NaN - cr) > 0.0001` is false).
+    const alvo = itens.find((item) => item.texto === '6.8' && item.x >= 500 && item.x < 532);
+    const adulterado = itens.flatMap((item) =>
+      item === alvo
+        ? [
+            { ...item, texto: '6' },
+            { ...item, texto: '.8', x: item.x + 3 },
+          ]
+        : [item],
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/nota .* não é um número/i);
+  });
+
+  it('throws when a cursado carries an empty cargaHoraria cell', () => {
+    // FISD36's own carga horária cell ("60") removed outright, leaving the
+    // cell empty rather than merely wrong — the same silent-zero shape
+    // `exigirNumero` already refuses for header fields.
+    const semCarga = itens.filter(
+      (item) =>
+        !(item.texto === '60' && item.x >= 480 && item.x < 500 && Math.abs(item.y - 330.08) < 0.1),
+    );
+
+    expect(() => parseHistorico(semCarga)).toThrow(/carga horária .* não é um número/i);
+  });
+
+  it('throws when a cursado natureza cell is non-empty but not in the known list', () => {
+    // FISD36's own natureza cell ("OB") replaced with a value the legend does
+    // not carry — empty stays a legitimate null, but this is not empty.
+    const adulterado = itens.map((item) =>
+      item.texto === 'OB' && item.x >= 65 && item.x < 90 && Math.abs(item.y - 330.08) < 0.1
+        ? { ...item, texto: 'ZZ' }
+        : item,
+    );
+
+    expect(() => parseHistorico(adulterado)).toThrow(/natureza/i);
+  });
+
   it('throws when the pendentes section anchor is entirely absent', () => {
     // This is the whole rationale for parsePendentes throwing instead of
     // returning []: an unread section must never masquerade as an empty one.
