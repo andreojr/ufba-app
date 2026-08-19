@@ -2409,6 +2409,8 @@ git commit -m "feat(mobile): add the trajetória API client"
 **Files:**
 - Create: `mobile/src/lib/trajetoria.ts`
 - Create: `mobile/src/lib/trajetoria.test.ts`
+- Create: `mobile/src/lib/periodo-cache.ts`
+- Create: `mobile/src/lib/periodo-cache.test.ts`
 
 **Interfaces:**
 - Consumes: `ComponenteCursado`, `ComponentePendente`, `ResumoCargaHoraria` from `./types`, and `parseIsoDate` from `./periodo-letivo`.
@@ -2560,29 +2562,29 @@ describe("zonasDePlanejamento", () => {
 
 describe("historicoDesatualizado", () => {
   const fim = "2026-07-15";
+  const emCurso = [componente({ semestre: "2026.1", situacao: "MATR", nota: null })];
+  const consolidado = [componente({ semestre: "2026.1", situacao: "APR", nota: 7 })];
 
-  it("flags a transcript last synced before the term ended", () => {
-    expect(
-      historicoDesatualizado(new Date("2026-06-01"), fim, new Date("2026-08-19")),
-    ).toBe(true);
+  it("flags a term that has ended while components are still in progress", () => {
+    // Both conditions together: grades that have yet to land (MATR), and a term
+    // already over, so they should have landed by now.
+    expect(historicoDesatualizado(emCurso, fim, new Date("2026-08-19"))).toBe(true);
   });
 
-  it("does not flag a transcript synced after the term ended", () => {
-    expect(
-      historicoDesatualizado(new Date("2026-07-20"), fim, new Date("2026-08-19")),
-    ).toBe(false);
+  it("stays quiet while the term is still running", () => {
+    // MATR is true all semester. On its own it is a permanent banner, and a
+    // permanent banner is one the student stops seeing.
+    expect(historicoDesatualizado(emCurso, fim, new Date("2026-07-01"))).toBe(false);
   });
 
-  it("does not flag anything while the term is still running", () => {
-    expect(
-      historicoDesatualizado(new Date("2026-06-01"), fim, new Date("2026-07-01")),
-    ).toBe(false);
+  it("stays quiet once every component is consolidated", () => {
+    expect(historicoDesatualizado(consolidado, fim, new Date("2026-08-19"))).toBe(false);
   });
 
   it("stays quiet when the term's end date is unknown", () => {
-    expect(historicoDesatualizado(new Date("2026-06-01"), null, new Date("2026-08-19"))).toBe(
-      false,
-    );
+    // No cached date, or a portal that reported a term without one: say nothing
+    // rather than guess.
+    expect(historicoDesatualizado(emCurso, null, new Date("2026-08-19"))).toBe(false);
   });
 });
 ```
@@ -2710,19 +2712,31 @@ export function zonasDePlanejamento(
 }
 
 /**
- * Whether to warn that the transcript may be stale: the term has ended and the
- * last sync predates that end.
+ * Whether to nudge the student to re-sync: the transcript still shows
+ * components in progress, and the term they belong to is already over.
+ *
+ * Both conditions are necessary. `MATR` on its own holds all semester long, so
+ * it would render a permanent banner — and a permanent banner is one the
+ * student stops seeing. The end date is what turns it into a signal.
  *
  * Derived entirely on the device. A user on `syncMode: "device"` keeps their
  * credential off our servers, so no background job will ever refresh them —
  * without this they would have no signal at all that grades have landed.
+ *
+ * `fimDoPeriodo` comes from the device-local cache the home screen writes (see
+ * periodo-cache.ts), not from a request of this screen's own.
  */
 export function historicoDesatualizado(
-  fetchedAt: Date,
+  cursados: ComponenteCursado[],
   fimDoPeriodo: string | null,
   agora: Date,
 ): boolean {
   if (!fimDoPeriodo) {
+    return false;
+  }
+  // MATR rows are the grades that have yet to land. Without one there is
+  // nothing to wait for, however old the transcript is.
+  if (!cursados.some((c) => c.situacao === SITUACAO_MATRICULADO)) {
     return false;
   }
   // parseIsoDate, never `new Date(string)`: the latter reads a bare YYYY-MM-DD
@@ -2732,7 +2746,7 @@ export function historicoDesatualizado(
   // comparisons are built the same way — but a real `fetchedAt` carries a real
   // time of day and would not cancel out.
   const fim = parseIsoDate(fimDoPeriodo);
-  return agora > fim && fetchedAt < fim;
+  return agora > fim;
 }
 ```
 
@@ -2741,11 +2755,126 @@ export function historicoDesatualizado(
 Run: `cd mobile && npm test -- trajetoria.test.ts`
 Expected: PASS, 19 tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Write the failing test for the term-date cache**
+
+`historicoDesatualizado` needs the term's end date, and the Trajetória screen has
+no request that carries one. The home screen already fetches it on every open, so
+the date is cached on the device rather than re-fetched. `expo-secure-store` is
+the app's only persistence mechanism — overkill for a public date, but it is what
+`session-storage.ts` and `sigaa-storage.ts` both use, and adding a dependency for
+this would be worse.
+
+`create: mobile/src/lib/periodo-cache.test.ts`:
+
+```ts
+import * as SecureStore from "expo-secure-store";
+
+import { getPeriodoCache, savePeriodoCache } from "./periodo-cache";
+
+jest.mock("expo-secure-store");
+
+describe("periodo-cache", () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it("round-trips the term through the store", async () => {
+    const periodo = { semestre: "2026.1", inicio: "2026-03-02", fim: "2026-07-15" };
+    jest.mocked(SecureStore.setItemAsync).mockResolvedValue(undefined);
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify(periodo));
+
+    await savePeriodoCache(periodo);
+
+    await expect(getPeriodoCache()).resolves.toEqual(periodo);
+  });
+
+  it("reports null when nothing was ever cached", async () => {
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
+
+    await expect(getPeriodoCache()).resolves.toBeNull();
+  });
+
+  it("reports null instead of throwing on corrupted contents", async () => {
+    // Same defensive shape as sigaa-storage.ts: a bad read must degrade to "no
+    // cached date", which makes the nudge stay quiet rather than crash a screen.
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue("{ not json");
+
+    await expect(getPeriodoCache()).resolves.toBeNull();
+  });
+
+  it("ignores a stored value missing the field the caller needs", async () => {
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValue(JSON.stringify({ semestre: "2026.1" }));
+
+    await expect(getPeriodoCache()).resolves.toBeNull();
+  });
+});
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `cd mobile && npm test -- periodo-cache`
+Expected: FAIL — cannot find module `./periodo-cache`.
+
+- [ ] **Step 7: Write the cache**
+
+`create: mobile/src/lib/periodo-cache.ts`:
+
+```ts
+import * as SecureStore from "expo-secure-store";
+
+import type { PeriodoLetivo } from "./types";
+
+/**
+ * Last academic term the app saw, kept so screens that never call `/schedule`
+ * can still tell whether the term is over.
+ *
+ * Written by the home screen after a successful schedule fetch, read by the
+ * Trajetória screen to decide whether to nudge a re-sync. Not secret — it lives
+ * in SecureStore only because that is the app's one persistence mechanism.
+ */
+const PERIODO_KEY = "gradline.periodo";
+
+function isPeriodoLetivo(value: unknown): value is PeriodoLetivo {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as PeriodoLetivo).semestre === "string" &&
+    typeof (value as PeriodoLetivo).inicio === "string" &&
+    typeof (value as PeriodoLetivo).fim === "string"
+  );
+}
+
+export async function getPeriodoCache(): Promise<PeriodoLetivo | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(PERIODO_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    return isPeriodoLetivo(parsed) ? parsed : null;
+  } catch {
+    // A bad read degrades to "no cached date", which keeps the nudge quiet.
+    // Never let a cache miss take a screen down.
+    return null;
+  }
+}
+
+export async function savePeriodoCache(periodo: PeriodoLetivo): Promise<void> {
+  await SecureStore.setItemAsync(PERIODO_KEY, JSON.stringify(periodo));
+}
+```
+
+- [ ] **Step 8: Run test to verify it passes**
+
+Run: `cd mobile && npm test -- periodo-cache`
+Expected: PASS, 4 tests.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add mobile/src/lib/trajetoria.ts mobile/src/lib/trajetoria.test.ts
-git commit -m "feat(mobile): add trajetória derivations"
+git add mobile/src/lib/trajetoria.ts mobile/src/lib/trajetoria.test.ts \
+  mobile/src/lib/periodo-cache.ts mobile/src/lib/periodo-cache.test.ts
+git commit -m "feat(mobile): add trajetória derivations and the term-date cache"
 ```
 
 ---
@@ -2758,6 +2887,7 @@ git commit -m "feat(mobile): add trajetória derivations"
 - Modify: `mobile/src/lib/mock-data.ts`
 - Create: `mobile/src/components/DownloadProgressBar.tsx`
 - Modify: `mobile/src/app/(tabs)/documentos.tsx` (import the extracted component instead of its local copy)
+- Modify: `mobile/src/app/(tabs)/index.tsx` (write the term to the cache after a successful schedule fetch)
 
 **Interfaces:**
 - Consumes: everything from Tasks 11 and 12.
@@ -2950,6 +3080,29 @@ describe("Trajetória", () => {
 Run: `cd mobile && npm test -- trajetoria.test.tsx`
 Expected: FAIL — the screen still renders mock data and has no sync affordance.
 
+- [ ] **Step 2b: Have the home screen fill the term cache**
+
+`modify: mobile/src/app/(tabs)/index.tsx` — inside `loadSchedule`, right after
+`postSchedule` resolves and before `setState`, persist the term when the response
+carried one:
+
+```tsx
+        if (periodoLetivo) {
+          // Cached for screens that never call /schedule — Trajetória reads this
+          // to tell whether the term is over. Fire and forget: a failed write
+          // must not turn a good schedule fetch into an error.
+          void savePeriodoCache(periodoLetivo).catch((error: unknown) => {
+            console.warn("Failed to cache the academic term", error);
+          });
+        }
+```
+
+Import `savePeriodoCache` from `@/lib/periodo-cache`. The existing
+`home.test.tsx` must keep passing untouched — run
+`cd mobile && npm test -- home.test` to confirm. It mocks `@/lib/api` but not
+`expo-secure-store`, so if the write surfaces there, mock `@/lib/periodo-cache`
+in that suite rather than changing the screen.
+
 - [ ] **Step 3: Extract the shared progress bar**
 
 `DownloadProgressBar` already exists as a local component inside
@@ -2999,15 +3152,23 @@ type LoadState =
 ```
 
 - Planner zones: keep the existing `Menu`-based move-to interaction, with the zone labels from `zonasDePlanejamento(semestreAtual, historico.prazoConclusaoMaximo, 2)` plus the unplanned pool, and the courses from `poolPlanejavel(historico.pendentesObrigatorios)`. `semestreAtual` is the `semestre` of the period `agruparPorSemestre` marked `emCurso`. Persisting a move is **not** in this task — the zones stay local state, exactly as they are today.
-- Below the summary card, the freshness line:
+- Below the summary card, the freshness line. `fimDoPeriodo` is state the screen
+  loads once from the cache — `const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null)`,
+  filled by a `useEffect` that calls `getPeriodoCache()` and sets
+  `periodo?.fim ?? null`. No request: the home screen is what populates that cache.
 
 ```tsx
 <Typography.Paragraph type="body-xs" color="muted">
-  {historicoDesatualizado(fetchedAt, periodoLetivo?.fim ?? null, new Date())
-    ? "O semestre acabou — seu histórico pode estar desatualizado."
+  {historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date())
+    ? "O semestre acabou e seu histórico ainda tem matérias em curso — sincronize para ver as notas."
     : `Sincronizado em ${fetchedAt.toLocaleDateString("pt-BR")}`}
 </Typography.Paragraph>
 ```
+
+  The five tests in Step 1 mock `@/lib/periodo-cache` alongside `@/lib/api`; with
+  `getPeriodoCache` resolving `null` the nudge stays quiet, which is what the four
+  non-staleness tests expect. Add a sixth test that resolves a term already ended
+  against a fixture carrying a `MATR` row, and asserts the nudge text appears.
 
 - Fallback state, for a user who has never synced. The disclosure sits **above** the button, not below it: pressing sync is the moment the user hands us a document carrying their CPF, RG and date of birth, so what we keep and what we discard has to be readable before the press, not after.
 
@@ -3057,7 +3218,7 @@ Imports for the block above: `DownloadProgressBar` from `@/components/DownloadPr
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd mobile && npm test -- trajetoria.test.tsx`
-Expected: PASS, 5 tests.
+Expected: PASS, 6 tests.
 
 - [ ] **Step 5: Drop the now-unused mocks**
 

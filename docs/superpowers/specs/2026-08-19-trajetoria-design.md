@@ -247,10 +247,22 @@ That asymmetry is why `fetchedAt` is part of the `GET /trajetoria`
 payload and visible on screen. Once cloud users get silent updates, a
 device user with no freshness signal is the worst case — stale data
 with no way to notice. The screen shows when it last synced, and
-derives a nudge client-side with no server credential involved: if the
-term's end date (already returned by `/schedule` as `periodoLetivo`)
-has passed and `fetchedAt` predates it, the transcript may be out of
-date and the screen says so.
+derives a nudge client-side with no server credential involved.
+
+Two conditions, both necessary. The transcript must still carry
+components in progress (`MATR` rows) — those are the grades that have
+yet to land. And the term must be over: `MATR` alone is true all
+semester long, so on its own it is a permanent banner rather than a
+signal, and a permanent banner is one the student stops seeing.
+
+The term's end date is the piece the screen does not have. It arrives
+with `/schedule`, which the Trajetória screen never calls, and paying
+for a second scrape inside the sync to fetch a single date is not worth
+it. Instead the home screen — which already fetches `periodoLetivo` on
+every open — writes the last date it saw to a small device-local cache,
+and Trajetória reads it. No new request anywhere, and the failure mode
+is graceful: no cached date, or a term the portal reported without one,
+means the nudge stays quiet rather than guessing.
 
 ## Derivations
 
