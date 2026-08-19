@@ -25,12 +25,18 @@ const ESPACO_POR_PONTO = 56;
 // The first/last point's floating value tilts -45° from roughly its own x
 // position, which pushes its rendered (rotated) box further left than the
 // point itself — margem 8 wasn't enough and the label clipped off the
-// chart's left edge. Y stays only as generous as the label's own height
-// needs: this margin is pixels taken directly out of `altura`, and with the
-// chart this short (~70px), every pixel spent here is a pixel the line
-// itself doesn't get to move in — the real reason the line was reading flat.
+// chart's left edge.
 const MARGEM_X = 20;
-const MARGEM_Y = 18;
+// Only what a dot needs to clear the plot's own top/bottom edge — this
+// margin comes straight out of `altura`, and the label has its own dedicated
+// headroom (ESPACO_LABEL) above the plot now, so it no longer has to compete
+// with the line for vertical room the way it used to.
+const MARGEM_Y = 6;
+// Reserved above the plot, outside `altura`, purely for the floating label.
+// Without this, lifting the label enough to clear its own point pushed it
+// past the plot's own top edge — which clips, not just overflows, so the
+// label's top sheared clean off instead of merely looking cramped.
+const ESPACO_LABEL = 26;
 // As tight as the domain math allows without pinning the line to the very
 // edges: the CR series already moves in small steps, and any padding beyond
 // this buries that movement in dead space instead of letting it fill the
@@ -73,31 +79,36 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="line-chart-scroll">
       <View testID="line-chart" style={{ width: largura }}>
-        <View style={{ width: largura, height: altura }}>
-          <Svg width={largura} height={altura}>
-            {coordenadas.length > 1 ? (
-              <Polyline
-                points={coordenadas.map((c) => `${c.x},${c.y}`).join(" ")}
-                fill="none"
-                stroke={accent}
-                strokeWidth={2}
-              />
-            ) : null}
-            {coordenadas.map((coordenada, indice) => (
-              <Circle key={indice} cx={coordenada.x} cy={coordenada.y} r={3.5} fill={accent} />
-            ))}
-          </Svg>
+        <View style={{ width: largura, height: altura + ESPACO_LABEL }}>
+          <View style={{ position: "absolute", top: ESPACO_LABEL, left: 0 }}>
+            <Svg width={largura} height={altura}>
+              {coordenadas.length > 1 ? (
+                <Polyline
+                  points={coordenadas.map((c) => `${c.x},${c.y}`).join(" ")}
+                  fill="none"
+                  stroke={accent}
+                  strokeWidth={2}
+                />
+              ) : null}
+              {coordenadas.map((coordenada, indice) => (
+                <Circle key={indice} cx={coordenada.x} cy={coordenada.y} r={3.5} fill={accent} />
+              ))}
+            </Svg>
+          </View>
           {/* Floating rather than a value row under the chart: a small, tilted
               label sitting right over its own point reads as an annotation of
               that point, without a second row of numbers competing with the
-              rótulo row below for the reader's attention. */}
+              rótulo row below for the reader's attention. Positioned up and to
+              the right of the point — along the same diagonal the tilt
+              implies — so its tail clears the line instead of running back
+              through it. */}
           {coordenadas.map((coordenada, indice) => (
             <Text
               key={indice}
               style={{
                 position: "absolute",
-                left: coordenada.x - 2,
-                top: coordenada.y - 28,
+                left: coordenada.x + 4,
+                top: ESPACO_LABEL + coordenada.y - 22,
                 fontSize: 10,
                 fontWeight: "600",
                 color: COR_VALOR,
