@@ -26,10 +26,12 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 - Matérias escolhidas aparecem automaticamente em "Minha Trajetória".
 - Ao cadastrar as matérias no banco, levantar tags brutas relacionando cada matéria à sua área de estudo — usadas como filtro por área nessa tela.
 
-## 6. Header global + remoção da tab de Ajustes
+## 6. Header global + remoção da tab de Ajustes ✅ feito
 - Remover "Ajustes" das tabs inferiores.
 - Header com foto de perfil + ícone de engrenagem (configurações) fica global em todas as páginas.
 
-## 7. Avaliação de professores
-- Nova aba/página listando os professores do semestre atual do usuário.
-- Usuário avalia; avaliação vai para o banco de dados.
+## 7. Página de professores (perfil, não avaliação)
+- Baseado na investigação em [PROFESSORES_INVESTIGATION.md](PROFESSORES_INVESTIGATION.md).
+- Descartada a ideia de avaliação (evitar atrito/problema com os professores).
+- O SIGAA já disponibiliza um perfil de cada professor, só que praticamente ninguém sabe que existe. Página pública, nem precisa de login: https://sigaa.ufba.br/sigaa/public/docente/busca_docentes.jsf
+- Nova aba/página listando os professores do semestre atual do usuário, mostrando esse perfil do SIGAA — democratizando a informação além de só o nome.

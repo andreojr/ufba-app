@@ -183,11 +183,39 @@ para marca, regular para sistema.
 
 ## Dívida no código
 
-Nada disso está no app ainda.
+- **Fontes: resolvido (2026-08-19).** Poppins (4 pesos) + Source Code Pro
+  carregam via `expo-font`/`@expo-google-fonts/*` em
+  `mobile/src/app/_layout.tsx`. `mobile/src/global.css` expõe
+  `--font-normal/-medium/-semibold/-bold` (convenção interna do HeroUI,
+  não é `--font-*` do Tailwind) para o Poppins, e agora também
+  `--font-mono: "SourceCodePro_400Regular"` — essa chave *é* um namespace
+  real do Tailwind v4, então basta a classe `font-mono` em qualquer
+  `Typography`/`View` com `className`. `.input__input` (todo `Input` do
+  HeroUI) já usava mono via override direto de antes.
 
-- **Fontes:** o app não carrega fonte nenhuma (`expo-font` instalado, zero
-  arquivos), então renderiza Roboto do sistema. Precisa de Poppins +
-  Source Code Pro via `expo-font` e `fontFamily` no tema do Uniwind.
+  **Critério de escopo (corrigido 2026-08-19 depois de feedback do
+  usuário)**: mono sempre que a semântica do valor for puramente
+  numérica — inclusive com unidade colada (`h`, `KB`, `º semestre`) ou
+  quando é um valor isolado (período, horário, ano) — mesmo que apareça
+  dentro de uma legenda maior (aí quebra-se o texto em nós separados,
+  só a parte numérica leva `font-mono`). Só fica de fora o que é
+  genuinamente uma frase verbo+número ("faltam N matérias", "em N min",
+  "há N min", "Atualizado há X") e meses abreviados por extenso ("ago",
+  "dez" em `SemesterTrack`/`periodo-letivo.ts`) — aí o número modifica um
+  substantivo em ordem de frase, não é o próprio dado.
+
+  Refatorado: CR, variação de CR, carga horária (integralizada/exigida/
+  isolada por matéria), percentual concluído, nota, impacto no CR, ano e
+  período/semestre (`trajetoria.tsx`, `SemesterTrack.tsx`), horários de
+  aula e números de dia/hora da grade (`(tabs)/index.tsx`,
+  `formatMinutes`), rótulos flutuantes e de eixo dos gráficos
+  (`BarChart.tsx`/`LineChart.tsx` — os primeiros são `Text` nativo do RN
+  sem `className`, usam `style={{ fontFamily: "SourceCodePro_400Regular" }}`
+  direto), matrícula, período de ingresso e "Tempo de casa"
+  (`ajustes.tsx`, via prop `mono` nova em `AcademicRow`), e data +
+  tamanho do arquivo em Documentos (`documentos.tsx` — `formatDocMeta`
+  virou o componente `DocMeta`, que quebra a legenda em texto normal +
+  dois `Text` mono, porque antes era uma única string).
 - **Tokens novos** que não existem no HeroUI e precisam entrar no tema:
   `--color-accent-text`, `--color-scrim`, `--color-hairline`.
 - **Overrides de valor** (20 tokens): `--accent` → violet-600, `--background`
