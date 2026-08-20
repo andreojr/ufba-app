@@ -17,6 +17,18 @@ export type DocenteBuscaResposta =
 
 const SIAPE_PATTERN = /siape=(\d+)/;
 
+// SIGAA lists a docente once per lotação, and the lotação can be recorded at
+// either of two levels: the broad "instituto" or the specific "departamento".
+// A student looking a professor up wants the department — it is the useful,
+// specific label, while the institute is just the umbrella above it.
+function normalizeForComparison(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+}
+
+function nomeiaDepartamento(departamento: string): boolean {
+  return normalizeForComparison(departamento).startsWith('departamento');
+}
+
 /**
  * SIGAA renders "no docentes matched" inside the SAME `#painel-erros` /
  * `ul.erros` block it uses for a rejected query — the DOM cannot tell the two
@@ -31,16 +43,21 @@ const SEM_RESULTADOS_PATTERN = /nenhum docente foi encontrado/i;
 export function parseDocenteBusca(html: string): DocenteBuscaResposta {
   const $ = cheerio.load(html);
 
-  const aviso = $('#painel-erros .erros li, ul.erros li, .erros li').first().text().trim();
+  const aviso = $('#painel-erros .erros li, ul.erros li, .erros li')
+    .first()
+    .text()
+    .trim();
   if (aviso && !SEM_RESULTADOS_PATTERN.test(aviso)) {
     return { tipo: 'erro', mensagem: aviso };
   }
 
   // Each docente is listed once per lotação, so the same siape recurs across
-  // rows with otherwise-identical name but a different departamento. Keyed by
-  // siape; later rows overwrite earlier ones so the last-listed lotação wins
-  // (confirmed against the captured fixture, where the first row carries the
-  // broader "instituto" and the second the specific "departamento").
+  // rows with an otherwise-identical name but a different departamento value.
+  // The first row seen sets siape/nome and is kept as-is; departamento is the
+  // only field that can later be upgraded, and only from institute to
+  // department, never the reverse — this deliberately does NOT depend on row
+  // order (SIGAA is free to emit the rows in either order and the result must
+  // not change; see the "regardless of row order" test).
   const porSiape = new Map<string, DocenteBuscaResultado>();
 
   $('table.listagem tr').each((_, row) => {
@@ -54,8 +71,23 @@ export function parseDocenteBusca(html: string): DocenteBuscaResposta {
     if (!nome) {
       return;
     }
-    const departamento = $row.find('span.departamento').text().trim();
-    porSiape.set(siape, { siape, nome, departamento: departamento || null });
+    const departamento = $row.find('span.departamento').text().trim() || null;
+
+    const existente = porSiape.get(siape);
+    if (!existente) {
+      porSiape.set(siape, { siape, nome, departamento });
+      return;
+    }
+    // A student wants the department, not the institute umbrella above it:
+    // upgrade only when the incoming value names a department and the one
+    // already stored does not.
+    if (
+      departamento &&
+      nomeiaDepartamento(departamento) &&
+      !(existente.departamento && nomeiaDepartamento(existente.departamento))
+    ) {
+      existente.departamento = departamento;
+    }
   });
 
   return { tipo: 'resultados', docentes: [...porSiape.values()] };
