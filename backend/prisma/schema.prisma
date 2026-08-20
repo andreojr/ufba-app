@@ -306,7 +306,12 @@ model EstruturaCurricular {
   fetchedAt  DateTime @default(now()) @map("fetched_at")
   staleAfter DateTime @map("stale_after")
 
-  curso       Curso                  @relation(fields: [cursoId], references: [idSigaa])
+  // Cascade, not the default RESTRICT: Curso/EstruturaCurricular are both
+  // replaced wholesale on refresh (see the module's Global Constraints), so
+  // a directory refresh must be able to delete a Curso row even when a
+  // course has an already-resolved EstruturaCurricular — RESTRICT would
+  // otherwise make salvarCursos throw an FK violation for any such course.
+  curso       Curso                  @relation(fields: [cursoId], references: [idSigaa], onDelete: Cascade)
   componentes ComponenteCurricular[]
 
   @@unique([cursoId, codigo])

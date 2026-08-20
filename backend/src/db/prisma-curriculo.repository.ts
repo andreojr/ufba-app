@@ -36,6 +36,7 @@ function estruturaParaDominio(
     prazoMedioSemestres: row.prazoMedioSemestres,
     prazoMaximoSemestres: row.prazoMaximoSemestres,
     fetchedAt: row.fetchedAt,
+    staleAfter: row.staleAfter,
     componentes: row.componentes.map((c): ComponenteCurricularSalvo => ({
       idSigaa: c.idSigaa,
       codigo: c.codigo,
@@ -57,6 +58,13 @@ export class PrismaCurriculoRepository implements CurriculoRepository {
   async buscarCursos(): Promise<CursoListaItem[]> {
     const rows = await this.prisma.curso.findMany();
     return rows.map(cursoParaDominio);
+  }
+
+  async buscarDiretorioAtualizadoEm(): Promise<Date | null> {
+    const row = await this.prisma.curso.findFirst({
+      select: { atualizadoEm: true },
+    });
+    return row ? row.atualizadoEm : null;
   }
 
   async salvarCursos(cursos: CursoListaItem[]): Promise<void> {

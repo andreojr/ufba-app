@@ -59,6 +59,7 @@ describe('PrismaCurriculoRepository', () => {
       prazoMinimoSemestres: 12,
       prazoMedioSemestres: 12,
       prazoMaximoSemestres: 18,
+      formFields: {},
       componentes: [
         {
           idSigaa: '34997',
@@ -67,6 +68,7 @@ describe('PrismaCurriculoRepository', () => {
           cargaHoraria: 60,
           natureza: 'OBRIGATORIA',
           periodo: 1,
+          jsfParams: {},
         },
       ],
     };
@@ -114,6 +116,7 @@ describe('PrismaCurriculoRepository', () => {
       prazoMinimoSemestres: 1,
       prazoMedioSemestres: 1,
       prazoMaximoSemestres: 1,
+      formFields: {},
       componentes: [
         {
           idSigaa: '1',
@@ -122,6 +125,7 @@ describe('PrismaCurriculoRepository', () => {
           cargaHoraria: 60,
           natureza: 'OBRIGATORIA',
           periodo: 1,
+          jsfParams: {},
         },
       ],
     };
@@ -152,6 +156,7 @@ describe('PrismaCurriculoRepository', () => {
           cargaHoraria: 60,
           natureza: 'OBRIGATORIA',
           periodo: 1,
+          jsfParams: {},
         },
       ],
     };
@@ -174,5 +179,39 @@ describe('PrismaCurriculoRepository', () => {
 
     const salva = await repo.buscarEstrutura('1');
     expect(salva?.componentes.map((c) => c.codigo)).toEqual(['BBB000']);
+  });
+
+  it('refreshes the directory wholesale without a FK violation, even when a course already has a resolved estrutura', async () => {
+    await repo.salvarCursos([
+      { idSigaa: '1', nome: 'CURSO A', sede: 'SALVADOR', nivel: 'G' },
+    ]);
+    const resumo: EstruturaResumo = {
+      anoPeriodoImplementacao: '2025.2',
+      cargaHorariaTotal: 100,
+      cargaHorariaObrigatoria: 100,
+      cargaHorariaOptativaMinima: 0,
+      cargaHorariaComplementarMinima: 0,
+      prazoMinimoSemestres: 1,
+      prazoMedioSemestres: 1,
+      prazoMaximoSemestres: 1,
+      formFields: {},
+      componentes: [],
+    };
+    await repo.salvarEstrutura('1', 'e1', 'G20251', resumo, [], new Date());
+
+    // The old salvarCursos deleteMany() over Curso would have thrown an FK
+    // violation here (ON DELETE RESTRICT) because course '1' still has an
+    // EstruturaCurricular row pointing at it — see I4.
+    await expect(
+      repo.salvarCursos([
+        { idSigaa: '2', nome: 'CURSO B', sede: 'SALVADOR', nivel: 'G' },
+      ]),
+    ).resolves.toBeUndefined();
+
+    expect(await repo.buscarCursos()).toEqual([
+      { idSigaa: '2', nome: 'CURSO B', sede: 'SALVADOR', nivel: 'G' },
+    ]);
+    // The cascade also took the now-orphaned estrutura with it.
+    expect(await repo.buscarEstrutura('1')).toBeNull();
   });
 });
