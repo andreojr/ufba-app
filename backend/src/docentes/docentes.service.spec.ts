@@ -242,10 +242,16 @@ describe('DocentesService.resumoDoSemestre', () => {
 
   it('records a miss when the search genuinely returns nothing', async () => {
     const repo = new RepositorioFake();
+    // The real shape of a genuine zero-result: SIGAA's own explicit message,
+    // not merely the absence of a results table (that shape is what a SIGAA
+    // outage/maintenance page also produces, and must NOT read as a miss).
     const http = httpRoteado((req) =>
       req.method === 'GET'
         ? ok(PAGINA_BUSCA)
-        : ok('<input name="javax.faces.ViewState" value="j_id2" />'),
+        : ok(
+            '<ul class="erros"><li>Nenhum docente foi encontrado de acordo com os critérios de busca informados</li></ul>' +
+              '<input name="javax.faces.ViewState" value="j_id2" />',
+          ),
     );
     const service = new DocentesService(
       repo,
@@ -418,7 +424,9 @@ describe('DocentesService.resumoDoSemestre', () => {
 
     // Never settles: if the response were awaited, this test would time out.
     const http = httpRoteado(() => ok(PAGINA_BUSCA));
-    jest.spyOn(http, 'request').mockReturnValue(new Promise(() => {}));
+    const requestSpy = jest
+      .spyOn(http, 'request')
+      .mockReturnValue(new Promise(() => {}));
 
     const service = new DocentesService(
       repo,
@@ -431,6 +439,12 @@ describe('DocentesService.resumoDoSemestre', () => {
 
     expect(resumos[0].perfil?.siape).toBe('1815041');
     expect(resumos[0].perfil?.selos.contato).toBe(true);
+    // The resync itself must actually have been attempted (a GET fired) —
+    // not just "not awaited", which a no-op would also satisfy.
+    expect(requestSpy).toHaveBeenCalled();
+    const primeiraChamada = requestSpy.mock.calls[0][0];
+    expect(primeiraChamada.method).toBe('GET');
+    expect(primeiraChamada.path).toContain('portal.jsf?siape=1815041');
   });
 
   // Homonyms have not appeared in the wild yet, but attaching the wrong
@@ -472,6 +486,79 @@ describe('DocentesService.resumoDoSemestre', () => {
       { codigo: 'MATA65', nome: 'CG', docente: 'JOAO SILVA' },
     ]);
     expect(resumo.perfil?.siape).toBe('222');
+  });
+
+  // Two or more non-exact candidates is a guess, not evidence — the same
+  // rule the homonym path already enforces, applied symmetrically to the
+  // "no exact match" branch.
+  it('refuses to guess between two non-exact candidates', async () => {
+    const repo = new RepositorioFake();
+    const http = httpRoteado((req) => {
+      if (req.method === 'GET' && req.path.includes('busca_docentes'))
+        return ok(PAGINA_BUSCA);
+      if (req.method === 'POST') {
+        return ok(
+          `<table class="listagem">
+             <tr><td><span class="nome">ALINE SILVA DE MOURA</span>
+               <span class="pagina"><a href="/sigaa/public/docente/portal.jsf?siape=111">v</a></span></td></tr>
+             <tr><td><span class="nome">ALINE SILVA COSTA</span>
+               <span class="pagina"><a href="/sigaa/public/docente/portal.jsf?siape=222">v</a></span></td></tr>
+           </table><input name="javax.faces.ViewState" value="j_id2" />`,
+        );
+      }
+      return ok('<html></html>');
+    });
+    const service = new DocentesService(
+      repo,
+      http,
+      () => new PublicSigaaSession(http),
+    );
+
+    const [resumo] = await service.resumoDoSemestre([
+      { codigo: 'A1', nome: 'A', docente: 'ALINE SILVA' },
+    ]);
+    expect(resumo.perfil).toBeNull();
+    expect(repo.lookupsSalvos).toHaveLength(0);
+  });
+
+  // A failure to establish the public search session (SIGAA down, network
+  // error) must degrade this batch, not throw away resumos already built
+  // from cache for other docentes in the same request.
+  it('degrades to null profiles when the session fails to start, keeping already-cached results', async () => {
+    const repo = new RepositorioFake();
+    repo.lookups = [
+      {
+        nomeNormalizado: 'X Y',
+        nomeOriginal: 'X Y',
+        siape: '1815041',
+        staleAfter: FRESCO,
+      },
+    ];
+    repo.docentes = [docenteSalvo({ siape: '1815041' })];
+
+    const http = httpRoteado((req) =>
+      req.method === 'GET' && req.path.includes('busca_docentes')
+        ? new Error('ECONNRESET')
+        : ok('<html></html>'),
+    );
+    const service = new DocentesService(
+      repo,
+      http,
+      () => new PublicSigaaSession(http),
+    );
+
+    const resumos = await service.resumoDoSemestre([
+      { codigo: 'A1', nome: 'A', docente: 'X Y' },
+      { codigo: 'B1', nome: 'B', docente: 'NUNCA VISTO' },
+    ]);
+
+    expect(resumos.find((r) => r.nomeOriginal === 'X Y')?.perfil?.siape).toBe(
+      '1815041',
+    );
+    expect(
+      resumos.find((r) => r.nomeOriginal === 'NUNCA VISTO')?.perfil,
+    ).toBeNull();
+    expect(repo.lookupsSalvos).toHaveLength(0);
   });
 
   it('refuses to guess when the tie cannot be broken', async () => {

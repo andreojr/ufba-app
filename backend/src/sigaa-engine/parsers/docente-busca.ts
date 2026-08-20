@@ -8,11 +8,18 @@ export interface DocenteBuscaResultado {
 
 /**
  * Zero results and a rejected query are different facts, and the caller treats
- * them differently: an empty list is grounds for recording "this docente has no
- * public record" for a month, an error never is.
+ * them differently: an explicit zero-result is grounds for recording "this
+ * docente has no public record" for a month, an error never is.
+ *
+ * `sem-resultados` must be asserted POSITIVELY from SIGAA's own "nenhum
+ * docente encontrado" message — never inferred from the mere absence of a
+ * results table. A SIGAA maintenance page, a 429 body, or any other
+ * unrecognised HTML answers 200 with no table and no recognised message
+ * either, and that must read as `erro`, not as evidence of absence.
  */
 export type DocenteBuscaResposta =
   | { tipo: 'resultados'; docentes: DocenteBuscaResultado[] }
+  | { tipo: 'sem-resultados' }
   | { tipo: 'erro'; mensagem: string };
 
 const SIAPE_PATTERN = /siape=(\d+)/;
@@ -47,7 +54,10 @@ export function parseDocenteBusca(html: string): DocenteBuscaResposta {
     .first()
     .text()
     .trim();
-  if (aviso && !SEM_RESULTADOS_PATTERN.test(aviso)) {
+  if (aviso) {
+    if (SEM_RESULTADOS_PATTERN.test(aviso)) {
+      return { tipo: 'sem-resultados' };
+    }
     return { tipo: 'erro', mensagem: aviso };
   }
 
@@ -89,6 +99,19 @@ export function parseDocenteBusca(html: string): DocenteBuscaResposta {
       existente.departamento = departamento;
     }
   });
+
+  if (porSiape.size === 0) {
+    // No recognised "zero results" message, no recognised error message, and
+    // no results table either: this is unrecognised HTML (a SIGAA maintenance
+    // page, a proxy error page, ...) answering 200. Reporting this as an empty
+    // result list would let an outage masquerade as "this docente has no
+    // public record" and get written into the cache as a 30-day miss.
+    return {
+      tipo: 'erro',
+      mensagem:
+        'Resposta da busca de docentes não reconhecida: sem tabela de resultados e sem mensagem de erro',
+    };
+  }
 
   return { tipo: 'resultados', docentes: [...porSiape.values()] };
 }

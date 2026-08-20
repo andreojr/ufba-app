@@ -86,6 +86,21 @@ describe('PublicSigaaSession', () => {
       /iniciar/,
     );
   });
+
+  // A 429/500/503 can still carry an HTML body with no table and no
+  // recognised error message — indistinguishable, to parseDocenteBusca, from
+  // a genuine zero-result. buscar must throw before that body ever reaches
+  // the parser, or an outage gets cached as a permanent false miss.
+  it('rejects when the search POST answers a non-200 status', async () => {
+    const { http } = fakeHttp([
+      pagina('j_id1'),
+      { status: 500, headers: {}, body: '<html>erro interno</html>' },
+    ]);
+    const session = new PublicSigaaSession(http);
+    await session.iniciar();
+
+    await expect(session.buscar('APOLINARIO')).rejects.toThrow(/500/);
+  });
 });
 
 describe('getPaginaPublica', () => {

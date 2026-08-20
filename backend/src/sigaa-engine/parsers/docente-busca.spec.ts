@@ -35,17 +35,19 @@ describe('parseDocenteBusca', () => {
   // SIGAA puts BOTH messages in the same `ul.erros` block, so the DOM cannot
   // separate them — only the text can. Misreading zero-results as an error
   // means no miss is ever recorded and the docente is re-searched forever.
-  it('reads a genuine zero-result page as an empty result list, not an error', () => {
+  // Zero results must be asserted POSITIVELY from SIGAA's own message, never
+  // inferred from an empty/missing table — see the "unrecognised HTML" test
+  // below for why.
+  it('reads a genuine zero-result page as sem-resultados, not an error', () => {
     expect(parseDocenteBusca(fixture('docente-busca-vazia.html'))).toEqual({
-      tipo: 'resultados',
-      docentes: [],
+      tipo: 'sem-resultados',
     });
   });
 
   it('tells the two ul.erros messages apart, since their markup is identical', () => {
     const vazia = parseDocenteBusca(fixture('docente-busca-vazia.html'));
     const curto = parseDocenteBusca(fixture('docente-busca-erro-curto.html'));
-    expect(vazia.tipo).toBe('resultados');
+    expect(vazia.tipo).toBe('sem-resultados');
     expect(curto.tipo).toBe('erro');
   });
 
@@ -56,6 +58,15 @@ describe('parseDocenteBusca', () => {
     expect(resposta.tipo).toBe('erro');
     if (resposta.tipo !== 'erro') return;
     expect(resposta.mensagem).toContain('4 caracteres');
+  });
+
+  // The whole reason `sem-resultados` must come from an explicit message: a
+  // SIGAA maintenance page (or any other unrecognised 200) has neither a
+  // results table nor a recognised error/zero-result message. Reading that as
+  // "resultados: []" would let an outage write a permanent false miss.
+  it('reads unrecognised HTML with no table and no message as an error, never as zero results', () => {
+    const resposta = parseDocenteBusca('<html><body>Manutenção</body></html>');
+    expect(resposta.tipo).toBe('erro');
   });
 
   it('prefers the department over the institute regardless of row order', () => {

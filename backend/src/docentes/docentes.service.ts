@@ -101,13 +101,11 @@ export class DocentesService {
         continue;
       }
       if (docente) {
-        // Stale: serve it now, resync outside the request — never awaited.
+        // Stale, but the siape is already known: resync via the cheap
+        // GET-only path — no new session, no repeat search. Serve now, never
+        // await the resync.
         resumos.push({ ...entrada, perfil: this.paraPerfil(docente) });
-        void this.revalidar(
-          nomeNormalizado,
-          entrada.nomeOriginal,
-          entrada.componentes,
-        );
+        this.agendarRecarga(docente);
         continue;
       }
       pendentes.push({
@@ -140,11 +138,19 @@ export class DocentesService {
     }
     if (docente.staleAfter <= new Date()) {
       // Serve, then resync outside the request — never awaited.
-      void this.recarregar(docente).catch((error: unknown) => {
-        this.logger.warn(`Background resync of docente ${siape} failed`, error);
-      });
+      this.agendarRecarga(docente);
     }
     return docente;
+  }
+
+  /** Fires the GET-only resync in the background; a failure never surfaces. */
+  private agendarRecarga(docente: DocenteSalvo): void {
+    void this.recarregar(docente).catch((error: unknown) => {
+      this.logger.warn(
+        `Background resync of docente ${docente.siape} failed`,
+        error,
+      );
+    });
   }
 
   private paraPerfil(docente: DocenteSalvo): DocenteResumo['perfil'] {
@@ -163,7 +169,17 @@ export class DocentesService {
   ): Promise<Map<string, DocenteSalvo>> {
     const resolvidos = new Map<string, DocenteSalvo>();
     const sessao = this.criarSessao();
-    await sessao.iniciar();
+
+    try {
+      await sessao.iniciar();
+    } catch (error) {
+      // SIGAA's public search is unreachable. This must degrade to "no
+      // profile for any pendente in this batch", not throw and discard the
+      // resumos already built from cache — one outage should not blank a
+      // screen that was mostly servable from cache.
+      this.logger.warn('Failed to start the public SIGAA session', error);
+      return resolvidos;
+    }
 
     const candidatos: {
       pendente: Pendente;
@@ -176,23 +192,35 @@ export class DocentesService {
         const resposta = parseDocenteBusca(html);
 
         if (resposta.tipo === 'erro') {
-          // SIGAA rejected the query. Not evidence the docente is absent, so no
-          // miss is recorded.
+          // SIGAA rejected the query, or answered with unrecognised HTML
+          // (e.g. a maintenance page under a 200). Neither is evidence the
+          // docente is absent, so no miss is recorded.
           this.logger.warn(
             `SIGAA rejected the search for ${pendente.nomeOriginal}: ${resposta.mensagem}`,
           );
           continue;
         }
 
-        if (resposta.docentes.length === 0) {
-          // A genuine zero-result: this docente has no public record. Recorded
-          // so the name is not re-searched on every screen open.
+        if (resposta.tipo === 'sem-resultados') {
+          // A genuine, explicitly-asserted zero-result: this docente has no
+          // public record. Recorded so the name is not re-searched on every
+          // screen open. This is the ONLY branch allowed to write siape: null.
           await this.repositorio.salvarLookup({
             nomeNormalizado: pendente.nomeNormalizado,
             nomeOriginal: pendente.nomeOriginal,
             siape: null,
             staleAfter: calcularStaleAfter(new Date()),
           });
+          continue;
+        }
+
+        if (resposta.docentes.length === 0) {
+          // Should be unreachable: parseDocenteBusca only returns `resultados`
+          // with a non-empty list (an explicit zero-result comes back as
+          // `sem-resultados`). Treated defensively as `erro`, never as a miss.
+          this.logger.warn(
+            `Unexpected empty 'resultados' for ${pendente.nomeOriginal}; treating as erro`,
+          );
           continue;
         }
 
@@ -226,6 +254,12 @@ export class DocentesService {
         try {
           const docente = await this.carregarPerfil(candidato);
           if (!docente) {
+            // portal.jsf 302'd for a siape the search just returned — a
+            // genuinely inconsistent SIGAA state. Deliberately NOT recorded as
+            // a lookup (no siape: null write here): this name will be
+            // re-searched on the next open rather than being cached as a
+            // permanent miss, which is the safer side to fail on when SIGAA
+            // itself is contradicting its own search result.
             return null;
           }
           await this.repositorio.salvarDocente(docente);
@@ -273,7 +307,12 @@ export class DocentesService {
       return exatos[0];
     }
     if (exatos.length === 0) {
-      return candidatos[0];
+      // No exact match: a single near-match is good evidence (the registry's
+      // spelling can differ slightly from the atestado's), but two or more
+      // non-exact candidates is a guess, not evidence — staple the wrong
+      // stranger's profile onto a real course is worse than showing none, so
+      // this refuses instead of picking row 0 arbitrarily.
+      return candidatos.length === 1 ? candidatos[0] : null;
     }
 
     // Homonyms: break the tie on evidence, not on row order. The right siape is
@@ -282,6 +321,9 @@ export class DocentesService {
     // name repeated across siapes), but guessing here would staple a stranger's
     // profile onto a real course, so if the evidence does not single one out we
     // return null and the card renders as "no profile".
+    const codigosPendente = new Set(
+      pendente.codigos.map((c) => c.trim().toUpperCase()),
+    );
     const vencedores = (
       await mapComLimite(exatos, LIMITE_GETS, async (candidato) => {
         const html = await getPaginaPublica(
@@ -292,7 +334,7 @@ export class DocentesService {
           return null;
         }
         const ensina = parseDocenteDisciplinas(html).some((d) =>
-          pendente.codigos.includes(d.codigo),
+          codigosPendente.has(d.codigo.trim().toUpperCase()),
         );
         return ensina ? candidato : null;
       })
@@ -305,20 +347,23 @@ export class DocentesService {
     candidato: DocenteBuscaResultado,
   ): Promise<DocenteSalvo | null> {
     const { siape } = candidato;
-    const [portalHtml, disciplinasHtml, producaoHtml] = await Promise.all([
-      getPaginaPublica(
-        this.http,
-        `/sigaa/public/docente/portal.jsf?siape=${siape}`,
-      ),
-      getPaginaPublica(
-        this.http,
-        `/sigaa/public/docente/disciplinas.jsf?siape=${siape}`,
-      ),
-      getPaginaPublica(
-        this.http,
-        `/sigaa/public/docente/producao.jsf?siape=${siape}`,
-      ),
-    ]);
+    // Sequential, not Promise.all: the GET cap (mapComLimite, LIMITE_GETS)
+    // only bounds how many candidates load in parallel. Firing all 3 of a
+    // single candidate's GETs at once would multiply that ceiling by 3 (up to
+    // 12 concurrent requests against a rate limit nobody has measured).
+    // Sequential keeps the true peak at LIMITE_GETS.
+    const portalHtml = await getPaginaPublica(
+      this.http,
+      `/sigaa/public/docente/portal.jsf?siape=${siape}`,
+    );
+    const disciplinasHtml = await getPaginaPublica(
+      this.http,
+      `/sigaa/public/docente/disciplinas.jsf?siape=${siape}`,
+    );
+    const producaoHtml = await getPaginaPublica(
+      this.http,
+      `/sigaa/public/docente/producao.jsf?siape=${siape}`,
+    );
 
     if (!portalHtml) {
       return null;
@@ -379,28 +424,6 @@ export class DocentesService {
     });
     if (docente) {
       await this.repositorio.salvarDocente(docente);
-    }
-  }
-
-  private async revalidar(
-    nomeNormalizado: string,
-    nomeOriginal: string,
-    componentes: { codigo: string; nome: string }[],
-  ): Promise<void> {
-    try {
-      await this.resolver([
-        {
-          nomeOriginal,
-          nomeNormalizado,
-          codigos: componentes.map((c) => c.codigo),
-        },
-      ]);
-    } catch (error) {
-      // A failed resync is retried on the next access; it must never surface.
-      this.logger.warn(
-        `Background revalidation of ${nomeOriginal} failed`,
-        error,
-      );
     }
   }
 }

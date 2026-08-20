@@ -50,6 +50,15 @@ export class PublicSigaaSession {
         'javax.faces.ViewState': this.viewState,
       },
     });
+    // Mirrors getPaginaPublica's contract: a 429/500/503 can still carry an
+    // HTML body with no table and no recognised error text, which
+    // parseDocenteBusca would otherwise be unable to tell apart from a
+    // genuine zero-result. Throwing here — before the body ever reaches the
+    // parser — is what keeps an outage from being written into the cache as a
+    // permanent "this docente does not exist".
+    if (resposta.status !== 200) {
+      throw new Error(`Unexpected status ${resposta.status} for ${BUSCA_PATH}`);
+    }
     this.capture(resposta);
     return resposta.body;
   }
