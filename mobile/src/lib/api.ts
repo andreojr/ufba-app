@@ -102,28 +102,35 @@ export async function getSigaaLink(accessToken: string): Promise<SigaaLinkStatus
   return request<SigaaLinkStatus>("/sigaa/link", { method: "GET", accessToken });
 }
 
+/** Reads the cached schedule. Cheap — this hits our own database, not SIGAA. */
+export async function getSchedule(accessToken: string): Promise<ScheduleResponse> {
+  return request<ScheduleResponse>("/schedule", { method: "GET", accessToken });
+}
+
 /**
- * Fetches the student's current-term turmas, plus the term's own start/end
- * dates, off their atestado de matrícula. POST (not GET) because credentials
- * travel in the body, and a spec-compliant fetch client can't send a body on a
- * GET request.
+ * Re-scrapes the student's current-term turmas, plus the term's own start/end
+ * dates, off their atestado de matrícula, persists them, then returns the
+ * fresh aggregate — so the screen renders without a second round trip. POST
+ * (not GET) because credentials travel in the body, and a spec-compliant
+ * fetch client can't send a body on a GET request.
  */
-export async function postSchedule(
+export async function postScheduleSync(
   accessToken: string,
   credentials: Pick<SigaaCredentials, "login" | "senha">,
 ): Promise<ScheduleResponse> {
-  return request<ScheduleResponse>("/schedule", {
+  return request<ScheduleResponse>("/schedule/sync", {
     method: "POST",
     accessToken,
     body: credentials,
+    timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
   });
 }
 
 /**
  * Logs in to SIGAA and returns a live session cookie for the "Abrir o SIGAA" button —
  * meant to be injected into a WebView's cookie store, not parsed as data. Distinct
- * from postSchedule: that endpoint returns our own parsed data, this one hands off
- * to the real sigaa.ufba.br site.
+ * from getSchedule/postScheduleSync: those return our own parsed data, this one hands
+ * off to the real sigaa.ufba.br site.
  */
 export async function postSigaaSession(
   accessToken: string,
