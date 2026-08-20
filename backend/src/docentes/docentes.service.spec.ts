@@ -159,6 +159,56 @@ describe('DocentesService.resumoDoSemestre', () => {
     expect(resumo.perfil).toBeNull();
   });
 
+  // The spec's rule is symmetric: a stale row is served as-is and resynced
+  // outside the request, whether it's a hit or a miss. A blocking re-search
+  // here would turn the once-a-month "no public record" case into a cold
+  // load for whichever student happens to open it that day.
+  it('serves a stale miss as perfil null without awaiting SIGAA, and retries in the background', async () => {
+    const repo = new RepositorioFake();
+    repo.lookups = [
+      {
+        nomeNormalizado: 'X Y',
+        nomeOriginal: 'X Y',
+        siape: null,
+        staleAfter: VENCIDO,
+      },
+    ];
+
+    // The GET that starts the session succeeds; the search POST never
+    // settles. If the code awaited the re-resolution, this test would hang
+    // instead of failing cleanly.
+    const http = httpRoteado((req) =>
+      req.method === 'GET' ? ok(PAGINA_BUSCA) : ok(PAGINA_BUSCA),
+    );
+    const requestSpy = jest
+      .spyOn(http, 'request')
+      .mockImplementation((req) =>
+        req.method === 'POST'
+          ? new Promise(() => {})
+          : Promise.resolve(ok(PAGINA_BUSCA)),
+      );
+
+    const service = new DocentesService(
+      repo,
+      http,
+      () => new PublicSigaaSession(http),
+    );
+
+    const resumos = await service.resumoDoSemestre([
+      { codigo: 'A1', nome: 'A', docente: 'X Y' },
+    ]);
+
+    expect(resumos[0].perfil).toBeNull();
+    // The background re-resolution must actually have been attempted — the
+    // search POST fired, not just "not awaited" (a no-op would also satisfy
+    // that weaker bar).
+    await Promise.resolve(); // let the fire-and-forget chain reach the POST
+    const chamadaBusca = requestSpy.mock.calls.find(
+      (chamada) => chamada[0].method === 'POST',
+    );
+    expect(chamadaBusca).toBeDefined();
+  });
+
   it('resolves an unknown name end to end and persists both rows', async () => {
     const repo = new RepositorioFake();
     const http = httpRoteado((req) => {

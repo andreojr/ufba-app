@@ -2,7 +2,9 @@ import { normalizarNomeDocente } from './docente-nome';
 
 describe('normalizarNomeDocente', () => {
   it('uppercases, strips diacritics and collapses whitespace', () => {
-    expect(normalizarNomeDocente('  Luís   da Paixão  ')).toBe('LUIS DA PAIXAO');
+    expect(normalizarNomeDocente('  Luís   da Paixão  ')).toBe(
+      'LUIS DA PAIXAO',
+    );
   });
 
   it('makes the atestado spelling and the registry spelling agree', () => {
@@ -17,13 +19,17 @@ describe('normalizarNomeDocente', () => {
     // search returns both for the shorter query. The lookup key must still tell
     // them apart after normalisation, or one docente's profile lands on the other.
     expect(normalizarNomeDocente('Aline  Silva')).toBe('ALINE SILVA');
-    expect(normalizarNomeDocente('Aline Silva de Moura')).toBe('ALINE SILVA DE MOURA');
+    expect(normalizarNomeDocente('Aline Silva de Moura')).toBe(
+      'ALINE SILVA DE MOURA',
+    );
     expect(normalizarNomeDocente('Aline  Silva')).not.toBe(
       normalizarNomeDocente('Aline Silva de Moura'),
     );
   });
 
   it('produces pure ASCII, which is what makes the ISO-8859-1 POST body safe', () => {
-    expect(normalizarNomeDocente('ANDRÉ GUSTAVO SCOLARI CONCEIÇÃO')).toMatch(/^[A-Z ]+$/);
+    expect(normalizarNomeDocente('ANDRÉ GUSTAVO SCOLARI CONCEIÇÃO')).toMatch(
+      /^[A-Z ]+$/,
+    );
   });
 });

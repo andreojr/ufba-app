@@ -91,9 +91,19 @@ export class DocentesService {
       const lookup = porNomeNormalizado.get(nomeNormalizado);
       const docente = lookup?.siape ? porSiape.get(lookup.siape) : undefined;
 
-      if (lookup && lookup.staleAfter > agora && !lookup.siape) {
-        // A fresh recorded miss: don't search again.
+      if (lookup && !lookup.siape) {
+        // A recorded miss, fresh or stale, is served as perfil: null either
+        // way — same rule as a hit. A stale one also fires the full
+        // re-resolution (search + profile) in the background, never awaited,
+        // mirroring the stale-hit resync below.
         resumos.push({ ...entrada, perfil: null });
+        if (lookup.staleAfter <= agora) {
+          this.agendarResolucaoPendente({
+            nomeOriginal: entrada.nomeOriginal,
+            nomeNormalizado,
+            codigos: entrada.componentes.map((c) => c.codigo),
+          });
+        }
         continue;
       }
       if (docente && docente.staleAfter > agora) {
@@ -148,6 +158,20 @@ export class DocentesService {
     void this.recarregar(docente).catch((error: unknown) => {
       this.logger.warn(
         `Background resync of docente ${docente.siape} failed`,
+        error,
+      );
+    });
+  }
+
+  /**
+   * Fires a full re-resolution (new session + search POST) for a stale miss
+   * in the background; a failure never surfaces. Unlike `agendarRecarga`,
+   * there is no siape to resync from, so this repeats the whole search.
+   */
+  private agendarResolucaoPendente(pendente: Pendente): void {
+    void this.resolver([pendente]).catch((error: unknown) => {
+      this.logger.warn(
+        `Background re-resolution of ${pendente.nomeOriginal} failed`,
         error,
       );
     });

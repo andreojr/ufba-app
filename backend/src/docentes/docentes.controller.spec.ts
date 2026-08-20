@@ -1,4 +1,8 @@
-import { ExecutionContext, INestApplication, NotFoundException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  INestApplication,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,7 +23,7 @@ describe('DocentesController', () => {
   it('passes only turmas that name a docente through to the service', async () => {
     const resumoDoSemestre = jest.fn().mockResolvedValue([]);
     const controller = new DocentesController(
-      servicoFake({ resumoDoSemestre } as never),
+      servicoFake({ resumoDoSemestre }),
     );
 
     await controller.semestre({
@@ -45,7 +49,7 @@ describe('DocentesController', () => {
     const perfil = jest
       .fn()
       .mockResolvedValue({ siape: '1815041', nome: 'FULANO' });
-    const controller = new DocentesController(servicoFake({ perfil } as never));
+    const controller = new DocentesController(servicoFake({ perfil }));
     await expect(controller.detalhe('1815041')).resolves.toMatchObject({
       siape: '1815041',
     });
