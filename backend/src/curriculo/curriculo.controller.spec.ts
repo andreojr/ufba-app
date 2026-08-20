@@ -61,4 +61,10 @@ describe('CurriculoController', () => {
       'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
     );
   });
+
+  it('GET /curriculo/meu-curso without a "curso" query param returns 400 instead of crashing', async () => {
+    const res = await request(app.getHttpServer()).get('/curriculo/meu-curso');
+    expect(res.status).toBe(400);
+    expect(service.resolverPorNomeUsuario).not.toHaveBeenCalled();
+  });
 });

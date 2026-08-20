@@ -13,12 +13,17 @@ import {
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
+import { CursoDesconhecidoError } from '../curriculo/curriculo.service';
 
 const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   [SigaaInvalidCredentialsError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaCredentialsRequiredError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaSessionExpiredError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaRateLimitedError.name]: HttpStatus.TOO_MANY_REQUESTS,
+  // An unknown cursoId — either /curriculo/cursos/:cursoId with an id not in
+  // the directory, or resolverPorNomeUsuario finding no match — is a client
+  // error about *what* was asked for, not a server failure.
+  [CursoDesconhecidoError.name]: HttpStatus.NOT_FOUND,
 };
 
 /**

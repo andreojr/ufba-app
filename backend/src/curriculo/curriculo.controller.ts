@@ -1,4 +1,12 @@
-import { Controller, Get, Inject, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { CursoListaItem } from '../sigaa-engine/parsers/curso-lista';
 import type { EstruturaCurricularSalva } from './curriculo.repository';
@@ -33,8 +41,11 @@ export class CurriculoController {
 
   @Get('meu-curso')
   async meuCurso(
-    @Query('curso') curso: string,
+    @Query('curso') curso: string | undefined,
   ): Promise<EstruturaCurricularSalva> {
+    if (!curso) {
+      throw new BadRequestException('Missing required query param "curso"');
+    }
     return this.service.resolverPorNomeUsuario(curso);
   }
 }
