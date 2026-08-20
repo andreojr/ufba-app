@@ -1,8 +1,8 @@
 import CookieManager from "@react-native-cookies/cookies";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Spinner, Typography } from "heroui-native";
-import { useEffect, useState, type JSX } from "react";
-import { Pressable, View } from "react-native";
+import { Spinner, Typography, useThemeColor } from "heroui-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
@@ -12,6 +12,13 @@ import { UfbaCrest } from "@/components/UfbaCrest";
 // Not the actual login domain (sigaa.ufba.br can front multiple app servers behind a
 // load balancer) — just the cookie's scope, per the SIGAA investigation spike.
 const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
+
+const UFBA_BLUE = "#2B3A8F";
+const SHEET_RADIUS = 24;
+const COLLAPSED_HEIGHT_RATIO = 0.5;
+// How far below the collapsed height the user has to drag before it's read
+// as "let go of this" rather than "snap back down".
+const DISMISS_DRAG_PX = 120;
 
 /**
  * Opens the real sigaa.ufba.br already authenticated, by injecting the session
@@ -23,18 +30,32 @@ const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
  * inside SIGAA, clicking menus/links fires JSF postbacks the WebView's own browser
  * engine drives, and those wouldn't carry a header we set. Cookies in the jar,
  * though, ride along automatically on every request that engine makes.
+ *
+ * The resizable sheet below is hand-rolled with core `Animated` + `PanResponder`
+ * instead of `@gorhom/bottom-sheet` on purpose: that library drives the sheet
+ * with Reanimated, and Reanimated-driven ancestors are a known trigger for
+ * react-native-webview rendering solid black on Android (the WebView's
+ * hardware-accelerated surface doesn't composite under a UI-thread transform).
+ * Animating `height` here is JS-driven either way (layout props can't use the
+ * native driver), so there's no transform ancestor for the WebView to conflict with.
  */
-const UFBA_BLUE = "#2B3A8F";
-
 export default function SigaaWebViewScreen(): JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const backgroundColor = useThemeColor("background");
   const { sessionCookie, targetUrl } = useLocalSearchParams<{
     sessionCookie: string;
     targetUrl: string;
   }>();
   const [cookieReady, setCookieReady] = useState(false);
   const [cookieError, setCookieError] = useState(false);
+
+  const windowHeight = Dimensions.get("window").height;
+  const collapsedHeight = windowHeight * COLLAPSED_HEIGHT_RATIO;
+  const expandedHeight = windowHeight;
+
+  const height = useRef(new Animated.Value(collapsedHeight)).current;
+  const heightAtGestureStart = useRef(collapsedHeight);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,47 +88,107 @@ export default function SigaaWebViewScreen(): JSX.Element {
     };
   }, [sessionCookie, targetUrl]);
 
-  return (
-    <View className="flex-1 bg-background">
-      <View
-        className="flex-row items-center justify-between px-6 pb-3.5 self-stretch"
-        style={{ paddingTop: insets.top + 14, backgroundColor: UFBA_BLUE }}
-      >
-        <View className="flex-row items-center gap-2">
-          <View className="items-center justify-center rounded-full bg-white p-1">
-            <UfbaCrest size={22} />
-          </View>
-          <Typography.Heading type="h4" style={{ color: "#FFFFFF" }}>
-            SIGAA | UFBA
-          </Typography.Heading>
-        </View>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <AppIcon name="IconX" size={24} color="#FFFFFF" />
-        </Pressable>
-      </View>
+  const handleClose = useCallback(() => {
+    router.back();
+  }, [router]);
 
-      {cookieError ? (
-        <View className="flex-1 items-center justify-center px-8 gap-2">
-          <Typography.Paragraph color="muted" align="center">
-            Não foi possível abrir o SIGAA já logado. Tente novamente.
-          </Typography.Paragraph>
+  const snapTo = useCallback(
+    (value: number) => {
+      Animated.spring(height, {
+        toValue: value,
+        useNativeDriver: false,
+        bounciness: 4,
+      }).start();
+    },
+    [height],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,
+        onPanResponderGrant: () => {
+          height.stopAnimation((value) => {
+            heightAtGestureStart.current = value;
+          });
+        },
+        onPanResponderMove: (_, gesture) => {
+          const next = heightAtGestureStart.current - gesture.dy;
+          height.setValue(Math.min(expandedHeight, Math.max(80, next)));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const current = heightAtGestureStart.current - gesture.dy;
+          if (current < collapsedHeight - DISMISS_DRAG_PX) {
+            handleClose();
+            return;
+          }
+          const midpoint = (collapsedHeight + expandedHeight) / 2;
+          snapTo(current > midpoint ? expandedHeight : collapsedHeight);
+        },
+      }),
+    [collapsedHeight, expandedHeight, handleClose, height, snapTo],
+  );
+
+  return (
+    <View className="flex-1 justify-end">
+      <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+
+      <Animated.View
+        style={{
+          height,
+          backgroundColor,
+          borderTopLeftRadius: SHEET_RADIUS,
+          borderTopRightRadius: SHEET_RADIUS,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          {...panResponder.panHandlers}
+          className="items-center self-stretch"
+          style={{ backgroundColor: UFBA_BLUE }}
+        >
+          <View className="w-9 h-1 rounded-full bg-white/40 mt-2.5 mb-1.5" />
+          <View className="flex-row items-center justify-between px-5 pb-3.5 self-stretch">
+            <View className="flex-row items-center gap-2">
+              <View className="items-center justify-center rounded-full bg-white p-1">
+                <UfbaCrest size={20} />
+              </View>
+              <Typography.Heading type="h4" style={{ color: "#FFFFFF" }}>
+                SIGAA | UFBA
+              </Typography.Heading>
+            </View>
+            <Pressable onPress={handleClose} hitSlop={12}>
+              <AppIcon name="IconX" size={22} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </View>
-      ) : !cookieReady ? (
-        <View className="flex-1 items-center justify-center">
-          <Spinner />
-        </View>
-      ) : (
-        <WebView
-          source={{ uri: targetUrl }}
-          sharedCookiesEnabled
-          startInLoadingState
-          renderLoading={() => (
+
+        <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
+          {cookieError ? (
+            <View className="flex-1 items-center justify-center px-8 gap-2">
+              <Typography.Paragraph color="muted" align="center">
+                Não foi possível abrir o SIGAA já logado. Tente novamente.
+              </Typography.Paragraph>
+            </View>
+          ) : !cookieReady ? (
             <View className="flex-1 items-center justify-center">
               <Spinner />
             </View>
+          ) : (
+            <WebView
+              source={{ uri: targetUrl }}
+              sharedCookiesEnabled
+              startInLoadingState
+              renderLoading={() => (
+                <View className="flex-1 items-center justify-center">
+                  <Spinner />
+                </View>
+              )}
+            />
           )}
-        />
-      )}
+        </View>
+      </Animated.View>
     </View>
   );
 }

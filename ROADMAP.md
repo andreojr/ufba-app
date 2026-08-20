@@ -6,7 +6,7 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 - Baseado na investigação em [TURMA_VIRTUAL_INVESTIGATION.md](TURMA_VIRTUAL_INVESTIGATION.md).
 - Cada matéria ganha sua própria tela (hoje só existe a visão agregada).
 
-## 2. Persistência estruturada dos dados do SIGAA
+## 2. Persistência estruturada dos dados do SIGAA ✅ feito
 - Hoje os dados são baixados do SIGAA a cada abertura do app — trocar por persistência real no banco.
 - Adicionar botão em Ajustes para re-sync manual sob demanda do usuário.
 
@@ -35,3 +35,17 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 - Descartada a ideia de avaliação (evitar atrito/problema com os professores).
 - O SIGAA já disponibiliza um perfil de cada professor, só que praticamente ninguém sabe que existe. Página pública, nem precisa de login: https://sigaa.ufba.br/sigaa/public/docente/busca_docentes.jsf
 - Nova aba/página listando os professores do semestre atual do usuário, mostrando esse perfil do SIGAA — democratizando a informação além de só o nome.
+
+## 8. Marcos de semestralização na barra de progresso da Trajetória
+- Depende do item 3 (catálogo de cursos e matérias no banco): com a grade curricular de cada curso persistida, dá pra saber quantos semestres o curso originalmente prevê e quantas horas cada um desses semestres soma.
+- Com isso, a barra de progresso de carga horária do curso (item 4) ganha linhas de referência marcando a carga horária acumulada esperada ao final de cada semestre da grade original.
+- Comparando a carga horária que a pessoa já cursou contra essas marcas dá pra dizer se ela está "semestralizada" (no ritmo previsto pela grade) ou adiantada/atrasada em relação a ela.
+
+## 9. Grafo de pré-requisitos ao clicar numa matéria da Trajetória
+- Depende do item 3 (catálogo de cursos e matérias no banco): precisa das relações de pré-requisito entre matérias persistidas.
+- Ao clicar numa matéria na grid da Trajetória, abre um modal com o grafo da árvore de dependências daquela matéria (pré-requisitos e, se fizer sentido, o que ela desbloqueia).
+- Matéria clicada em destaque no grafo; navegar pela árvore ajuda a entender por que uma matéria específica ainda está bloqueada.
+
+## 10. Vincular Moodle e Google Classroom
+- Nem todo professor posta material só na turma virtual do SIGAA — muitos usam Moodle ou Google Classroom em paralelo, e isso fica fora do radar do app.
+- Investigar vínculo com essas plataformas (login/integração) para trazer avisos, materiais e atividades de lá também, unificando com o que já vem do SIGAA.

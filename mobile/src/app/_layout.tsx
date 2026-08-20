@@ -58,7 +58,14 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
           <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
-          <Stack.Screen name="sigaa-webview" options={{ presentation: "modal" }} />
+          <Stack.Screen
+            name="sigaa-webview"
+            options={{
+              presentation: "transparentModal",
+              animation: "slide_from_bottom",
+              contentStyle: { backgroundColor: "transparent" },
+            }}
+          />
         </Stack.Protected>
         <Stack.Protected guard={auth.status === "signedOut"}>
           <Stack.Screen name="login" />
