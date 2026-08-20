@@ -8,12 +8,12 @@ import { WebView } from "react-native-webview";
 
 import { AppIcon } from "@/components/AppIcon";
 import { UfbaCrest } from "@/components/UfbaCrest";
+import { markSigaaWebviewClosed, markSigaaWebviewOpened } from "@/lib/sigaa-webview-state";
 
 // Not the actual login domain (sigaa.ufba.br can front multiple app servers behind a
 // load balancer) — just the cookie's scope, per the SIGAA investigation spike.
 const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
 
-const UFBA_BLUE = "#2B3A8F";
 const SHEET_RADIUS = 24;
 const COLLAPSED_HEIGHT_RATIO = 0.5;
 // How far below the collapsed height the user has to drag before it's read
@@ -42,7 +42,7 @@ const DISMISS_DRAG_PX = 120;
 export default function SigaaWebViewScreen(): JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const backgroundColor = useThemeColor("background");
+  const [backgroundColor, accentColor] = useThemeColor(["background", "accent"]);
   const { sessionCookie, targetUrl } = useLocalSearchParams<{
     sessionCookie: string;
     targetUrl: string;
@@ -56,6 +56,17 @@ export default function SigaaWebViewScreen(): JSX.Element {
 
   const height = useRef(new Animated.Value(collapsedHeight)).current;
   const heightAtGestureStart = useRef(collapsedHeight);
+
+  // Lets the tab bar's SIGAA button (a world away from here, on the other
+  // side of the `router.push` that opened this screen) know a popup is up,
+  // so it can stay blocked for as long as this screen is mounted instead of
+  // just for the session-minting round trip.
+  useEffect(() => {
+    markSigaaWebviewOpened();
+    return () => {
+      markSigaaWebviewClosed();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +157,7 @@ export default function SigaaWebViewScreen(): JSX.Element {
         <View
           {...panResponder.panHandlers}
           className="items-center self-stretch"
-          style={{ backgroundColor: UFBA_BLUE }}
+          style={{ backgroundColor: accentColor }}
         >
           <View className="w-9 h-1 rounded-full bg-white/40 mt-2.5 mb-1.5" />
           <View className="flex-row items-center justify-between px-5 pb-3.5 self-stretch">
