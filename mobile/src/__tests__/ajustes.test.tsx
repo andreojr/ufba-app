@@ -1,12 +1,28 @@
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
+import { ApiError, postSchedule } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 import AjustesTab from "@/app/(tabs)/ajustes";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
+jest.mock("@/lib/sigaa-storage");
+jest.mock("@/lib/api", () => ({
+  ...jest.requireActual("@/lib/api"),
+  postSchedule: jest.fn(),
+}));
+jest.mock("@/lib/calendar-export", () => {
+  const actual = jest.requireActual("@/lib/calendar-export");
+  return {
+    ...actual,
+    exportScheduleToDeviceCalendar: jest.fn(),
+  };
+});
 
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
@@ -16,6 +32,8 @@ jest.mock("expo-router", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
+const mockToastShow = jest.fn();
 
 jest.mock("heroui-native", () => {
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
@@ -30,18 +48,24 @@ jest.mock("heroui-native", () => {
       </TouchableOpacity>
     ),
     ListGroup: Object.assign(({ children }: any) => <View>{children}</View>, {
-      Item: ({ children, onPress }: any) => <TouchableOpacity onPress={onPress}>{children}</TouchableOpacity>,
+      Item: ({ children, onPress, disabled, testID }: any) => (
+        <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled}>
+          {children}
+        </TouchableOpacity>
+      ),
       ItemPrefix: ({ children }: any) => <View>{children}</View>,
       ItemSuffix: ({ children }: any) => <View>{children}</View>,
       ItemContent: ({ children }: any) => <View>{children}</View>,
       ItemTitle: ({ children }: any) => <Text>{children}</Text>,
       ItemDescription: ({ children }: any) => <Text>{children}</Text>,
     }),
+    Spinner: () => <Text>Carregando spinner</Text>,
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
       Paragraph: ({ children }: any) => <Text>{children}</Text>,
     },
     useThemeColor: () => "#000000",
+    useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
 
@@ -57,8 +81,37 @@ jest.mock("react-native-svg", () => {
 
 const mockedUseAuth = jest.mocked(useAuth);
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
+const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
+const mockedPostSchedule = jest.mocked(postSchedule);
+const mockedExportScheduleToDeviceCalendar = jest.mocked(exportScheduleToDeviceCalendar);
 
 const mockRefreshUser = jest.fn();
+
+const PERIODO_LETIVO: PeriodoLetivo = {
+  semestre: "2026.2",
+  inicio: "2026-08-19",
+  fim: "2026-12-19",
+};
+
+function turma(): Turma {
+  return {
+    codigo: "MATA37",
+    nome: "SISTEMAS OPERACIONAIS",
+    docente: "BEATRIZ NUNES CAMPELO",
+    slots: [
+      {
+        dia: "Segunda",
+        inicioMin: 480,
+        fimMin: 540,
+        predio: "PAF 1",
+        sala: "208",
+        localOriginal: "PAF 1 - 208",
+      },
+    ],
+    vigencia: { inicio: "19/08/2026", fim: "19/12/2026" },
+    semestre: "2026.2",
+  };
+}
 
 function mockSignedIn(userOverrides: Record<string, unknown> = {}) {
   mockedUseAuth.mockReturnValue({
@@ -80,6 +133,9 @@ function mockSignedIn(userOverrides: Record<string, unknown> = {}) {
 describe("AjustesTab", () => {
   beforeEach(() => {
     mockRefreshUser.mockClear();
+    mockToastShow.mockClear();
+    mockedPostSchedule.mockClear();
+    mockedExportScheduleToDeviceCalendar.mockClear();
     mockSignedIn();
   });
 
@@ -219,5 +275,115 @@ describe("AjustesTab", () => {
     const { queryByTestId } = await render(<AjustesTab />);
 
     expect(queryByTestId("academic-card")).toBeNull();
+  });
+
+  describe("exportar horário para o calendário", () => {
+    it("blocks the export item when the SIGAA account isn't linked", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+      const { getByTestId, getByText } = await render(<AjustesTab />);
+
+      expect(getByTestId("export-calendar-item").props.accessibilityState?.disabled).toBe(true);
+      expect(getByText("Vincule sua conta do SIGAA para exportar")).toBeTruthy();
+    });
+
+    it("enables the export item once the account is linked", async () => {
+      mockedUseSigaaLink.mockReturnValue({
+        status: "linked",
+        syncMode: "device",
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
+
+      const { getByTestId } = await render(<AjustesTab />);
+
+      expect(getByTestId("export-calendar-item").props.accessibilityState?.disabled).toBeFalsy();
+    });
+
+    describe("linked", () => {
+      beforeEach(() => {
+        mockedUseSigaaLink.mockReturnValue({
+          status: "linked",
+          syncMode: "device",
+          link: jest.fn(),
+          unlink: jest.fn(),
+        });
+        mockedGetSigaaCredentials.mockResolvedValue({
+          login: "123",
+          senha: "segredo",
+          syncMode: "device",
+        });
+        mockedPostSchedule.mockResolvedValue({ turmas: [turma()], periodoLetivo: PERIODO_LETIVO });
+        mockedExportScheduleToDeviceCalendar.mockResolvedValue(1);
+      });
+
+      it("exports the freshly-fetched schedule to the device calendar when pressed", async () => {
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("export-calendar-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockedExportScheduleToDeviceCalendar).toHaveBeenCalledWith(
+            [turma()],
+            PERIODO_LETIVO
+          )
+        );
+        expect(mockToastShow).toHaveBeenCalledWith(
+          expect.objectContaining({ variant: "success" })
+        );
+      });
+
+      it("shows a toast instead of exporting when the term isn't known yet", async () => {
+        mockedPostSchedule.mockResolvedValue({ turmas: [turma()], periodoLetivo: null });
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("export-calendar-item"));
+        });
+
+        await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+        expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
+        expect(mockToastShow).toHaveBeenCalledWith(expect.objectContaining({ variant: "danger" }));
+      });
+
+      it("shows a toast asking to enable calendar access when permission is denied", async () => {
+        mockedExportScheduleToDeviceCalendar.mockRejectedValue(new CalendarPermissionDeniedError());
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("export-calendar-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockToastShow).toHaveBeenCalledWith(
+            expect.objectContaining({
+              variant: "danger",
+              label: expect.stringMatching(/permiss/i),
+            })
+          )
+        );
+      });
+
+      it("shows a generic error toast when fetching the schedule fails", async () => {
+        mockedPostSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("export-calendar-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockToastShow).toHaveBeenCalledWith(
+            expect.objectContaining({ variant: "danger", label: "Credenciais inválidas" })
+          )
+        );
+        expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
+      });
+    });
   });
 });

@@ -53,3 +53,15 @@
 .input__input {
   font-family: "SourceCodePro_400Regular";
 }
+
+/* `--font-mono` is one of Tailwind v4's real fontFamily theme keys, so this
+   alone gives every screen a `font-mono` className utility — no per-call
+   fontFamily string to typo. Per the design system decision (Source Code
+   Pro for "números e cálculos" — CR, carga horária, notas, percentuais):
+   apply `font-mono` to a number that IS the content of its own text node
+   (a metric standing alone), not to a number embedded inside a longer
+   sentence (dates, "faltam N matérias", semester codes) — see
+   docs/superpowers/specs/2026-08-18-figma-design-system-state.md. */
+@theme {
+  --font-mono: "SourceCodePro_400Regular";
+}

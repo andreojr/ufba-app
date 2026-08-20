@@ -34,6 +34,13 @@
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "O Gradline usa o calendário para exportar o horário de aulas do semestre.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-system-ui",
         {
           "userInterfaceStyle": "automatic"

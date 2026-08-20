@@ -1,15 +1,19 @@
 import { useRouter } from "expo-router";
-import { Avatar, Button, ListGroup, Typography, useThemeColor } from "heroui-native";
-import { useEffect, type JSX } from "react";
+import { Avatar, Button, ListGroup, Spinner, Typography, useThemeColor, useToast } from "heroui-native";
+import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SvgUri } from "react-native-svg";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
+import { postSchedule } from "@/lib/api";
+import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
+import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
 import { buildAvatarUrl } from "@/lib/dicebear";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { getInitials } from "@/lib/user-name";
 
 // Matches heroui-native's Avatar "lg" size (--spacing * 16 = 64px) so the SVG fills
@@ -28,11 +32,14 @@ function AcademicRow({
   tint,
   label,
   value,
+  mono = false,
 }: {
   icon: AppIconName;
   tint: string;
   label: string;
   value: string;
+  /** The value is a numeric value (a period, a count), not a name — Source Code Pro. */
+  mono?: boolean;
 }): JSX.Element {
   return (
     <View className="flex-row items-start gap-3">
@@ -47,7 +54,7 @@ function AcademicRow({
         <Typography.Paragraph type="body-xs" color="muted">
           {label}
         </Typography.Paragraph>
-        <Typography.Paragraph type="body-sm" weight="medium">
+        <Typography.Paragraph type="body-sm" weight="medium" className={mono ? "font-mono" : undefined}>
           {value}
         </Typography.Paragraph>
       </View>
@@ -60,6 +67,53 @@ export default function AjustesTab(): JSX.Element {
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const mutedColor = useThemeColor("muted");
+  const { toast } = useToast();
+  const [isExportingCalendar, setIsExportingCalendar] = useState(false);
+
+  const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  const isSigaaLinked = sigaaLink.status === "linked";
+
+  const handleExportCalendar = useCallback(async () => {
+    if (!isSigaaLinked || !accessToken) {
+      return;
+    }
+
+    setIsExportingCalendar(true);
+    try {
+      const credentials = await getSigaaCredentials();
+      if (!credentials) {
+        toast.show({ variant: "danger", label: "Vincule sua conta do SIGAA para exportar." });
+        return;
+      }
+
+      const { turmas, periodoLetivo } = await postSchedule(accessToken, credentials);
+      if (!periodoLetivo) {
+        toast.show({
+          variant: "danger",
+          label: "Período letivo desconhecido — não é possível exportar ainda.",
+        });
+        return;
+      }
+
+      const count = await exportScheduleToDeviceCalendar(turmas, periodoLetivo);
+      toast.show({
+        variant: "success",
+        label: `${count} aula${count === 1 ? "" : "s"} exportada${count === 1 ? "" : "s"} para o calendário "Gradline".`,
+      });
+    } catch (error) {
+      if (error instanceof CalendarPermissionDeniedError) {
+        toast.show({
+          variant: "danger",
+          label: "Permissão de calendário negada. Habilite o acesso nos ajustes do aparelho.",
+        });
+      } else {
+        console.warn("Failed to export the schedule to the device calendar", error);
+        toast.show({ variant: "danger", label: describeApiError(error) });
+      }
+    } finally {
+      setIsExportingCalendar(false);
+    }
+  }, [isSigaaLinked, accessToken, toast]);
 
   const user = auth.status === "signedIn" ? auth.user : null;
   const { name: studentName = "", email: studentEmail = "", avatarUrl = null } = user ?? {};
@@ -120,7 +174,7 @@ export default function AjustesTab(): JSX.Element {
                   {studentEmail}
                 </Typography.Paragraph>
                 {matricula ? (
-                  <Typography.Paragraph type="body-sm" color="muted">
+                  <Typography.Paragraph type="body-sm" color="muted" className="font-mono">
                     {` · ${matricula}`}
                   </Typography.Paragraph>
                 ) : null}
@@ -139,6 +193,7 @@ export default function AjustesTab(): JSX.Element {
                   tint="#10B981"
                   label="Ingresso na UFBA"
                   value={periodoIngresso}
+                  mono
                 />
               ) : null}
               {semestresNaUfba !== null ? (
@@ -147,6 +202,7 @@ export default function AjustesTab(): JSX.Element {
                   tint="#F59E0B"
                   label="Tempo de casa"
                   value={formatTempoNaUfba(semestresNaUfba)}
+                  mono
                 />
               ) : null}
             </View>
@@ -222,6 +278,32 @@ export default function AjustesTab(): JSX.Element {
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix />
+            </ListGroup.Item>
+          </ListGroup>
+        </View>
+
+        <View className="gap-2.5">
+          <Typography.Paragraph type="body-xs" color="muted">
+            Horário
+          </Typography.Paragraph>
+          <ListGroup>
+            <ListGroup.Item
+              testID="export-calendar-item"
+              disabled={!isSigaaLinked || isExportingCalendar}
+              onPress={handleExportCalendar}
+            >
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconCalendarBlank" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Exportar horário para o calendário</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {isSigaaLinked
+                    ? "Cria um calendário \"Gradline\" no aparelho com suas aulas do semestre"
+                    : "Vincule sua conta do SIGAA para exportar"}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>
         </View>
