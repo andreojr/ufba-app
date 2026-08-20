@@ -89,7 +89,17 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
       setEstado({ status: "ready", layout: construirLayout(resposta) });
     } catch (error) {
       if (!ativoRef.current) return;
-      if (error instanceof ApiError && error.status === 404) {
+      // Um 404 pode vir de dois erros distintos do backend, com o mesmo
+      // status: ComponenteDesconhecidoError (a matéria em si não está na
+      // grade ativa — o caso que esta tela quer nomear) ou
+      // CursoDesconhecidoError (o curso do usuário não bate com nada no
+      // diretório — um problema totalmente diferente, à montante). Tratar os
+      // dois como o mesmo estado mostraria "matéria não está na grade" para
+      // toda e qualquer matéria sempre que a resolução do curso falhasse —
+      // mesmo para matérias que estão, de fato, na grade. A mensagem do
+      // ComponenteDesconhecidoError cita o código exato tocado; a do
+      // CursoDesconhecidoError, não.
+      if (error instanceof ApiError && error.status === 404 && error.message.includes(codigo)) {
         setEstado({ status: "naoNaGrade" });
         return;
       }

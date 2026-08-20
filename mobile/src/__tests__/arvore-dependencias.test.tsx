@@ -140,15 +140,38 @@ describe("ArvoreDependenciasScreen", () => {
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 
-  it("mostra mensagem específica quando o código raiz não está na grade ativa (404)", async () => {
+  it("mostra mensagem específica quando o código raiz não está na grade ativa (404 de ComponenteDesconhecidoError)", async () => {
     const { ApiError } = jest.requireActual("@/lib/api");
-    mockedGet.mockRejectedValue(new ApiError("not found", 404));
+    // Mensagem real do backend (ComponenteDesconhecidoError) — cita o código
+    // exato, ao contrário de um 404 de curso não encontrado (ver teste abaixo).
+    mockedGet.mockRejectedValue(
+      new ApiError(
+        "Component MATA02 is not in course curso-1's active curriculum structure",
+        404,
+      ),
+    );
 
     await render(<ArvoreDependenciasScreen />);
     await waitFor(() =>
       expect(screen.getByTestId("arvore-dependencias-nao-na-grade")).toBeTruthy()
     );
     expect(screen.queryByTestId("arvore-dependencias-vazio")).toBeNull();
+  });
+
+  it("um 404 de curso não encontrado (não cita o código) cai no estado de erro genérico, não 'não está na grade'", async () => {
+    const { ApiError } = jest.requireActual("@/lib/api");
+    // Mensagem real do backend para CursoDesconhecidoError — mesmo status
+    // (404) do ComponenteDesconhecidoError, mas sobre o CURSO, não a matéria.
+    // Tratar os dois como o mesmo estado mostraria "matéria não está na
+    // grade" para toda e qualquer matéria sempre que o curso do usuário não
+    // bater com o diretório — mesmo pra matérias que estão na grade.
+    mockedGet.mockRejectedValue(
+      new ApiError("Course ENGENHARIA DA COMPUTAÇÃO is not in the directory", 404),
+    );
+
+    await render(<ArvoreDependenciasScreen />);
+    await waitFor(() => expect(screen.getByTestId("arvore-dependencias-erro")).toBeTruthy());
+    expect(screen.queryByTestId("arvore-dependencias-nao-na-grade")).toBeNull();
   });
 
   it("renderiza o nome da matéria (não só o código) dentro de cada nó do grafo", async () => {
