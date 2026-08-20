@@ -19,7 +19,7 @@ import { describeApiError } from "@/lib/api-errors";
 import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { HISTORICO_STAGES } from "@/lib/download-progress";
-import { gradeColor } from "@/lib/mock-data";
+import { cargaHorariaColor, gradeColor } from "@/lib/mock-data";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
@@ -781,60 +781,73 @@ function LinhaDoTempo({
   insight: Insight;
   cursados: ComponenteCursado[];
 }): JSX.Element {
+  const accentColor = useThemeColor("accent");
   return (
     <View>
-      {anos.map((anoBloco) => (
+      {anos.map((anoBloco) => {
+        // A year only reads as done once every period on it is — one
+        // "Em curso"/"Aguardando notas" left is still a year in progress.
+        const anoConcluido = anoBloco.periodos.every((periodo) => !periodo.emCurso);
+        return (
         <View key={anoBloco.ano} className="flex-row gap-3">
           <View className="w-3 items-center">
-            <View className="w-2.5 h-2.5 rounded-full bg-accent mt-1" />
+            <View
+              className={`w-2.5 h-2.5 rounded-full mt-1 ${anoConcluido ? "bg-success" : "bg-accent"}`}
+            />
             <View className="flex-1 w-px bg-white/15" />
           </View>
           <View className="flex-1 gap-2.5 pb-5">
             <Typography.Paragraph weight="medium" className="font-mono">
               {anoBloco.ano}
             </Typography.Paragraph>
-            <View className="flex-row flex-wrap gap-2.5">
+            <View className="gap-3">
               {anoBloco.periodos.map((periodo) => (
-                <View key={periodo.semestre} className="flex-1 gap-2" style={{ minWidth: 150 }}>
+                <View key={periodo.semestre} className="gap-2">
                   <View className="flex-row items-center gap-2">
                     <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
                       {periodo.semestre}
                     </Typography.Paragraph>
                     <View
                       className={`rounded-full px-2 py-0.5 ${
-                        periodo.emCurso ? "bg-accent-soft" : "bg-white/5"
+                        periodo.emCurso ? "bg-accent-soft" : "bg-success-soft"
                       }`}
                     >
                       <Typography.Paragraph
                         type="body-xs"
-                        className={periodo.emCurso ? "text-accent" : undefined}
-                        color={periodo.emCurso ? undefined : "muted"}
+                        className={periodo.emCurso ? "text-accent" : "text-success"}
                       >
                         {rotuloPeriodo(periodo.emCurso, desatualizado)}
                       </Typography.Paragraph>
                     </View>
                   </View>
-                  {periodo.componentes.map((componente) => (
-                    <MateriaCard
-                      key={`${componente.semestre}-${componente.codigo}`}
-                      componente={componente}
-                      insight={insight}
-                      cursados={cursados}
-                    />
-                  ))}
+                  {/* One box per período, matérias flowing left to right and
+                      wrapping — not a single column anymore. Each card sets
+                      its own min width below and lets flex-wrap decide how
+                      many fit per row. */}
+                  <View className="flex-row flex-wrap gap-2">
+                    {periodo.componentes.map((componente) => (
+                      <MateriaCard
+                        key={`${componente.semestre}-${componente.codigo}`}
+                        componente={componente}
+                        insight={insight}
+                        cursados={cursados}
+                      />
+                    ))}
+                  </View>
                 </View>
               ))}
             </View>
           </View>
         </View>
-      ))}
+        );
+      })}
 
       <View className="flex-row gap-3">
         <View className="w-3 items-center">
           <View className="w-2.5 h-2.5 rounded-full bg-accent mt-1" />
         </View>
         <View className="flex-1 rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-2.5">
-          <AppIcon name="IconFlag" size={20} />
+          <AppIcon name="IconFlag" size={20} color={accentColor} />
           <Typography.Paragraph weight="medium">Linha de chegada</Typography.Paragraph>
         </View>
       </View>
@@ -859,41 +872,95 @@ function MateriaCard({
   const rotulo = rotuloSituacao(componente.situacao);
   const nota = formatarNota(componente.nota);
   const impacto = insight === "cr" && componente.nota !== null ? impactoNoCr(cursados, componente.codigo) : null;
+  const mutedColor = useThemeColor("muted");
+  // Trancada, cancelada, etc.: no grade at all, so nothing on this card
+  // moves the CR — the dashed border and faded fill are what say "it's here,
+  // but it doesn't count" without needing another line of text.
+  const naoConta = componente.nota === null;
 
   return (
-    <View className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-3">
-      <View className="flex-1 gap-0.5">
-        <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
-        <Typography.Paragraph type="body-xs" color="muted">
-          {componente.codigo} ·{" "}
-          <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-            {componente.cargaHoraria} h
-          </Typography.Paragraph>
-        </Typography.Paragraph>
-      </View>
-      {rotulo ? (
-        <View className="rounded-full bg-white/5 px-2 py-1">
-          <Typography.Paragraph type="body-xs" color="muted">
-            {rotulo}
-          </Typography.Paragraph>
+    // Narrow enough to sit two (or more) per row in the período box's
+    // flex-wrap above — `flexBasis`/`minWidth` together are what let it grow
+    // past that floor when there's room, but never shrink below it.
+    <View
+      className={`rounded-2xl p-3 justify-between gap-1.5 ${
+        naoConta
+          ? "bg-surface-secondary/40 border border-dashed border-white/20 opacity-60"
+          : "bg-surface-secondary"
+      }`}
+      style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}
+    >
+      {/* A nota 10 gets its own sticker — a blue circle poking out past the
+          card's own top-right corner. Absolute + a negative offset is what
+          lets it bleed outside the card's bounds instead of being clipped to
+          it; nothing here sets `overflow-hidden`, so it's free to. */}
+      {componente.nota === 10 ? (
+        <View
+          className="absolute items-center justify-center rounded-full bg-blue-500 border-2 border-background"
+          style={{ top: -6, right: -6, width: 24, height: 24 }}
+        >
+          <AppIcon name="IconStar" size={13} color="white" />
         </View>
       ) : null}
-      {insight === "cargaHoraria" ? (
-        <Typography.Heading type="h6" className="font-mono">
-          {componente.cargaHoraria} h
-        </Typography.Heading>
-      ) : (
-        <View className="items-end gap-0.5">
-          <Typography.Heading type="h6" className="font-mono" style={{ color: gradeColor(nota) }}>
-            {nota}
-          </Typography.Heading>
-          {impacto !== null ? (
+      {/* Its own group, separate from the badge/nota row below: the row's
+          parent stretches every card in a flex-wrap line to match the
+          tallest one, and `justify-between` on that parent is what pins this
+          row to the bottom of that stretched height instead of leaving it
+          floating right under a short nome with dead space beneath it. */}
+      <View className="gap-0.5">
+        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+          {componente.codigo}
+        </Typography.Paragraph>
+        <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+      </View>
+      <View className="flex-row items-end justify-between">
+        {/* Bottom-left: situação badge stacked above the CR impact — the two
+            rarely both show (a trancada/refatorada has no nota, so no
+            impacto either), but a reprovada can carry both. */}
+        <View className="items-start gap-1">
+          {rotulo ? (
+            <View className="rounded-full bg-white/5 px-2 py-1 flex-row items-center gap-1">
+              {componente.situacao === "TRANC" ? (
+                <AppIcon name="IconLockKey" size={11} color={mutedColor} />
+              ) : null}
+              <Typography.Paragraph type="body-xs" color="muted">
+                {rotulo}
+              </Typography.Paragraph>
+            </View>
+          ) : null}
+          {/* The 0,005 floor, not a plain truthy check: `impacto` is a raw
+              float, and one that rounds to "0,00" at the two decimals this
+              displays (e.g. 0.001) is still nonzero in JS — a bare `!== 0`
+              let exactly that case through with an arrow glued to a number
+              that reads as no change at all. */}
+          {impacto !== null && Math.abs(impacto) >= 0.005 ? (
             <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
               {formatarImpacto(impacto)}
             </Typography.Paragraph>
           ) : null}
         </View>
-      )}
+        {/* Bottom-right, always: the card's one headline number — nota on
+            the CR tab, carga horária on the other. A trancada/cancelada has
+            no nota at all, and "—" in that slot reads as a real value gone
+            missing rather than a value that was never going to exist —
+            better to leave the corner blank. */}
+        {insight === "cargaHoraria" ? (
+          <View className="flex-row items-center gap-1">
+            <AppIcon name="IconClock" size={13} color={cargaHorariaColor(componente.cargaHoraria)} />
+            <Typography.Heading
+              type="h6"
+              className="font-mono"
+              style={{ color: cargaHorariaColor(componente.cargaHoraria) }}
+            >
+              {componente.cargaHoraria} h
+            </Typography.Heading>
+          </View>
+        ) : componente.nota !== null ? (
+          <Typography.Heading type="h6" className="font-mono" style={{ color: gradeColor(nota) }}>
+            {nota}
+          </Typography.Heading>
+        ) : null}
+      </View>
     </View>
   );
 }

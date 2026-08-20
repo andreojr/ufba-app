@@ -108,3 +108,16 @@ export function gradeColor(grade: string): string {
   if (value >= 5) return "#F8CE8C";
   return "#E76964";
 }
+
+/**
+ * Carga horária color by hour density: the same blue hue throughout, but a
+ * heavier component (more hours) reads in a deeper, more saturated shade than
+ * a light one — a quick visual weight cue alongside the number itself,
+ * without a whole second legend to learn.
+ */
+export function cargaHorariaColor(horas: number): string {
+  if (horas >= 120) return "#1D4ED8";
+  if (horas >= 75) return "#2563EB";
+  if (horas >= 45) return "#3B82F6";
+  return "#93C5FD";
+}
