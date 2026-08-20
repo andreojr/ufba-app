@@ -1,6 +1,6 @@
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
@@ -83,7 +83,6 @@ export default function HomeTab(): JSX.Element {
   const [selectedDay, setSelectedDay] = useState(todayIndex === -1 ? 0 : todayIndex);
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [refreshing, setRefreshing] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
   const mutedColor = useThemeColor("muted");
 
@@ -178,18 +177,6 @@ export default function HomeTab(): JSX.Element {
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
 
-  // Pull-to-refresh always re-scrapes: it's the explicit "I want the freshest
-  // possible data" gesture, not just a re-read of what's already cached.
-  const onRefresh = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-    const credentials = await getSigaaCredentials();
-    setRefreshing(true);
-    await syncSchedule(credentials, true);
-    setRefreshing(false);
-  }, [accessToken, syncSchedule]);
-
   const week = state.status === "ready" ? state.week : EMPTY_WEEK;
   const daySchedule = week[selectedDay] ?? [];
 
@@ -278,7 +265,6 @@ export default function HomeTab(): JSX.Element {
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Heading and freshness share one row — the semester moved out of this
             text and into the badge on the term track inside the grid card. */}

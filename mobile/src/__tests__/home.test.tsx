@@ -550,22 +550,6 @@ describe("HomeTab", () => {
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
       expect(mockedPostScheduleSync).toHaveBeenCalledTimes(1);
     });
-
-    it("pull-to-refresh re-scrapes SIGAA instead of just re-reading the cache", async () => {
-      mockedGetSchedule.mockResolvedValue(scheduleResponse());
-      mockedPostScheduleSync.mockResolvedValue(scheduleResponse());
-
-      const { getAllByText, getByTestId } = await render(<HomeTab />);
-      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
-      expect(mockedPostScheduleSync).not.toHaveBeenCalled();
-
-      const scroll = getByTestId("home-schedule-scroll");
-      await act(async () => {
-        await scroll.props.refreshControl.props.onRefresh();
-      });
-
-      expect(mockedPostScheduleSync).toHaveBeenCalledTimes(1);
-    });
   });
 
 });
