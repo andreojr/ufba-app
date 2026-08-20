@@ -13,7 +13,10 @@ import {
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
-import { CursoDesconhecidoError } from '../curriculo/curriculo.service';
+import {
+  ComponenteDesconhecidoError,
+  CursoDesconhecidoError,
+} from '../curriculo/curriculo.service';
 
 const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   [SigaaInvalidCredentialsError.name]: HttpStatus.UNAUTHORIZED,
@@ -24,6 +27,9 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   // the directory, or resolverPorNomeUsuario finding no match — is a client
   // error about *what* was asked for, not a server failure.
   [CursoDesconhecidoError.name]: HttpStatus.NOT_FOUND,
+  // Same reasoning as CursoDesconhecidoError, one level down: the código
+  // itself isn't in the course's active curriculum structure.
+  [ComponenteDesconhecidoError.name]: HttpStatus.NOT_FOUND,
 };
 
 /**

@@ -16,10 +16,12 @@ import { CURRICULO_SERVICE } from './tokens';
 
 /**
  * `/curriculo/meu-curso` takes the course name as a query param for now — it
- * does not yet read `User.curso` off the authenticated user. Wiring that in
- * is for whichever of roadmap items 4/5/8 becomes this endpoint's first real
- * consumer; the resolution logic itself (CurriculoService.resolverPorNomeUsuario)
- * is already what a future wiring would call.
+ * does not yet read `User.curso` off the authenticated user. This endpoint
+ * family now has a real consumer (mobile's árvore de dependências screen,
+ * via `getArvoreDependencias` in `mobile/src/lib/api.ts`, hitting
+ * `/curriculo/meu-curso/componentes/:codigo/arvore-dependencias` below), but
+ * that consumer still passes `curso` as a query param itself rather than
+ * resolving `User.curso` server-side — that wiring is still not done.
  */
 @Controller('curriculo')
 @UseGuards(JwtAuthGuard)
