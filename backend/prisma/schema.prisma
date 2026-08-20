@@ -84,11 +84,11 @@ model CachedGrade {
 // Historico: the fetch is the complete state for the term, so upserting row
 // by row would leave behind a turma the student dropped.
 model CachedSchedule {
-  userId                 String   @id @map("user_id")
-  periodoLetivoSemestre  String?  @map("periodo_letivo_semestre")
-  periodoLetivoInicio    String?  @map("periodo_letivo_inicio")
-  periodoLetivoFim       String?  @map("periodo_letivo_fim")
-  fetchedAt              DateTime @default(now()) @map("fetched_at")
+  userId                String   @id @map("user_id")
+  periodoLetivoSemestre String?  @map("periodo_letivo_semestre")
+  periodoLetivoInicio   String?  @map("periodo_letivo_inicio")
+  periodoLetivoFim      String?  @map("periodo_letivo_fim")
+  fetchedAt             DateTime @default(now()) @map("fetched_at")
 
   user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   turmas CachedTurma[]
@@ -219,4 +219,53 @@ model PlanoItem {
   // HistoricoService.sync reconciles by codigo instead.
   @@unique([userId, codigo])
   @@map("plano_item")
+}
+
+// Global — NOT a per-user cache like CachedGrade/CachedSchedule. The public
+// profile is identical for every student, so the second student enrolled with
+// this docente costs zero SIGAA requests.
+model Docente {
+  siape        String  @id
+  nome         String
+  departamento String?
+  unidade      String?
+
+  // portal.jsf #perfil-docente — absent in 3 of 4 in the measured sample.
+  descricaoPessoal String?  @map("descricao_pessoal")
+  formacao         String[] @default([])
+  areasInteresse   String[] @default([]) @map("areas_interesse")
+  lattesUrl        String?  @map("lattes_url")
+
+  // portal.jsf #contato — filled in 4 of 4, and the part students actually want.
+  enderecoProfissional String? @map("endereco_profissional")
+  sala                 String?
+  telefone             String?
+  email                String?
+
+  // [{ semestre, codigo, nome, cargaHoraria, horario }]
+  disciplinas    Json @default("[]")
+  // [{ titulo, ano }] — never a student name.
+  tccsOrientados Json @default("[]") @map("tccs_orientados")
+
+  orientacoesMestradoAndamento   Int @default(0) @map("orientacoes_mestrado_andamento")
+  orientacoesMestradoConcluidas  Int @default(0) @map("orientacoes_mestrado_concluidas")
+  orientacoesDoutoradoAndamento  Int @default(0) @map("orientacoes_doutorado_andamento")
+  orientacoesDoutoradoConcluidas Int @default(0) @map("orientacoes_doutorado_concluidas")
+
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+  staleAfter DateTime @map("stale_after")
+
+  @@map("docentes")
+}
+
+// Normalised name → siape. Stores the MISS (siape null) too, so a docente with
+// no public record is not re-searched on every screen open.
+model DocenteLookup {
+  nomeNormalizado String   @id @map("nome_normalizado")
+  nomeOriginal    String   @map("nome_original")
+  siape           String?
+  resolvedAt      DateTime @default(now()) @map("resolved_at")
+  staleAfter      DateTime @map("stale_after")
+
+  @@map("docente_lookup")
 }

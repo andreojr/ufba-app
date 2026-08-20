@@ -1,4 +1,6 @@
 import type {
+  DocentePerfil,
+  DocenteResumo,
   GoogleUserInfo,
   ScheduleResponse,
   SigaaCredentials,
@@ -286,4 +288,28 @@ export async function postTrajetoriaSync(
     body: credentials,
     timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
   });
+}
+
+// The first call for a set of docentes resolves them against SIGAA (one search
+// POST each, serial, plus three profile GETs each) — far past the default
+// timeout. Subsequent calls hit the backend's global cache and are instant.
+const DOCENTES_TIMEOUT_MS = 60_000;
+
+export async function postDocentesSemestre(
+  accessToken: string,
+  turmas: { codigo: string; nome: string; docente: string }[],
+): Promise<DocenteResumo[]> {
+  return request<DocenteResumo[]>("/docentes/semestre", {
+    method: "POST",
+    body: { turmas },
+    accessToken,
+    timeoutMs: DOCENTES_TIMEOUT_MS,
+  });
+}
+
+export async function getDocente(
+  accessToken: string,
+  siape: string,
+): Promise<DocentePerfil> {
+  return request<DocentePerfil>(`/docentes/${siape}`, { method: "GET", accessToken });
 }

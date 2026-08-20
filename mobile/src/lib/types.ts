@@ -53,8 +53,8 @@ export interface Turma {
   nome: string;
   /**
    * Null when the backend had to fall back to the portal home, which omits it.
-   * Deliberately not rendered anywhere yet — captured because the atestado
-   * hands it over for free, kept for whichever screen ends up wanting it.
+   * This is what the Professores tab sends to POST /docentes/semestre to
+   * resolve each professor's public profile.
    */
   docente: string | null;
   slots: TurmaSlot[];
@@ -140,3 +140,59 @@ export interface ItemPlano {
 export type TrajetoriaResponse =
   | { sincronizado: false }
   | { historico: Historico; fetchedAt: string; plano: ItemPlano[] };
+
+/** Mirrors the backend's DocenteSelos — see backend/src/docentes/selos.ts. */
+export interface DocenteSelos {
+  contato: boolean;
+  formacao: boolean;
+  areasInteresse: boolean;
+  lattes: boolean;
+  orientacoes: boolean;
+  semestresLecionando: number;
+}
+
+/** Mirrors POST /docentes/semestre's response item — see backend DocentesService.resumoDoSemestre. */
+export interface DocenteResumo {
+  nomeOriginal: string;
+  componentes: { codigo: string; nome: string }[];
+  perfil: null | {
+    siape: string;
+    nome: string;
+    departamento: string | null;
+    unidade: string | null;
+    selos: DocenteSelos;
+  };
+}
+
+/** Mirrors one entry of DocentePerfil.disciplinas — see backend/src/sigaa-engine/parsers/docente-disciplinas.ts. */
+export interface DocenteDisciplina {
+  semestre: string;
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  horario: string;
+}
+
+/** Mirrors GET /docentes/:siape's response — see backend/src/docentes/docentes.service.ts. */
+export interface DocentePerfil {
+  siape: string;
+  nome: string;
+  departamento: string | null;
+  unidade: string | null;
+  descricaoPessoal: string | null;
+  formacao: string[];
+  areasInteresse: string[];
+  lattesUrl: string | null;
+  enderecoProfissional: string | null;
+  sala: string | null;
+  telefone: string | null;
+  email: string | null;
+  disciplinas: DocenteDisciplina[];
+  tccsOrientados: { titulo: string; ano: number }[];
+  orientacoes: {
+    mestradoAndamento: number;
+    mestradoConcluidas: number;
+    doutoradoAndamento: number;
+    doutoradoConcluidas: number;
+  };
+}

@@ -5,8 +5,10 @@ import { PrismaAuditLogger } from './prisma-audit-logger';
 import { PrismaUserRepository } from './prisma-user.repository';
 import { PrismaHistoricoRepository } from './prisma-historico.repository';
 import { PrismaScheduleRepository } from './prisma-schedule.repository';
+import { PrismaDocenteRepository } from './prisma-docente.repository';
 import {
   AUDIT_LOGGER,
+  DOCENTE_REPOSITORY,
   HISTORICO_REPOSITORY,
   SCHEDULE_REPOSITORY,
   SIGAA_LINK_REPOSITORY,
@@ -35,12 +37,20 @@ import {
     {
       provide: HISTORICO_REPOSITORY,
       inject: [PrismaService],
-      useFactory: (prisma: PrismaService) => new PrismaHistoricoRepository(prisma),
+      useFactory: (prisma: PrismaService) =>
+        new PrismaHistoricoRepository(prisma),
     },
     {
       provide: SCHEDULE_REPOSITORY,
       inject: [PrismaService],
-      useFactory: (prisma: PrismaService) => new PrismaScheduleRepository(prisma),
+      useFactory: (prisma: PrismaService) =>
+        new PrismaScheduleRepository(prisma),
+    },
+    {
+      provide: DOCENTE_REPOSITORY,
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) =>
+        new PrismaDocenteRepository(prisma),
     },
   ],
   exports: [
@@ -50,6 +60,7 @@ import {
     USER_REPOSITORY,
     HISTORICO_REPOSITORY,
     SCHEDULE_REPOSITORY,
+    DOCENTE_REPOSITORY,
   ],
 })
 export class DatabaseModule {}

@@ -223,7 +223,7 @@ Create `backend/src/sigaa-engine/docente-nome.ts`:
 export function normalizarNomeDocente(nome: string): string {
   return nome
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/\s+/g, ' ')
     .trim();
@@ -297,11 +297,21 @@ describe('parseDocenteBusca', () => {
     expect(new Set(siapes).size).toBe(siapes.length);
   });
 
+  // SIGAA puts BOTH messages in the same `ul.erros` block, so the DOM cannot
+  // separate them — only the text can. Misreading zero-results as an error
+  // means no miss is ever recorded and the docente is re-searched forever.
   it('reads a genuine zero-result page as an empty result list, not an error', () => {
     expect(parseDocenteBusca(fixture('docente-busca-vazia.html'))).toEqual({
       tipo: 'resultados',
       docentes: [],
     });
+  });
+
+  it('tells the two ul.erros messages apart, since their markup is identical', () => {
+    const vazia = parseDocenteBusca(fixture('docente-busca-vazia.html'));
+    const curto = parseDocenteBusca(fixture('docente-busca-erro-curto.html'));
+    expect(vazia.tipo).toBe('resultados');
+    expect(curto.tipo).toBe('erro');
   });
 
   it('reads the minimum-length complaint as an error, not as zero results', () => {
@@ -342,12 +352,23 @@ export type DocenteBuscaResposta =
 
 const SIAPE_PATTERN = /siape=(\d+)/;
 
+/**
+ * SIGAA renders "no docentes matched" inside the SAME `#painel-erros` /
+ * `ul.erros` block it uses for a rejected query — the DOM cannot tell the two
+ * apart, only the message can (verified against both captured fixtures).
+ *
+ * Getting this backwards is not cosmetic. A zero-result misread as an error is
+ * never recorded as a lookup miss, so a docente with no public record gets
+ * re-searched on every single screen open, forever.
+ */
+const SEM_RESULTADOS_PATTERN = /nenhum docente foi encontrado/i;
+
 export function parseDocenteBusca(html: string): DocenteBuscaResposta {
   const $ = cheerio.load(html);
 
-  const erro = $('.erros, .error, ul.erros li').first().text().trim();
-  if (erro) {
-    return { tipo: 'erro', mensagem: erro };
+  const aviso = $('#painel-erros .erros li, ul.erros li, .erros li').first().text().trim();
+  if (aviso && !SEM_RESULTADOS_PATTERN.test(aviso)) {
+    return { tipo: 'erro', mensagem: aviso };
   }
 
   // Each docente is listed once per lotação, so the same siape recurs. Keyed by
@@ -376,9 +397,12 @@ export function parseDocenteBusca(html: string): DocenteBuscaResposta {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npm test -- src/sigaa-engine/parsers/docente-busca.spec.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
-If the error test fails because the real markup uses a different class, open `docente-busca-erro-curto.html`, find the element actually holding "pelo menos 4 caracteres", and widen the selector in the `erro` line. Do not change the test's assertion.
+Both messages live in `<div id="painel-erros"><ul class="erros"><li>` — confirmed
+against the captured fixtures. If a selector needs widening, widen it; never
+"fix" a failure by weakening the zero-result-vs-error distinction, which is the
+whole point of the union this parser returns.
 
 - [ ] **Step 5: Commit**
 
@@ -507,7 +531,7 @@ export interface DocentePortal {
 function normalizeLabel(label: string): string {
   return label
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/:\s*$/, '')
     .trim()
     .toLowerCase();
@@ -788,10 +812,39 @@ describe('parseDocenteProducao', () => {
     expect(total).toBeLessThan(cabecalho);
   });
 
-  it('never returns a student name in the supervised-TCC list', () => {
-    const { tccsOrientados } = parseDocenteProducao(fixture);
-    expect(tccsOrientados.length).toBeGreaterThan(0);
-    for (const tcc of tccsOrientados) {
+  // The captured docente has ONLY an orientações section — no "Trabalho de Fim
+  // de Curso" heading exists on the page at all. Asserting the empty list
+  // explicitly keeps the parser honest about the difference between "no such
+  // section" and "failed to parse the section", which would otherwise look
+  // identical from the outside.
+  it('returns no TCCs for a page that has no Trabalho de Fim de Curso section', () => {
+    const { tccsOrientados, orientacoes } = parseDocenteProducao(fixture);
+    expect(tccsOrientados).toEqual([]);
+    expect(
+      orientacoes.mestradoAndamento +
+        orientacoes.mestradoConcluidas +
+        orientacoes.doutoradoAndamento +
+        orientacoes.doutoradoConcluidas,
+    ).toBeGreaterThan(0);
+  });
+
+  // The privacy constraint, proven rather than merely asserted structurally: the
+  // student's name is a dedupe key held in memory and must not survive into
+  // anything this function returns. Serialising the whole result and searching
+  // it catches a leak through any field, not just the ones we thought to check.
+  it('never lets a student name escape into the returned data', () => {
+    const html = `<h2>Trabalho de Fim de Curso (2)</h2>
+      <ul class="listagem">
+        <li>Um estudo sobre grafos, MARIA DAS DORES SANTOS, 03/2024</li>
+        <li>Outro trabalho, JOAO PEREIRA LIMA, 11/2023</li>
+      </ul>`;
+    const resultado = parseDocenteProducao(html);
+
+    expect(resultado.tccsOrientados).toHaveLength(2);
+    const serializado = JSON.stringify(resultado);
+    expect(serializado).not.toContain('MARIA DAS DORES SANTOS');
+    expect(serializado).not.toContain('JOAO PEREIRA LIMA');
+    for (const tcc of resultado.tccsOrientados) {
       expect(Object.keys(tcc).sort()).toEqual(['ano', 'titulo']);
       expect(Number.isInteger(tcc.ano)).toBe(true);
     }
@@ -861,7 +914,7 @@ const ANO_PATTERN = /(\d{2})\/(\d{4})\s*$/;
 function semAcento(texto: string): string {
   return texto
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 }
 
@@ -958,7 +1011,7 @@ export function parseDocenteProducao(html: string): DocenteProducao {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npm test -- src/sigaa-engine/parsers/docente-producao.spec.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 If the section lookup misses because the real markup wraps rows differently (e.g. the rows are `<li>` not `<tr>`, or the table is not the next sibling), open `docente-producao.html`, find how a supervision row is actually marked up, and adjust `linhasDaSecao`. Do not weaken the dedupe assertion — proving the total comes in under the header count is the whole point of this task.
 
@@ -1958,6 +2011,38 @@ describe('DocentesService.resumoDoSemestre', () => {
     });
   });
 
+  // portal.jsf's sidebar only carries the broad instituto — the specific
+  // department exists nowhere but the search result. Reading it off the profile
+  // page leaves every card's subtitle blank, and silently discards the
+  // department-over-instituto choice the search parser makes.
+  it('takes departamento from the search result, not the profile page', async () => {
+    const repo = new RepositorioFake();
+    const http = httpRoteado((req) => {
+      if (req.method === 'GET' && req.path.includes('busca_docentes')) return ok(PAGINA_BUSCA);
+      if (req.method === 'POST') {
+        return ok(
+          `<table class="listagem"><tr><td>
+             <span class="nome">ANTONIO LOPES APOLINARIO JUNIOR</span>
+             <span class="departamento">DEPARTAMENTO DE CIÊNCIA DA COMPUTAÇÃO /IC</span>
+             <span class="pagina"><a href="/sigaa/public/docente/portal.jsf?siape=1815041">v</a></span>
+           </td></tr></table><input name="javax.faces.ViewState" value="j_id2" />`,
+        );
+      }
+      // A profile page with no department anywhere in it — the real shape.
+      return ok('<div id="contato"><dl><dt>Sala</dt><dd>IC- 2012</dd></dl></div>');
+    });
+    const service = new DocentesService(repo, http, () => new PublicSigaaSession(http));
+
+    const [resumo] = await service.resumoDoSemestre([
+      { codigo: 'MATA65', nome: 'CG', docente: 'ANTONIO LOPES APOLINARIO JUNIOR' },
+    ]);
+
+    expect(resumo.perfil?.departamento).toBe('DEPARTAMENTO DE CIÊNCIA DA COMPUTAÇÃO /IC');
+    expect(repo.docentesSalvos[0].departamento).toBe(
+      'DEPARTAMENTO DE CIÊNCIA DA COMPUTAÇÃO /IC',
+    );
+  });
+
   it('records a miss when the search genuinely returns nothing', async () => {
     const repo = new RepositorioFake();
     const http = httpRoteado((req) =>
@@ -2191,7 +2276,10 @@ Create `backend/src/docentes/docentes.service.ts`:
 ```ts
 import { Logger } from '@nestjs/common';
 import { normalizarNomeDocente } from '../sigaa-engine/docente-nome';
-import { parseDocenteBusca } from '../sigaa-engine/parsers/docente-busca';
+import {
+  parseDocenteBusca,
+  type DocenteBuscaResultado,
+} from '../sigaa-engine/parsers/docente-busca';
 import { parseDocenteDisciplinas } from '../sigaa-engine/parsers/docente-disciplinas';
 import { parseDocentePortal } from '../sigaa-engine/parsers/docente-portal';
 import { parseDocenteProducao } from '../sigaa-engine/parsers/docente-producao';
@@ -2320,7 +2408,7 @@ export class DocentesService {
       return null;
     }
     if (docente.staleAfter <= new Date()) {
-      void this.recarregar(docente.siape).catch((error: unknown) => {
+      void this.recarregar(docente).catch((error: unknown) => {
         this.logger.warn(`Background resync of docente ${siape} failed`, error);
       });
     }
@@ -2343,7 +2431,7 @@ export class DocentesService {
     const sessao = this.criarSessao();
     await sessao.iniciar();
 
-    const siapes: { pendente: Pendente; siape: string }[] = [];
+    const candidatos: { pendente: Pendente; candidato: DocenteBuscaResultado }[] = [];
 
     for (const pendente of pendentes) {
       try {
@@ -2377,7 +2465,7 @@ export class DocentesService {
           this.logger.warn(`Could not disambiguate ${pendente.nomeOriginal}`);
           continue;
         }
-        siapes.push({ pendente, siape: escolhido });
+        candidatos.push({ pendente, candidato: escolhido });
       } catch (error) {
         // Network error, 429, unexpected status: never a miss.
         this.logger.warn(`Failed to search for ${pendente.nomeOriginal}`, error);
@@ -2386,9 +2474,9 @@ export class DocentesService {
 
     // Profile pages are stateless, so these can overlap — capped, since nobody
     // has measured the rate limit on the public endpoints.
-    const perfis = await mapComLimite(siapes, LIMITE_GETS, async ({ pendente, siape }) => {
+    const perfis = await mapComLimite(candidatos, LIMITE_GETS, async ({ pendente, candidato }) => {
       try {
-        const docente = await this.carregarPerfil(siape);
+        const docente = await this.carregarPerfil(candidato);
         if (!docente) {
           return null;
         }
@@ -2396,12 +2484,12 @@ export class DocentesService {
         await this.repositorio.salvarLookup({
           nomeNormalizado: pendente.nomeNormalizado,
           nomeOriginal: pendente.nomeOriginal,
-          siape,
+          siape: candidato.siape,
           staleAfter: calcularStaleAfter(new Date()),
         });
         return { nomeNormalizado: pendente.nomeNormalizado, docente };
       } catch (error) {
-        this.logger.warn(`Failed to load the profile of siape ${siape}`, error);
+        this.logger.warn(`Failed to load the profile of siape ${candidato.siape}`, error);
         return null;
       }
     });
@@ -2420,9 +2508,9 @@ export class DocentesService {
    * 339).
    */
   private async escolherCandidato(
-    candidatos: { siape: string; nome: string }[],
+    candidatos: DocenteBuscaResultado[],
     pendente: Pendente,
-  ): Promise<string | null> {
+  ): Promise<DocenteBuscaResultado | null> {
     if (candidatos.length === 0) {
       return null;
     }
@@ -2430,10 +2518,10 @@ export class DocentesService {
       (c) => normalizarNomeDocente(c.nome) === pendente.nomeNormalizado,
     );
     if (exatos.length === 1) {
-      return exatos[0].siape;
+      return exatos[0];
     }
     if (exatos.length === 0) {
-      return candidatos[0].siape;
+      return candidatos[0];
     }
 
     // Homonyms: break the tie on evidence, not on row order. The right siape is
@@ -2454,14 +2542,17 @@ export class DocentesService {
         const ensina = parseDocenteDisciplinas(html).some((d) =>
           pendente.codigos.includes(d.codigo),
         );
-        return ensina ? candidato.siape : null;
+        return ensina ? candidato : null;
       })
-    ).filter((siape): siape is string => siape !== null);
+    ).filter((c): c is DocenteBuscaResultado => c !== null);
 
     return vencedores.length === 1 ? vencedores[0] : null;
   }
 
-  private async carregarPerfil(siape: string): Promise<DocenteSalvo | null> {
+  private async carregarPerfil(
+    candidato: DocenteBuscaResultado,
+  ): Promise<DocenteSalvo | null> {
+    const { siape } = candidato;
     const [portalHtml, disciplinasHtml, producaoHtml] = await Promise.all([
       getPaginaPublica(this.http, `/sigaa/public/docente/portal.jsf?siape=${siape}`),
       getPaginaPublica(this.http, `/sigaa/public/docente/disciplinas.jsf?siape=${siape}`),
@@ -2488,8 +2579,13 @@ export class DocentesService {
 
     return {
       siape,
-      nome: portal.nome ?? '',
-      departamento: portal.departamento,
+      // The search result is the better source for both. portal.jsf's sidebar
+      // carries only the broad instituto, never the specific department — so
+      // reading departamento off the profile page would leave every card
+      // blank and would throw away the department-over-instituto choice the
+      // search parser deliberately makes.
+      nome: candidato.nome || portal.nome || '',
+      departamento: candidato.departamento ?? portal.departamento,
       unidade: portal.unidade,
       descricaoPessoal: portal.descricaoPessoal,
       formacao: portal.formacao,
@@ -2507,8 +2603,17 @@ export class DocentesService {
     };
   }
 
-  private async recarregar(siape: string): Promise<void> {
-    const docente = await this.carregarPerfil(siape);
+  /**
+   * Background resync of a stale row. Reuses the stored nome/departamento as the
+   * candidate: they came from the search result originally, and the profile page
+   * cannot supply the specific department.
+   */
+  private async recarregar(existente: DocenteSalvo): Promise<void> {
+    const docente = await this.carregarPerfil({
+      siape: existente.siape,
+      nome: existente.nome,
+      departamento: existente.departamento,
+    });
     if (docente) {
       await this.repositorio.salvarDocente(docente);
     }
@@ -2534,7 +2639,7 @@ export class DocentesService {
 - [ ] **Step 8: Run it and watch it pass**
 
 Run: `npm test -- src/docentes/docentes.service.spec.ts`
-Expected: PASS, 14 tests.
+Expected: PASS, 15 tests.
 
 The nome the resolved docente carries comes from `parseDocentePortal`. If the portal selector for the name is unreliable (see Task 4 step 4), fall back to the name from the search result: pass the candidate's `nome` into `carregarPerfil` and use it when `portal.nome` is null. Add a test asserting the resolved `perfil.nome` is non-empty.
 
