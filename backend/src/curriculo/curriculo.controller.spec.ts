@@ -8,10 +8,21 @@ import type { CurriculoService } from './curriculo.service';
 
 describe('CurriculoController', () => {
   let app: INestApplication;
-  const service: jest.Mocked<Pick<CurriculoService, 'listarCursos' | 'resolverCurso' | 'resolverPorNomeUsuario'>> = {
+  const service: jest.Mocked<
+    Pick<
+      CurriculoService,
+      | 'listarCursos'
+      | 'resolverCurso'
+      | 'resolverPorNomeUsuario'
+      | 'arvoreDependencias'
+      | 'arvoreDependenciasPorNomeUsuario'
+    >
+  > = {
     listarCursos: jest.fn(),
     resolverCurso: jest.fn(),
     resolverPorNomeUsuario: jest.fn(),
+    arvoreDependencias: jest.fn(),
+    arvoreDependenciasPorNomeUsuario: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -66,5 +77,41 @@ describe('CurriculoController', () => {
     const res = await request(app.getHttpServer()).get('/curriculo/meu-curso');
     expect(res.status).toBe(400);
     expect(service.resolverPorNomeUsuario).not.toHaveBeenCalled();
+  });
+
+  it('GET /curriculo/cursos/:cursoId/componentes/:codigo/arvore-dependencias devolve o grafo', async () => {
+    service.arvoreDependencias.mockResolvedValue({
+      nos: [{ codigo: 'MATA02', nome: 'Cálculo A', periodo: 1 }],
+      arestas: [],
+    });
+    const res = await request(app.getHttpServer()).get(
+      '/curriculo/cursos/1/componentes/MATA02/arvore-dependencias',
+    );
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      nos: [{ codigo: 'MATA02', nome: 'Cálculo A', periodo: 1 }],
+      arestas: [],
+    });
+    expect(service.arvoreDependencias).toHaveBeenCalledWith('1', 'MATA02');
+  });
+
+  it('GET /curriculo/meu-curso/componentes/:codigo/arvore-dependencias devolve o grafo pelo nome do curso', async () => {
+    service.arvoreDependenciasPorNomeUsuario.mockResolvedValue({ nos: [], arestas: [] });
+    const res = await request(app.getHttpServer())
+      .get('/curriculo/meu-curso/componentes/MATA02/arvore-dependencias')
+      .query({ curso: 'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador' });
+    expect(res.status).toBe(200);
+    expect(service.arvoreDependenciasPorNomeUsuario).toHaveBeenCalledWith(
+      'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
+      'MATA02',
+    );
+  });
+
+  it('GET /curriculo/meu-curso/componentes/:codigo/arvore-dependencias sem "curso" devolve 400', async () => {
+    const res = await request(app.getHttpServer()).get(
+      '/curriculo/meu-curso/componentes/MATA02/arvore-dependencias',
+    );
+    expect(res.status).toBe(400);
+    expect(service.arvoreDependenciasPorNomeUsuario).not.toHaveBeenCalled();
   });
 });

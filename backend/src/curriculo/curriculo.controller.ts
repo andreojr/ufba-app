@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { CursoListaItem } from '../sigaa-engine/parsers/curso-lista';
+import type { ArvoreDependencias } from './arvore-dependencias';
 import type { EstruturaCurricularSalva } from './curriculo.repository';
 import { CurriculoService } from './curriculo.service';
 import { CURRICULO_SERVICE } from './tokens';
@@ -47,5 +48,24 @@ export class CurriculoController {
       throw new BadRequestException('Missing required query param "curso"');
     }
     return this.service.resolverPorNomeUsuario(curso);
+  }
+
+  @Get('cursos/:cursoId/componentes/:codigo/arvore-dependencias')
+  async arvoreDependencias(
+    @Param('cursoId') cursoId: string,
+    @Param('codigo') codigo: string,
+  ): Promise<ArvoreDependencias> {
+    return this.service.arvoreDependencias(cursoId, codigo);
+  }
+
+  @Get('meu-curso/componentes/:codigo/arvore-dependencias')
+  async arvoreDependenciasMeuCurso(
+    @Param('codigo') codigo: string,
+    @Query('curso') curso: string | undefined,
+  ): Promise<ArvoreDependencias> {
+    if (!curso) {
+      throw new BadRequestException('Missing required query param "curso"');
+    }
+    return this.service.arvoreDependenciasPorNomeUsuario(curso, codigo);
   }
 }
