@@ -65,6 +65,13 @@ export default function TabsLayout(): JSX.Element {
         }}
       />
       <Tabs.Screen
+        name="professores"
+        options={{
+          title: "Professores",
+          tabBarIcon: ({ color }) => <TabIcon name="IconChalkboardTeacher" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="documentos"
         options={{
           title: "Documentos",
