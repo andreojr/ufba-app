@@ -102,13 +102,18 @@ export class CurriculoService {
       resumo.componentes,
       CONCORRENCIA_COMPONENTES,
       async (componente): Promise<ComponenteCurricularSalvo> => {
+        // Only the network call is caught here: a parser exception is a
+        // programming bug (or an unexpected page shape SIGAA never actually
+        // serves), not a transient per-component failure, and must not be
+        // silently absorbed into the same "treat as absence" path as a
+        // genuine fetch failure.
+        let detalheHtml: string;
         try {
-          const detalheHtml = await session.postar(RESUMO_PATH, {
+          detalheHtml = await session.postar(RESUMO_PATH, {
             formulario: 'formulario',
             id: componente.idSigaa,
             publico: 'public',
           });
-          return { ...componente, ...parseComponenteResumo(detalheHtml) };
         } catch (erro) {
           this.logger.warn(
             `Falha ao buscar detalhe do componente ${componente.codigo}: ${erro}`,
@@ -121,6 +126,7 @@ export class CurriculoService {
             equivalencias: null,
           };
         }
+        return { ...componente, ...parseComponenteResumo(detalheHtml) };
       },
     );
 

@@ -1,4 +1,8 @@
-import { CurriculoService, SemEstruturaAtivaError } from './curriculo.service';
+import {
+  CurriculoService,
+  CursoDesconhecidoError,
+  SemEstruturaAtivaError,
+} from './curriculo.service';
 import type { CurriculoRepository } from './curriculo.repository';
 import type { SigaaHttpClient } from '../sigaa-engine/session';
 
@@ -118,5 +122,55 @@ describe('CurriculoService', () => {
 
     await expect(service.resolverCurso('1')).rejects.toThrow(SemEstruturaAtivaError);
     expect(repository.salvarEstrutura).not.toHaveBeenCalled();
+  });
+
+  it('resolves a course by the profile-style "NOME/SIGLA - Campus" name and delegates to resolverCurso', async () => {
+    const cached = {
+      idSigaa: 'e1',
+      codigo: 'G20251',
+      anoPeriodoImplementacao: '2025.2',
+      cargaHorariaTotal: 100,
+      cargaHorariaObrigatoria: 100,
+      cargaHorariaOptativaMinima: 0,
+      cargaHorariaComplementarMinima: 0,
+      prazoMinimoSemestres: 1,
+      prazoMedioSemestres: 1,
+      prazoMaximoSemestres: 1,
+      fetchedAt: new Date('2025-12-01T00:00:00Z'),
+      staleAfter: new Date('2026-06-01T00:00:00Z'),
+      componentes: [],
+    };
+    const repository = fakeRepository({
+      buscarCursos: jest.fn().mockResolvedValue([
+        { idSigaa: '1876880', nome: 'ENGENHARIA DE COMPUTAÇÃO', sede: 'Salvador', nivel: 'G' },
+        { idSigaa: '2', nome: 'ENGENHARIA DE COMPUTAÇÃO', sede: 'Vitória da Conquista', nivel: 'G' },
+      ]),
+      buscarCursoPorId: jest
+        .fn()
+        .mockResolvedValue({ idSigaa: '1876880', nome: 'X', sede: 'Salvador', nivel: 'G' }),
+      buscarEstrutura: jest.fn().mockResolvedValue(cached),
+    });
+    const service = new CurriculoService(fakeHttp({}), repository, agora);
+
+    const resolvido = await service.resolverPorNomeUsuario(
+      'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
+    );
+
+    expect(resolvido).toEqual(cached);
+    expect(repository.buscarEstrutura).toHaveBeenCalledWith('1876880');
+  });
+
+  it('throws CursoDesconhecidoError when no course in the directory matches the profile name', async () => {
+    const repository = fakeRepository({
+      buscarCursos: jest
+        .fn()
+        .mockResolvedValue([{ idSigaa: '1', nome: 'ENGENHARIA CIVIL', sede: 'Salvador', nivel: 'G' }]),
+    });
+    const service = new CurriculoService(fakeHttp({}), repository, agora);
+
+    await expect(
+      service.resolverPorNomeUsuario('ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador'),
+    ).rejects.toThrow(CursoDesconhecidoError);
+    expect(repository.buscarEstrutura).not.toHaveBeenCalled();
   });
 });
