@@ -11,6 +11,10 @@ import type {
   EstruturaCurricularSalva,
 } from './curriculo.repository';
 import { calcularStaleAfter, diretorioDesatualizado } from './stale';
+import {
+  construirArvoreDependencias,
+  type ArvoreDependencias,
+} from './arvore-dependencias';
 
 const LISTA_PATH = '/sigaa/public/curso/lista.jsf';
 const CURRICULO_PATH = '/sigaa/public/curso/curriculo.jsf';
@@ -30,6 +34,20 @@ export class CursoDesconhecidoError extends Error {
     // maps status codes off `exception.name`, which without this would be
     // the inherited "Error" instead of "CursoDesconhecidoError".
     this.name = 'CursoDesconhecidoError';
+  }
+}
+
+export class ComponenteDesconhecidoError extends Error {
+  constructor(codigo: string, cursoId: string) {
+    super(
+      `Component ${codigo} is not in course ${cursoId}'s active curriculum structure`,
+    );
+    // Same convention as CursoDesconhecidoError: SigaaExceptionFilter maps
+    // status codes off `exception.name`. This distinguishes "root código not
+    // found in the active grade" (nos.length === 0) from the genuinely
+    // empty-dependents case, where `construirArvoreDependencias` still
+    // includes the root itself (nos.length === 1, arestas.length === 0).
+    this.name = 'ComponenteDesconhecidoError';
   }
 }
 
@@ -202,5 +220,47 @@ export class CurriculoService {
       throw new CursoDesconhecidoError(nomeCurso);
     }
     return this.resolverCurso(encontrado.idSigaa);
+  }
+
+  /**
+   * Grafo de descendentes de `codigo` dentro da estrutura curricular já
+   * resolvida/persistida de `cursoId` — não dispara scraping ao vivo (só lê
+   * o que `resolverCurso` já teria trazido). `resolverCurso` já sabe servir
+   * a linha em cache ou re-resolver se vencida, então essa mesma regra vale
+   * aqui de graça.
+   */
+  async arvoreDependencias(cursoId: string, codigo: string): Promise<ArvoreDependencias> {
+    const estrutura = await this.resolverCurso(cursoId);
+    return this.montarArvoreOuFalhar(estrutura.componentes, codigo, cursoId);
+  }
+
+  /** Mesma conveniência de `resolverPorNomeUsuario`, aplicada ao grafo. */
+  async arvoreDependenciasPorNomeUsuario(
+    nomeCurso: string,
+    codigo: string,
+  ): Promise<ArvoreDependencias> {
+    const estrutura = await this.resolverPorNomeUsuario(nomeCurso);
+    return this.montarArvoreOuFalhar(estrutura.componentes, codigo, nomeCurso);
+  }
+
+  /**
+   * `construirArvoreDependencias` returns `nos: []` both when `codigo`
+   * genuinely has zero dependents AND when `codigo` doesn't exist in the
+   * active grade at all (e.g. an optativa or a matéria from an older
+   * curriculum, reached by tapping a card from the student's histórico) —
+   * `nos.length === 1` (root only, no arestas) is the real "zero dependents"
+   * case, while `nos.length === 0` means the root itself wasn't found. The
+   * two must not be presented identically to the client.
+   */
+  private montarArvoreOuFalhar(
+    componentes: Parameters<typeof construirArvoreDependencias>[0],
+    codigo: string,
+    identificadorCurso: string,
+  ): ArvoreDependencias {
+    const arvore = construirArvoreDependencias(componentes, codigo);
+    if (arvore.nos.length === 0) {
+      throw new ComponenteDesconhecidoError(codigo, identificadorCurso);
+    }
+    return arvore;
   }
 }

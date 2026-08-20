@@ -1,0 +1,271 @@
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
+import { Pressable, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, {
+  Defs,
+  Marker,
+  Polygon,
+  Polyline,
+  Rect,
+  Text as SvgText,
+} from "react-native-svg";
+
+import { AppIcon } from "@/components/AppIcon";
+import { ApiError, getArvoreDependencias } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { construirLayout, type LayoutArvore } from "@/lib/arvore-dependencias-layout";
+import { aplicarPan, aplicarPinch } from "@/lib/pan-zoom";
+
+type Estado =
+  | { status: "loading" }
+  | { status: "vazio" }
+  | { status: "ready"; layout: LayoutArvore }
+  | { status: "erro" }
+  // Distinta de "vazio": o próprio código raiz não existe na grade ativa do
+  // curso (ex: optativa, ou matéria de um currículo antigo, vinda do
+  // histórico do aluno) — não "existe mas não tem dependentes". A API
+  // devolve 404 (ComponenteDesconhecidoError) para diferenciar os dois casos.
+  | { status: "naoNaGrade" };
+
+const ESCALA_MIN = 0.4;
+const ESCALA_MAX = 2.5;
+
+// Tamanho aproximado de caractere em px para fontSize 12 — usado só para
+// decidir onde truncar o nome dentro da largura fixa do nó, não para medir
+// texto de verdade (react-native-svg não expõe isso).
+const CARACTERES_MAX_NOME = 18;
+
+function truncar(texto: string, maxCaracteres: number): string {
+  if (texto.length <= maxCaracteres) return texto;
+  return `${texto.slice(0, maxCaracteres - 1)}…`;
+}
+
+/**
+ * Modal com o grafo de matérias que dependem da matéria selecionada
+ * (`codigo`), com posições calculadas por `construirLayout` (dagre) e
+ * renderizadas em SVG. Suporta pan/zoom via gesture-handler + reanimated.
+ */
+export default function ArvoreDependenciasScreen(): JSX.Element {
+  const router = useRouter();
+  const auth = useAuth();
+  const insets = useSafeAreaInsets();
+  const { codigo, nome } = useLocalSearchParams<{ codigo: string; nome?: string }>();
+  const [foregroundColor, mutedColor] = useThemeColor(["foreground", "muted"]);
+  const [estado, setEstado] = useState<Estado>({ status: "loading" });
+  // Guards against setEstado firing after the modal is dismissed while the
+  // fetch is still in flight (same pattern as professor/[siape].tsx).
+  const ativoRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      ativoRef.current = false;
+    },
+    []
+  );
+
+  // Matches how professor/[siape].tsx re-runs its own fetch: a plain
+  // useCallback driven by both the mount effect and a retry button, so a
+  // timeout (this endpoint can trigger a full live SIGAA scrape) doesn't
+  // strand the user with no way to try again short of closing the modal.
+  const carregar = useCallback(async () => {
+    const curso = auth.status === "signedIn" ? auth.user.curso : null;
+    if (auth.status !== "signedIn" || !curso || !codigo) {
+      setEstado({ status: "erro" });
+      return;
+    }
+
+    setEstado({ status: "loading" });
+    try {
+      const resposta = await getArvoreDependencias(auth.accessToken, curso, codigo);
+      if (!ativoRef.current) return;
+      if (resposta.nos.length <= 1 && resposta.arestas.length === 0) {
+        setEstado({ status: "vazio" });
+        return;
+      }
+      setEstado({ status: "ready", layout: construirLayout(resposta) });
+    } catch (error) {
+      if (!ativoRef.current) return;
+      if (error instanceof ApiError && error.status === 404) {
+        setEstado({ status: "naoNaGrade" });
+        return;
+      }
+      setEstado({ status: "erro" });
+    }
+  }, [auth, codigo]);
+
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  const escala = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  // Offsets salvos ao final do gesto anterior — sem eles, cada novo
+  // pinch/pan reinicia sua própria escala/translação (e.scale sempre
+  // recomeça em 1, e.translationX/Y sempre recomeçam em 0), fazendo o grafo
+  // "pular" de volta à posição anterior a cada novo dedo tocando a tela.
+  const savedEscala = useSharedValue(1);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinch = Gesture.Pinch()
+    .onStart(() => {
+      savedEscala.value = escala.value;
+    })
+    .onUpdate((e) => {
+      escala.value = aplicarPinch(savedEscala.value, e.scale, ESCALA_MIN, ESCALA_MAX);
+    });
+  const pan = Gesture.Pan()
+    .onStart(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    })
+    .onUpdate((e) => {
+      translateX.value = aplicarPan(savedTranslateX.value, e.translationX);
+      translateY.value = aplicarPan(savedTranslateY.value, e.translationY);
+    });
+  const gesto = Gesture.Simultaneous(pinch, pan);
+
+  const estiloAnimado = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: escala.value },
+    ],
+  }));
+
+  return (
+    <View className="flex-1 bg-background">
+      <View
+        className="flex-row items-center justify-between px-6 pb-3.5"
+        style={{ paddingTop: insets.top + 14 }}
+      >
+        <View className="flex-1 gap-0.5">
+          <Typography.Heading type="h4">{nome ?? codigo}</Typography.Heading>
+          <Typography.Paragraph type="body-xs" color="muted">
+            Matérias que dependem de {codigo}
+          </Typography.Paragraph>
+        </View>
+        <Pressable testID="arvore-dependencias-close" onPress={() => router.back()} hitSlop={12}>
+          <AppIcon name="IconX" size={24} color={foregroundColor} />
+        </Pressable>
+      </View>
+
+      <View className="flex-1 items-center justify-center">
+        {estado.status === "loading" ? (
+          <Spinner testID="arvore-dependencias-loading" />
+        ) : estado.status === "erro" ? (
+          <View className="gap-3 px-6 items-center">
+            <Typography.Paragraph
+              testID="arvore-dependencias-erro"
+              color="muted"
+              align="center"
+            >
+              Não foi possível carregar a árvore de dependências.
+            </Typography.Paragraph>
+            <Button variant="outline" size="sm" onPress={() => void carregar()}>
+              Tentar novamente
+            </Button>
+          </View>
+        ) : estado.status === "naoNaGrade" ? (
+          <Typography.Paragraph
+            testID="arvore-dependencias-nao-na-grade"
+            color="muted"
+            align="center"
+            className="px-6"
+          >
+            Essa matéria não está na grade curricular ativa do curso.
+          </Typography.Paragraph>
+        ) : estado.status === "vazio" ? (
+          <Typography.Paragraph
+            testID="arvore-dependencias-vazio"
+            color="muted"
+            align="center"
+            className="px-6"
+          >
+            Nenhuma matéria depende de {codigo} na grade atual.
+          </Typography.Paragraph>
+        ) : (
+          <GestureDetector gesture={gesto}>
+            <Animated.View style={estiloAnimado}>
+              <Svg
+                testID="arvore-dependencias-svg"
+                width={estado.layout.largura}
+                height={estado.layout.altura}
+              >
+                <Defs>
+                  <Marker
+                    id="seta-dependencia"
+                    viewBox="0 0 10 10"
+                    refX={8}
+                    refY={5}
+                    markerWidth={6}
+                    markerHeight={6}
+                    orient="auto-start-reverse"
+                  >
+                    <Polygon points="0,0 10,5 0,10" fill={mutedColor} />
+                  </Marker>
+                </Defs>
+                {estado.layout.arestas.map((aresta, i) => {
+                  if (aresta.pontos.length === 0) return null;
+                  const pontos = aresta.pontos.map((p) => `${p.x},${p.y}`).join(" ");
+                  return (
+                    <Polyline
+                      key={`${aresta.de}-${aresta.para}-${i}`}
+                      points={pontos}
+                      fill="none"
+                      stroke={mutedColor}
+                      strokeWidth={1.5}
+                      markerEnd="url(#seta-dependencia)"
+                    />
+                  );
+                })}
+                {estado.layout.nos.map((no) => (
+                  <Rect
+                    key={no.codigo}
+                    x={no.x - no.largura / 2}
+                    y={no.y - no.altura / 2}
+                    width={no.largura}
+                    height={no.altura}
+                    rx={12}
+                    fill={no.codigo === codigo ? mutedColor : "transparent"}
+                    stroke={mutedColor}
+                    strokeWidth={1.5}
+                  />
+                ))}
+                {estado.layout.nos.map((no) => (
+                  <SvgText
+                    key={`codigo-${no.codigo}`}
+                    x={no.x}
+                    y={no.y - 6}
+                    fill={mutedColor}
+                    fontSize={9}
+                    textAnchor="middle"
+                  >
+                    {no.codigo}
+                  </SvgText>
+                ))}
+                {estado.layout.nos.map((no) => (
+                  <SvgText
+                    key={`nome-${no.codigo}`}
+                    x={no.x}
+                    y={no.y + 12}
+                    fill={foregroundColor}
+                    fontSize={11}
+                    textAnchor="middle"
+                  >
+                    {truncar(no.nome, CARACTERES_MAX_NOME)}
+                  </SvgText>
+                ))}
+              </Svg>
+            </Animated.View>
+          </GestureDetector>
+        )}
+      </View>
+    </View>
+  );
+}

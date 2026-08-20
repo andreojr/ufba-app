@@ -61,6 +61,7 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
           <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
           <Stack.Screen name="documentos" />
+          <Stack.Screen name="arvore-dependencias" options={{ presentation: "modal" }} />
           <Stack.Screen
             name="sigaa-webview"
             options={{

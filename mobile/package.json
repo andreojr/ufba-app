@@ -23,6 +23,7 @@
     "@react-native-cookies/cookies": "^6.2.1",
     "@react-native-google-signin/google-signin": "^16.1.4",
     "cpf-cnpj-validator": "^2.1.2",
+    "dagre": "^0.8.5",
     "expo": "~54.0.0",
     "expo-calendar": "~15.0.8",
     "expo-constants": "~18.0.14",
@@ -55,6 +56,7 @@
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
+    "@types/dagre": "^0.7.54",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.10",
     "eslint": "^9.39.4",

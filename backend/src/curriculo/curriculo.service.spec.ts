@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  ComponenteDesconhecidoError,
   CurriculoService,
   CursoDesconhecidoError,
   SemEstruturaAtivaError,
@@ -451,5 +452,118 @@ describe('CurriculoService', () => {
       service.resolverPorNomeUsuario('ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador'),
     ).rejects.toThrow(CursoDesconhecidoError);
     expect(repository.buscarEstrutura).not.toHaveBeenCalled();
+  });
+
+  describe('arvoreDependencias / arvoreDependenciasPorNomeUsuario', () => {
+    const estruturaSalva = {
+      idSigaa: 'e1',
+      codigo: 'G20251',
+      anoPeriodoImplementacao: '2025.1',
+      cargaHorariaTotal: 3200,
+      cargaHorariaObrigatoria: 2400,
+      cargaHorariaOptativaMinima: 400,
+      cargaHorariaComplementarMinima: 200,
+      prazoMinimoSemestres: 8,
+      prazoMedioSemestres: 10,
+      prazoMaximoSemestres: 14,
+      fetchedAt: new Date('2026-01-01T00:00:00Z'),
+      staleAfter: new Date('2027-01-01T00:00:00Z'),
+      componentes: [
+        {
+          idSigaa: 'c1',
+          codigo: 'MATA02',
+          nome: 'Cálculo A',
+          cargaHoraria: 68,
+          natureza: 'OBRIGATORIA' as const,
+          periodo: 1,
+          unidadeResponsavel: null,
+          preRequisito: null,
+          coRequisito: null,
+          equivalencias: null,
+        },
+        {
+          idSigaa: 'c2',
+          codigo: 'MATA03',
+          nome: 'Cálculo B',
+          cargaHoraria: 68,
+          natureza: 'OBRIGATORIA' as const,
+          periodo: 2,
+          unidadeResponsavel: null,
+          preRequisito: 'MATA02',
+          coRequisito: null,
+          equivalencias: null,
+        },
+      ],
+    };
+
+    it('arvoreDependencias busca a estrutura já resolvida e monta o grafo', async () => {
+      const repository = fakeRepository({
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository);
+      const arvore = await service.arvoreDependencias('curso-1', 'MATA02');
+      expect(arvore.nos.map((n) => n.codigo).sort()).toEqual(['MATA02', 'MATA03']);
+      expect(arvore.arestas).toEqual([{ de: 'MATA02', para: 'MATA03' }]);
+    });
+
+    it('arvoreDependenciasPorNomeUsuario resolve o curso pelo nome e monta o grafo', async () => {
+      const repository = fakeRepository({
+        buscarCursos: jest.fn().mockResolvedValue([
+          { idSigaa: 'curso-1', nome: 'ENGENHARIA DA COMPUTAÇÃO', sede: 'SALVADOR', nivel: 'G' },
+        ]),
+        buscarDiretorioAtualizadoEm: jest.fn().mockResolvedValue(new Date('2026-01-01T00:00:00Z')),
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      // agora fixo: sem isso, listarCursos vê buscarDiretorioAtualizadoEm
+      // (2026-01-01) como vencido contra o relógio real da máquina e tenta
+      // um GET real a lista.jsf, que este fakeHttp não serve.
+      const service = new CurriculoService(fakeHttp({}), repository, agora);
+      const arvore = await service.arvoreDependenciasPorNomeUsuario(
+        'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
+        'MATA02',
+      );
+      expect(arvore.nos.map((n) => n.codigo).sort()).toEqual(['MATA02', 'MATA03']);
+    });
+
+    // A código absent from the currently-active grade (optativa, older
+    // curriculum) must be distinguishable from "found, zero dependents" —
+    // `construirArvoreDependencias` returns `nos: []` for both, so the
+    // service has to tell them apart before handing the response back.
+    it('arvoreDependencias lança ComponenteDesconhecidoError quando o código não está na estrutura ativa', async () => {
+      const repository = fakeRepository({
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository);
+      await expect(
+        service.arvoreDependencias('curso-1', 'NAOEXISTE01'),
+      ).rejects.toThrow(ComponenteDesconhecidoError);
+    });
+
+    it('arvoreDependenciasPorNomeUsuario lança ComponenteDesconhecidoError quando o código não está na estrutura ativa', async () => {
+      const repository = fakeRepository({
+        buscarCursos: jest.fn().mockResolvedValue([
+          { idSigaa: 'curso-1', nome: 'ENGENHARIA DA COMPUTAÇÃO', sede: 'SALVADOR', nivel: 'G' },
+        ]),
+        buscarDiretorioAtualizadoEm: jest.fn().mockResolvedValue(new Date('2026-01-01T00:00:00Z')),
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository, agora);
+      await expect(
+        service.arvoreDependenciasPorNomeUsuario(
+          'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
+          'NAOEXISTE01',
+        ),
+      ).rejects.toThrow(ComponenteDesconhecidoError);
+    });
+
+    it('arvoreDependencias não lança quando o código existe mas não tem dependentes (raiz sozinha)', async () => {
+      const repository = fakeRepository({
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository);
+      const arvore = await service.arvoreDependencias('curso-1', 'MATA03');
+      expect(arvore.nos.map((n) => n.codigo)).toEqual(['MATA03']);
+      expect(arvore.arestas).toEqual([]);
+    });
   });
 });

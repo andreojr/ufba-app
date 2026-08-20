@@ -1,4 +1,5 @@
 import type {
+  ArvoreDependenciasResponse,
   DocentePerfil,
   DocenteResumo,
   GoogleUserInfo,
@@ -295,6 +296,16 @@ export async function postTrajetoriaSync(
 // timeout. Subsequent calls hit the backend's global cache and are instant.
 const DOCENTES_TIMEOUT_MS = 60_000;
 
+// getArvoreDependencias delegates to CurriculoService.resolverCurso /
+// resolverPorNomeUsuario, which — same as /curriculo/meu-curso itself would,
+// were anything else calling it with a missing/stale structure — can trigger
+// a full live SIGAA scrape (GET lista.jsf, POST curriculo.jsf, then N
+// parallel POSTs to resumo_curriculo.jsf) whenever the course's curriculum
+// structure isn't already cached. The default 10s aborts mid-scrape; give it
+// the same SIGAA_DOCUMENT_TIMEOUT_MS budget as the other scraping-backed
+// endpoints above.
+const ARVORE_DEPENDENCIAS_TIMEOUT_MS = SIGAA_DOCUMENT_TIMEOUT_MS;
+
 export async function postDocentesSemestre(
   accessToken: string,
   turmas: { codigo: string; nome: string; docente: string }[],
@@ -312,4 +323,21 @@ export async function getDocente(
   siape: string,
 ): Promise<DocentePerfil> {
   return request<DocentePerfil>(`/docentes/${siape}`, { method: "GET", accessToken });
+}
+
+/**
+ * Grafo de descendentes (matérias que têm `codigo` como pré-requisito,
+ * direta ou transitivamente) dentro da grade ativa do curso do usuário
+ * logado. Mesma conveniência de `/curriculo/meu-curso`: recebe o nome bruto
+ * de `User.curso` em vez de resolver `cursoId` num passo à parte.
+ */
+export async function getArvoreDependencias(
+  accessToken: string,
+  curso: string,
+  codigo: string,
+): Promise<ArvoreDependenciasResponse> {
+  return request<ArvoreDependenciasResponse>(
+    `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/arvore-dependencias?curso=${encodeURIComponent(curso)}`,
+    { method: "GET", accessToken, timeoutMs: ARVORE_DEPENDENCIAS_TIMEOUT_MS },
+  );
 }
