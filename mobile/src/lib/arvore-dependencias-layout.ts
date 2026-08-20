@@ -24,7 +24,10 @@ export interface LayoutArvore {
 }
 
 const LARGURA_NO = 140;
-const ALTURA_NO = 56;
+// Alta o suficiente para caber duas linhas de texto (código pequeno/muted em
+// cima, nome truncado embaixo) em vez de só o código bruto — ver
+// arvore-dependencias.tsx.
+const ALTURA_NO = 64;
 
 /**
  * dagre é puro JS (sem dependência de DOM/Node) — só calcula posições, quem

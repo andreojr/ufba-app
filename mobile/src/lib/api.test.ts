@@ -417,6 +417,32 @@ describe("getArvoreDependencias", () => {
       ApiError,
     );
   });
+
+  it("gives the request the long document timeout, not the default 10s", async () => {
+    // resolverCurso/resolverPorNomeUsuario behind this endpoint can trigger a
+    // full live SIGAA scrape when the course structure is missing or stale —
+    // same slow flow as postTrajetoriaSync, which is why it needs the same
+    // budget instead of the default that aborts mid-scrape.
+    jest.useFakeTimers();
+    const fetchMock = jest.fn(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const promessa = getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02");
+    const assertion = expect(promessa).rejects.toThrow();
+
+    jest.advanceTimersByTime(20_000);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
+
+    jest.advanceTimersByTime(30_000);
+    await assertion;
+
+    jest.useRealTimers();
+  });
 });
 
 describe("getDocente", () => {
