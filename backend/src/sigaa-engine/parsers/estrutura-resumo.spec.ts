@@ -32,6 +32,11 @@ describe('parseEstruturaResumo', () => {
       cargaHoraria: 60,
       natureza: 'OBRIGATORIA',
       periodo: 1,
+      jsfParams: {
+        'formulario:j_id_jsp_337523315_66': 'formulario:j_id_jsp_337523315_66',
+        id: '34997',
+        publico: 'public',
+      },
     });
   });
 
@@ -44,6 +49,15 @@ describe('parseEstruturaResumo', () => {
       cargaHoraria: 60,
       natureza: 'OPTATIVA',
       periodo: null,
+      jsfParams: {
+        'formulario:j_id_jsp_337523315_46': 'formulario:j_id_jsp_337523315_46',
+        id: '30548',
+        publico: 'public',
+      },
     });
+  });
+
+  it("captures the #formulario form's own hidden fields, excluding the ViewState", () => {
+    expect(resumo.formFields).toEqual({ formulario: 'formulario' });
   });
 });

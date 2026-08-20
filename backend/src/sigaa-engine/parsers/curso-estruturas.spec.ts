@@ -26,4 +26,12 @@ describe('parseCursoEstruturas', () => {
     expect(ativa?.jsfParams.id).toMatch(/^\d+$/);
     expect(Object.keys(ativa!.jsfParams).length).toBeGreaterThanOrEqual(2);
   });
+
+  it("captures the enclosing form's own hidden fields, excluding the ViewState", () => {
+    const ativa = estruturas.find((e) => e.ativa);
+    expect(ativa?.formFields).toEqual({
+      formCurriculosCurso: 'formCurriculosCurso',
+      nivel: 'G',
+    });
+  });
 });

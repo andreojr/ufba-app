@@ -8,6 +8,14 @@ export interface ComponenteResumoMatriz {
   cargaHoraria: number;
   natureza: 'OBRIGATORIA' | 'OPTATIVA' | 'COMPLEMENTAR';
   periodo: number | null;
+  /**
+   * Every key:value pair inside this row's "Visualizar Detalhes do
+   * Componente" onclick's jsfcljs({...}) object literal — includes `id` and
+   * `publico`, but also the row's own JSF field key (e.g.
+   * `formulario:j_id_jsp_337523315_46`), which a real browser submits
+   * alongside `id`/`publico` and which CurriculoService must include too.
+   */
+  jsfParams: Record<string, string>;
 }
 
 export interface EstruturaResumo {
@@ -20,12 +28,23 @@ export interface EstruturaResumo {
   prazoMedioSemestres: number;
   prazoMaximoSemestres: number;
   componentes: ComponenteResumoMatriz[];
+  /**
+   * The `#formulario` form's own hidden inputs (e.g. `formulario`),
+   * excluding `javax.faces.ViewState` — see curso-estruturas.ts's
+   * `formFields` for the identical rationale. The per-component detail POST
+   * targets this same form.
+   */
+  formFields: Record<string, string>;
 }
 
 // "ENG295 - HIGIENE E SEGURANÇA NO TRABALHO - 60h"
 const COMPONENTE_ROW_PATTERN = /^(\S+)\s*-\s*(.+?)\s*-\s*(\d+)h$/;
-const ID_PARAM_PATTERN = /'id':'(\d+)'/;
+// Every key:value pair inside the onclick's jsfcljs({...}) object literal —
+// same generic capture as curso-estruturas.ts's JSF_PARAM_PATTERN, since only
+// the shape (string keys/values, one of which is "id") is guaranteed.
+const JSF_PARAM_PATTERN = /'([^']+)':'([^']+)'/g;
 const HORAS_PATTERN = /(\d+)h/;
+const VIEW_STATE_FIELD = 'javax.faces.ViewState';
 
 function normalizeLabel(label: string): string {
   return label
@@ -60,7 +79,7 @@ function horasDe(texto: string): number {
  */
 function parseResumoStats(
   $: CheerioAPI,
-): Omit<EstruturaResumo, 'componentes'> {
+): Omit<EstruturaResumo, 'componentes' | 'formFields'> {
   const stats: Record<string, string> = {};
   $('table.formulario tr').each((_, row) => {
     const $row = $(row);
@@ -140,18 +159,23 @@ function parseComponentes($: CheerioAPI): ComponenteResumoMatriz[] {
         $row
           .find('a[title="Visualizar Detalhes do Componente"]')
           .attr('onclick') ?? '';
-      const idMatch = onclick.match(ID_PARAM_PATTERN);
-      if (!idMatch) {
+      const jsfParams: Record<string, string> = {};
+      for (const match of onclick.matchAll(JSF_PARAM_PATTERN)) {
+        jsfParams[match[1]] = match[2];
+      }
+      const idSigaa = jsfParams.id;
+      if (!idSigaa) {
         return;
       }
 
       componentes.push({
-        idSigaa: idMatch[1],
+        idSigaa,
         codigo: rowMatch[1],
         nome: rowMatch[2],
         cargaHoraria: Number(rowMatch[3]),
         natureza,
         periodo,
+        jsfParams,
       });
     });
   });
@@ -159,10 +183,23 @@ function parseComponentes($: CheerioAPI): ComponenteResumoMatriz[] {
   return componentes;
 }
 
+function parseFormFields($: CheerioAPI): Record<string, string> {
+  const formFields: Record<string, string> = {};
+  $('form input[type="hidden"]').each((_, input) => {
+    const name = $(input).attr('name');
+    const value = $(input).attr('value');
+    if (name && value !== undefined && name !== VIEW_STATE_FIELD) {
+      formFields[name] = value;
+    }
+  });
+  return formFields;
+}
+
 export function parseEstruturaResumo(html: string): EstruturaResumo {
   const $ = cheerio.load(html);
   return {
     ...parseResumoStats($),
     componentes: parseComponentes($),
+    formFields: parseFormFields($),
   };
 }
