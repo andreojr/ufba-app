@@ -11,6 +11,10 @@ import type {
   EstruturaCurricularSalva,
 } from './curriculo.repository';
 import { calcularStaleAfter, diretorioDesatualizado } from './stale';
+import {
+  construirArvoreDependencias,
+  type ArvoreDependencias,
+} from './arvore-dependencias';
 
 const LISTA_PATH = '/sigaa/public/curso/lista.jsf';
 const CURRICULO_PATH = '/sigaa/public/curso/curriculo.jsf';
@@ -202,5 +206,26 @@ export class CurriculoService {
       throw new CursoDesconhecidoError(nomeCurso);
     }
     return this.resolverCurso(encontrado.idSigaa);
+  }
+
+  /**
+   * Grafo de descendentes de `codigo` dentro da estrutura curricular já
+   * resolvida/persistida de `cursoId` — não dispara scraping ao vivo (só lê
+   * o que `resolverCurso` já teria trazido). `resolverCurso` já sabe servir
+   * a linha em cache ou re-resolver se vencida, então essa mesma regra vale
+   * aqui de graça.
+   */
+  async arvoreDependencias(cursoId: string, codigo: string): Promise<ArvoreDependencias> {
+    const estrutura = await this.resolverCurso(cursoId);
+    return construirArvoreDependencias(estrutura.componentes, codigo);
+  }
+
+  /** Mesma conveniência de `resolverPorNomeUsuario`, aplicada ao grafo. */
+  async arvoreDependenciasPorNomeUsuario(
+    nomeCurso: string,
+    codigo: string,
+  ): Promise<ArvoreDependencias> {
+    const estrutura = await this.resolverPorNomeUsuario(nomeCurso);
+    return construirArvoreDependencias(estrutura.componentes, codigo);
   }
 }
