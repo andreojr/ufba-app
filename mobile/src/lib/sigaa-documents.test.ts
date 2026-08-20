@@ -1,6 +1,6 @@
 import * as Sharing from "expo-sharing";
 
-import { getSavedSigaaDocument, openSavedSigaaDocument, saveSigaaDocument } from "./sigaa-documents";
+import { deleteSigaaDocument, getSavedSigaaDocument, openSavedSigaaDocument, saveSigaaDocument } from "./sigaa-documents";
 
 jest.mock("expo-sharing", () => ({
   shareAsync: jest.fn().mockResolvedValue(undefined),
@@ -151,6 +151,20 @@ describe("getSavedSigaaDocument", () => {
     expect(saved?.uri).toContain("historico-escolar.pdf");
     expect(saved?.uri).not.toContain(".part");
     expect(fileSystemMock.__files.has("document/historico-escolar.pdf.part")).toBe(false);
+  });
+});
+
+describe("deleteSigaaDocument", () => {
+  it("removes a previously saved document from the device", () => {
+    saveSigaaDocument("historico", new Uint8Array([1, 2, 3]));
+
+    deleteSigaaDocument("historico");
+
+    expect(getSavedSigaaDocument("historico")).toBeNull();
+  });
+
+  it("is a no-op when the document was never saved", () => {
+    expect(() => deleteSigaaDocument("atestado")).not.toThrow();
   });
 });
 

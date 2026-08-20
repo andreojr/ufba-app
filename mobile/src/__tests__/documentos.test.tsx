@@ -1,9 +1,15 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 import { ApiError, postSigaaAtestado, postSigaaHistorico } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { htmlToPdfBytes } from "@/lib/html-to-pdf";
-import { getSavedSigaaDocument, openSavedSigaaDocument, saveSigaaDocument } from "@/lib/sigaa-documents";
+import {
+  deleteSigaaDocument,
+  getSavedSigaaDocument,
+  openSavedSigaaDocument,
+  saveSigaaDocument,
+} from "@/lib/sigaa-documents";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 
 import DocumentosTab from "@/app/(tabs)/documentos";
@@ -16,6 +22,7 @@ jest.mock("@/lib/sigaa-documents", () => ({
   getSavedSigaaDocument: jest.fn(),
   saveSigaaDocument: jest.fn(),
   openSavedSigaaDocument: jest.fn(),
+  deleteSigaaDocument: jest.fn(),
 }));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
@@ -70,6 +77,7 @@ const mockedHtmlToPdfBytes = jest.mocked(htmlToPdfBytes);
 const mockedGetSavedSigaaDocument = jest.mocked(getSavedSigaaDocument);
 const mockedSaveSigaaDocument = jest.mocked(saveSigaaDocument);
 const mockedOpenSavedSigaaDocument = jest.mocked(openSavedSigaaDocument);
+const mockedDeleteSigaaDocument = jest.mocked(deleteSigaaDocument);
 
 describe("DocumentosTab", () => {
   beforeEach(() => {
@@ -311,5 +319,46 @@ describe("DocumentosTab", () => {
     });
 
     expect(mockedOpenSavedSigaaDocument).toHaveBeenCalledWith(savedHistorico);
+  });
+
+  it("asks for confirmation before deleting a saved document, and does nothing if cancelled", async () => {
+    mockedGetSavedSigaaDocument.mockImplementation((key) =>
+      key === "historico"
+        ? { uri: "file:///document/historico-escolar.pdf", size: 4096, savedAt: new Date("2026-05-02T12:00:00Z") }
+        : null,
+    );
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+
+    const { getByText } = await render(<DocumentosTab />);
+
+    await act(async () => {
+      fireEvent.press(getByText("Excluir"));
+    });
+
+    expect(alertSpy).toHaveBeenCalled();
+    expect(mockedDeleteSigaaDocument).not.toHaveBeenCalled();
+    expect(getByText("Gerar de novo")).toBeTruthy();
+  });
+
+  it("deletes the document and returns to the idle state once the user confirms", async () => {
+    mockedGetSavedSigaaDocument.mockImplementation((key) =>
+      key === "historico"
+        ? { uri: "file:///document/historico-escolar.pdf", size: 4096, savedAt: new Date("2026-05-02T12:00:00Z") }
+        : null,
+    );
+    jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
+      const confirm = buttons?.find((button) => button.style === "destructive");
+      confirm?.onPress?.();
+    });
+
+    const { getByText, queryByText } = await render(<DocumentosTab />);
+
+    await act(async () => {
+      fireEvent.press(getByText("Excluir"));
+    });
+
+    expect(mockedDeleteSigaaDocument).toHaveBeenCalledWith("historico");
+    expect(queryByText("Excluir")).toBeNull();
+    expect(queryByText("No aparelho")).toBeNull();
   });
 });

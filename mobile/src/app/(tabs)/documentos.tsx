@@ -1,6 +1,6 @@
 import { Chip, ListGroup, Typography, useThemeColor } from "heroui-native";
 import { useEffect, useState, type JSX } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ATESTADO_STAGES, HISTORICO_STAGES } from "@/lib/download-progress";
 import { DOCUMENT_DEFS, type DocumentKey } from "@/lib/mock-data";
 import {
+  deleteSigaaDocument,
   getSavedSigaaDocument,
   openSavedSigaaDocument,
   saveSigaaDocument,
@@ -135,6 +136,24 @@ export default function DocumentosTab(): JSX.Element {
     }
   }
 
+  function confirmDelete(key: DocumentKey): void {
+    Alert.alert(
+      "Excluir documento?",
+      `${DOCUMENT_DEFS[key].title} será removido do aparelho. Você pode gerar de novo quando quiser.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            deleteSigaaDocument(key);
+            setStates((prev) => ({ ...prev, [key]: { status: "idle" } }));
+          },
+        },
+      ],
+    );
+  }
+
   const savedDocuments = DOCUMENT_KEYS.map((key) => {
     const document = documentOf(states[key]);
     return document ? { key, document } : null;
@@ -191,16 +210,28 @@ export default function DocumentosTab(): JSX.Element {
               ) : null}
 
               {state.status === "done" ? (
-                <View className="flex-row items-center gap-2.5">
-                  <AppIcon name="IconCheck" size={16} color={successSoftForeground} />
-                  <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
-                    Baixado
-                  </Typography.Paragraph>
-                  <Pressable onPress={() => download(key)} className="h-9 px-3 justify-center">
-                    <Typography.Paragraph type="body-sm" weight="medium" className="text-accent">
-                      Gerar de novo
+                <View className="gap-2.5">
+                  <View className="flex-row items-center gap-2.5">
+                    <AppIcon name="IconCheck" size={16} color={successSoftForeground} />
+                    <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
+                      Baixado
                     </Typography.Paragraph>
-                  </Pressable>
+                  </View>
+                  <View className="flex-row items-center gap-3">
+                    <Pressable onPress={() => confirmDelete(key)} className="h-11 px-3 justify-center">
+                      <Typography.Paragraph type="body-sm" weight="medium" className="text-danger">
+                        Excluir
+                      </Typography.Paragraph>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => download(key)}
+                      className="flex-1 h-11 rounded-full bg-accent flex-row items-center justify-center gap-2"
+                    >
+                      <Typography.Paragraph type="body-sm" weight="medium" className="text-white">
+                        Gerar de novo
+                      </Typography.Paragraph>
+                    </Pressable>
+                  </View>
                 </View>
               ) : null}
 

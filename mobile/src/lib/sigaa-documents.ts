@@ -74,6 +74,14 @@ export async function openSavedSigaaDocument(document: SavedSigaaDocument): Prom
   });
 }
 
+/** Removes a saved document from the device, if there is one. */
+export function deleteSigaaDocument(key: DocumentKey): void {
+  const file = documentFile(key);
+  if (file.exists) {
+    file.delete();
+  }
+}
+
 /** Returns info about a document already saved on this device, or null if it hasn't been downloaded yet. */
 export function getSavedSigaaDocument(key: DocumentKey): SavedSigaaDocument | null {
   const file = documentFile(key);
