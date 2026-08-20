@@ -215,7 +215,16 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
                     refY={5}
                     markerWidth={6}
                     markerHeight={6}
-                    orient="auto-start-reverse"
+                    // "auto", não "auto-start-reverse": o Android do
+                    // react-native-svg (até 15.12.1 e ainda no main) só aceita
+                    // "auto" ou um número — qualquer outra string cai num
+                    // Double.parseDouble e crasha o app com
+                    // NumberFormatException na fase de draw nativa
+                    // (MarkerView.java:125). Como este marker só é usado via
+                    // markerEnd, a spec SVG garante que "auto" e
+                    // "auto-start-reverse" são visualmente idênticos (eles só
+                    // diferem em marker-start).
+                    orient="auto"
                   >
                     <Polygon points="0,0 10,5 0,10" fill={mutedColor} />
                   </Marker>

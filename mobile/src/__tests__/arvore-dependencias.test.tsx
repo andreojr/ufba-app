@@ -32,6 +32,21 @@ function coletarTextosSvg(
   return textos;
 }
 
+function coletarNosPorTipo(
+  json: NoJsonSimplificado | (NoJsonSimplificado | string)[] | string | null,
+  tipo: string
+): NoJsonSimplificado[] {
+  if (!json || typeof json === "string") return [];
+  const nos = Array.isArray(json) ? json : [json];
+  const encontrados: NoJsonSimplificado[] = [];
+  for (const no of nos) {
+    if (typeof no === "string") continue;
+    if (no.type === tipo) encontrados.push(no);
+    if (no.children) encontrados.push(...coletarNosPorTipo(no.children, tipo));
+  }
+  return encontrados;
+}
+
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ codigo: "MATA02", nome: "Cálculo A" }),
   useRouter: () => ({ back: jest.fn() }),
@@ -189,5 +204,33 @@ describe("ArvoreDependenciasScreen", () => {
     const textos = coletarTextosSvg(resultado.toJSON());
     expect(textos).toContain("Cálculo A");
     expect(textos).toContain("Cálculo B");
+  });
+
+  it("usa um orient de Marker que o Android suporta ('auto' ou número, nunca 'auto-start-reverse')", async () => {
+    // Regressão de crash real em dispositivo: o código nativo Android do
+    // react-native-svg (MarkerView.java:125, até 15.12.1 e ainda no main
+    // upstream) só aceita "auto" ou um número — qualquer outra string
+    // (inclusive "auto-start-reverse", válido na spec SVG 2) cai em
+    // Double.parseDouble e derruba o app com NumberFormatException na fase
+    // de draw. Como o marker daqui só é usado via markerEnd, "auto" é
+    // visualmente idêntico por spec.
+    mockedGet.mockResolvedValue({
+      nos: [
+        { codigo: "MATA02", nome: "Cálculo A", periodo: 1 },
+        { codigo: "MATA03", nome: "Cálculo B", periodo: 2 },
+      ],
+      arestas: [{ de: "MATA02", para: "MATA03" }],
+    });
+
+    const resultado = await render(<ArvoreDependenciasScreen />);
+    await waitFor(() => expect(screen.getByTestId("arvore-dependencias-svg")).toBeTruthy());
+
+    const markers = coletarNosPorTipo(resultado.toJSON(), "RNSVGMarker");
+    expect(markers.length).toBeGreaterThan(0);
+    for (const marker of markers) {
+      const orient = String(marker.props?.orient);
+      const suportadoNoAndroid = orient === "auto" || Number.isFinite(Number(orient));
+      expect(suportadoNoAndroid).toBe(true);
+    }
   });
 });
