@@ -75,11 +75,15 @@ export interface PeriodoLetivo {
   fim: string;
 }
 
-/** What POST /schedule answers with. `periodoLetivo` is null on the portal-home fallback. */
-export interface ScheduleResponse {
-  turmas: Turma[];
-  periodoLetivo: PeriodoLetivo | null;
-}
+/**
+ * What GET /schedule and POST /schedule/sync answer with. `periodoLetivo` is
+ * null on the portal-home fallback. `sincronizado: false` is the fallback
+ * state for a user who has never synced — GET reads the cache and finds
+ * nothing yet, the same shape TrajetoriaResponse uses.
+ */
+export type ScheduleResponse =
+  | { sincronizado: false }
+  | { turmas: Turma[]; periodoLetivo: PeriodoLetivo | null; fetchedAt: string };
 
 /** Mirrors the backend's parser output — see backend/src/sigaa-engine/parsers/historico.ts. */
 export interface ComponenteCursado {

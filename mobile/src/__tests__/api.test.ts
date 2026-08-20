@@ -1,4 +1,11 @@
-import { ApiError, getSigaaLink, postGoogleLogin, postSchedule, postSigaaLink } from "../lib/api";
+import {
+  ApiError,
+  getSchedule,
+  getSigaaLink,
+  postGoogleLogin,
+  postScheduleSync,
+  postSigaaLink,
+} from "../lib/api";
 
 describe("postGoogleLogin", () => {
   const originalFetch = global.fetch;
@@ -133,7 +140,7 @@ describe("getSigaaLink", () => {
   });
 });
 
-describe("postSchedule", () => {
+describe("getSchedule", () => {
   const originalFetch = global.fetch;
   const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -144,6 +151,71 @@ describe("postSchedule", () => {
   afterEach(() => {
     global.fetch = originalFetch;
     process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  it("GETs the cached schedule with the bearer token", async () => {
+    const schedule = {
+      turmas: [
+        {
+          codigo: "MATA37",
+          nome: "SISTEMAS OPERACIONAIS",
+          docente: "BEATRIZ NUNES CAMPELO",
+          slots: [
+            {
+              dia: "Terça",
+              inicioMin: 1110,
+              fimMin: 1220,
+              predio: "PAF 1",
+              sala: "208",
+              localOriginal: "PAF 1 - 208 - Terça Horários 18:30 às 19:25",
+            },
+          ],
+          vigencia: { inicio: "19/08/2026", fim: "19/12/2026" },
+          semestre: "2026.2",
+        },
+      ],
+      periodoLetivo: { semestre: "2026.2", inicio: "2026-08-19", fim: "2026-12-19" },
+      fetchedAt: "2026-08-19T03:35:00.000Z",
+    };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => schedule,
+    }) as unknown as typeof fetch;
+
+    await expect(getSchedule("access-token")).resolves.toEqual(schedule);
+
+    expect(global.fetch).toHaveBeenCalledWith("https://api.example.com/schedule", {
+      method: "GET",
+      headers: { Authorization: "Bearer access-token" },
+      body: undefined,
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("reports the unsynced state without throwing", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ sincronizado: false }),
+    }) as unknown as typeof fetch;
+
+    await expect(getSchedule("access-token")).resolves.toEqual({ sincronizado: false });
+  });
+});
+
+describe("postScheduleSync", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.useRealTimers();
   });
 
   it("POSTs the credentials with the bearer token and returns the turmas plus the periodo letivo", async () => {
@@ -168,6 +240,7 @@ describe("postSchedule", () => {
         },
       ],
       periodoLetivo: { semestre: "2026.2", inicio: "2026-08-19", fim: "2026-12-19" },
+      fetchedAt: "2026-08-19T03:35:00.000Z",
     };
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -176,10 +249,10 @@ describe("postSchedule", () => {
     }) as unknown as typeof fetch;
 
     await expect(
-      postSchedule("access-token", { login: "12345678900", senha: "segredo" }),
+      postScheduleSync("access-token", { login: "12345678900", senha: "segredo" }),
     ).resolves.toEqual(schedule);
 
-    expect(global.fetch).toHaveBeenCalledWith("https://api.example.com/schedule", {
+    expect(global.fetch).toHaveBeenCalledWith("https://api.example.com/schedule/sync", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -198,7 +271,27 @@ describe("postSchedule", () => {
     }) as unknown as typeof fetch;
 
     await expect(
-      postSchedule("access-token", { login: "12345678900", senha: "wrong" }),
+      postScheduleSync("access-token", { login: "12345678900", senha: "wrong" }),
     ).rejects.toThrow(ApiError);
+  });
+
+  it("gives the sync the long document timeout, not the default", async () => {
+    // The sync makes ~7 sequential SIGAA requests server-side. The 10s default
+    // aborts mid-scrape, and the fetch polyfill resolves that abort as an empty
+    // response — which used to look like a successful-but-empty download.
+    jest.useFakeTimers();
+    const fetchMock = jest.fn(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const promessa = postScheduleSync("access-token", { login: "1", senha: "2" });
+    const assertion = expect(promessa).rejects.toThrow();
+
+    jest.advanceTimersByTime(45_000);
+    await assertion;
   });
 });
