@@ -28,6 +28,12 @@ jest.mock("@/lib/periodo-cache", () => ({
   savePeriodoCache: jest.fn(),
 }));
 
+// Jest's jest.mock() factory rejects out-of-scope references unless the name
+// is prefixed with "mock" (case-insensitive) — this name is chosen for that,
+// not stylistically.
+const mockRouterPush = jest.fn();
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockRouterPush }) }));
+
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -433,6 +439,19 @@ describe("Trajetória", () => {
     expect(screen.getByText("Em curso")).toBeTruthy();
     expect(screen.queryByText("Credenciais inválidas")).toBeNull();
     consoleWarn.mockRestore();
+  });
+
+  it("toque num card de matéria cursada abre a árvore de dependências", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+
+    await render(<TrajetoriaTab />);
+
+    fireEvent.press(await screen.findByText("MATA55"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/arvore-dependencias",
+      params: { codigo: "MATA55", nome: "SISTEMAS OPERACIONAIS" },
+    });
   });
 
   it("nudges a re-sync once the term has ended with grades still missing", async () => {

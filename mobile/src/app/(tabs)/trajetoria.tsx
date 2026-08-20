@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Button, Menu, Tabs, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { Pressable, RefreshControl, ScrollView, View, type LayoutChangeEvent } from "react-native";
@@ -111,6 +112,7 @@ function planoSalvo(plano: ItemPlano[]): Plano {
 }
 
 export default function TrajetoriaTab(): JSX.Element {
+  const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
@@ -406,6 +408,9 @@ export default function TrajetoriaTab(): JSX.Element {
               barChartScrollGesture={barChartScrollGesture}
               abaAtual={abaAtual}
               arrasto={arrasto}
+              onAbrirArvore={(codigo, nome) =>
+                router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
+              }
             />
           ) : null}
         </ScrollView>
@@ -431,6 +436,7 @@ function ReadyTrajetoria({
   barChartScrollGesture,
   abaAtual,
   arrasto,
+  onAbrirArvore,
 }: {
   historico: Historico;
   fetchedAt: Date;
@@ -455,6 +461,7 @@ function ReadyTrajetoria({
   // move, and this component's own `estiloTrilha` for how they're read.
   abaAtual: SharedValue<number>;
   arrasto: SharedValue<number>;
+  onAbrirArvore: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const { total } = historico.cargaHoraria;
   const percentual = percentualConcluido(total);
@@ -666,6 +673,7 @@ function ReadyTrajetoria({
         desatualizado={desatualizado}
         insight={insight}
         cursados={historico.cursados}
+        onAbrirArvore={onAbrirArvore}
       />
 
       <View className="gap-5">
@@ -775,11 +783,13 @@ function LinhaDoTempo({
   desatualizado,
   insight,
   cursados,
+  onAbrirArvore,
 }: {
   anos: AnoTrajetoria[];
   desatualizado: boolean;
   insight: Insight;
   cursados: ComponenteCursado[];
+  onAbrirArvore: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   return (
@@ -831,6 +841,7 @@ function LinhaDoTempo({
                         componente={componente}
                         insight={insight}
                         cursados={cursados}
+                        onAbrirArvore={onAbrirArvore}
                       />
                     ))}
                   </View>
@@ -864,10 +875,12 @@ function MateriaCard({
   componente,
   insight,
   cursados,
+  onAbrirArvore,
 }: {
   componente: ComponenteCursado;
   insight: Insight;
   cursados: ComponenteCursado[];
+  onAbrirArvore: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const rotulo = rotuloSituacao(componente.situacao);
   const nota = formatarNota(componente.nota);
@@ -882,7 +895,9 @@ function MateriaCard({
     // Narrow enough to sit two (or more) per row in the período box's
     // flex-wrap above — `flexBasis`/`minWidth` together are what let it grow
     // past that floor when there's room, but never shrink below it.
-    <View
+    <Pressable
+      testID={`materia-card-${componente.codigo}`}
+      onPress={() => onAbrirArvore(componente.codigo, componente.nome)}
       className={`rounded-2xl p-3 justify-between gap-1.5 ${
         naoConta
           ? "bg-surface-secondary/40 border border-dashed border-white/20 opacity-60"
@@ -961,6 +976,6 @@ function MateriaCard({
           </Typography.Heading>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
