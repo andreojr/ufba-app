@@ -125,6 +125,10 @@ model Historico {
   userId             String   @id @map("user_id")
   emitidoEm          DateTime @map("emitido_em")
   curriculo          String
+  // "ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR - ..." straight off the
+  // transcript's own "Curso:" header line — resolves the student's curso
+  // without depending on the schedule sync ever having populated User.curso.
+  nomeCurso          String   @map("nome_curso")
   periodoLetivoAtual Int      @map("periodo_letivo_atual")
   prazoPadrao        String   @map("prazo_padrao")
   prazoMaximo        String   @map("prazo_maximo")

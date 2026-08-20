@@ -6,6 +6,7 @@ function historicoMinimo(): Historico {
   return {
     emitidoEm: '2026-08-19',
     curriculo: 'G20251 - 2025.2',
+    nomeCurso: 'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR - BACHARELADO - PRESENCIAL - N',
     periodoLetivoAtual: 8,
     prazoConclusaoPadrao: '2030.1',
     prazoConclusaoMaximo: '2033.1',

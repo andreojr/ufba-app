@@ -25,6 +25,7 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
           userId,
           emitidoEm: new Date(historico.emitidoEm),
           curriculo: historico.curriculo,
+          nomeCurso: historico.nomeCurso,
           periodoLetivoAtual: historico.periodoLetivoAtual,
           prazoPadrao: historico.prazoConclusaoPadrao,
           prazoMaximo: historico.prazoConclusaoMaximo,
@@ -84,6 +85,7 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
       historico: {
         emitidoEm: registro.emitidoEm.toISOString().slice(0, 10),
         curriculo: registro.curriculo,
+        nomeCurso: registro.nomeCurso,
         periodoLetivoAtual: registro.periodoLetivoAtual,
         prazoConclusaoPadrao: registro.prazoPadrao,
         prazoConclusaoMaximo: registro.prazoMaximo,

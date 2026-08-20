@@ -15,8 +15,13 @@ import { CURRICULO_SERVICE } from './tokens';
       provide: CURRICULO_SERVICE,
       inject: [CURRICULO_REPOSITORY],
       useFactory: (repository: CurriculoRepository) =>
-        new CurriculoService(createSigaaHttpClient(), repository, () => new Date()),
+        new CurriculoService(
+          createSigaaHttpClient(),
+          repository,
+          () => new Date(),
+        ),
     },
   ],
+  exports: [CURRICULO_SERVICE],
 })
 export class CurriculoModule {}

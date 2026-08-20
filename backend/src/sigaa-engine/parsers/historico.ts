@@ -69,6 +69,7 @@ export interface Historico {
   /** ISO date, so a client can build a Date without guessing day/month order. */
   emitidoEm: string;
   curriculo: string;
+  nomeCurso: string;
   periodoLetivoAtual: number;
   prazoConclusaoPadrao: string;
   prazoConclusaoMaximo: string;
@@ -683,6 +684,7 @@ export function parseHistorico(itens: ItemTexto[]): Historico {
   const historico: Historico = {
     emitidoEm,
     curriculo: exigirValor(itens, 'Currículo:'),
+    nomeCurso: exigirValor(itens, 'Curso:'),
     periodoLetivoAtual: exigirNumero(itens, 'Período Letivo Atual:'),
     prazoConclusaoPadrao: prazos[1],
     prazoConclusaoMaximo: prazos[2],

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
+import { CurriculoModule } from '../curriculo/curriculo.module';
 import { DatabaseModule } from '../db/database.module';
 import {
   AUDIT_LOGGER,
@@ -31,7 +32,7 @@ import { TrajetoriaController } from './trajetoria.controller';
 import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
 
 @Module({
-  imports: [ConfigModule, AuthModule, DatabaseModule],
+  imports: [ConfigModule, AuthModule, DatabaseModule, CurriculoModule],
   controllers: [SigaaController, TrajetoriaController, ScheduleController],
   providers: [
     {

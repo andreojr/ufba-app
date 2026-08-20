@@ -28,6 +28,14 @@ describe('parseHistorico', () => {
     expect(historico.prazoConclusaoMaximo).toBe('2033.1');
   });
 
+  it('reads the course name off the "Curso:" header line', () => {
+    const historico = parseHistorico(itens);
+
+    expect(historico.nomeCurso).toBe(
+      'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR - BACHARELADO - PRESENCIAL - N',
+    );
+  });
+
   it('reads the issue date off the header line', () => {
     const historico = parseHistorico(itens);
 
