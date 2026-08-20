@@ -812,10 +812,39 @@ describe('parseDocenteProducao', () => {
     expect(total).toBeLessThan(cabecalho);
   });
 
-  it('never returns a student name in the supervised-TCC list', () => {
-    const { tccsOrientados } = parseDocenteProducao(fixture);
-    expect(tccsOrientados.length).toBeGreaterThan(0);
-    for (const tcc of tccsOrientados) {
+  // The captured docente has ONLY an orientações section — no "Trabalho de Fim
+  // de Curso" heading exists on the page at all. Asserting the empty list
+  // explicitly keeps the parser honest about the difference between "no such
+  // section" and "failed to parse the section", which would otherwise look
+  // identical from the outside.
+  it('returns no TCCs for a page that has no Trabalho de Fim de Curso section', () => {
+    const { tccsOrientados, orientacoes } = parseDocenteProducao(fixture);
+    expect(tccsOrientados).toEqual([]);
+    expect(
+      orientacoes.mestradoAndamento +
+        orientacoes.mestradoConcluidas +
+        orientacoes.doutoradoAndamento +
+        orientacoes.doutoradoConcluidas,
+    ).toBeGreaterThan(0);
+  });
+
+  // The privacy constraint, proven rather than merely asserted structurally: the
+  // student's name is a dedupe key held in memory and must not survive into
+  // anything this function returns. Serialising the whole result and searching
+  // it catches a leak through any field, not just the ones we thought to check.
+  it('never lets a student name escape into the returned data', () => {
+    const html = `<h2>Trabalho de Fim de Curso (2)</h2>
+      <ul class="listagem">
+        <li>Um estudo sobre grafos, MARIA DAS DORES SANTOS, 03/2024</li>
+        <li>Outro trabalho, JOAO PEREIRA LIMA, 11/2023</li>
+      </ul>`;
+    const resultado = parseDocenteProducao(html);
+
+    expect(resultado.tccsOrientados).toHaveLength(2);
+    const serializado = JSON.stringify(resultado);
+    expect(serializado).not.toContain('MARIA DAS DORES SANTOS');
+    expect(serializado).not.toContain('JOAO PEREIRA LIMA');
+    for (const tcc of resultado.tccsOrientados) {
       expect(Object.keys(tcc).sort()).toEqual(['ano', 'titulo']);
       expect(Number.isInteger(tcc.ano)).toBe(true);
     }
@@ -982,7 +1011,7 @@ export function parseDocenteProducao(html: string): DocenteProducao {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npm test -- src/sigaa-engine/parsers/docente-producao.spec.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 If the section lookup misses because the real markup wraps rows differently (e.g. the rows are `<li>` not `<tr>`, or the table is not the next sibling), open `docente-producao.html`, find how a supervision row is actually marked up, and adjust `linhasDaSecao`. Do not weaken the dedupe assertion — proving the total comes in under the header count is the whole point of this task.
 
