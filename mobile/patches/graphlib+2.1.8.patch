@@ -1,0 +1,12 @@
+diff --git a/node_modules/graphlib/index.js b/node_modules/graphlib/index.js
+index 0b861f2..8a2b2a5 100644
+--- a/node_modules/graphlib/index.js
++++ b/node_modules/graphlib/index.js
+@@ -33,6 +33,6 @@ var lib = require("./lib");
+ module.exports = {
+   Graph: lib.Graph,
+   json: require("./lib/json"),
+-  alg: require("./lib/alg"),
++  alg: require("./lib/alg/index.js"),
+   version: lib.version
+ };
