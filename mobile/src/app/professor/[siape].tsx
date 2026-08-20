@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { Button, Spinner, Typography } from "heroui-native";
-import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Linking, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
@@ -43,6 +43,19 @@ export default function ProfessorDetalhe(): JSX.Element {
   // signed in — matching how trajetoria.tsx reads it.
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
+  // Guards every setEstado in `carregar` against firing after the screen is
+  // gone — a student can back out while getDocente is still in flight, and a
+  // retry pressed before that in-flight request settles must not let its
+  // stale response resurrect a now-abandoned attempt. Mirrors professores.tsx's
+  // montadoRef (added alongside this screen's retry button).
+  const montadoRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      montadoRef.current = false;
+    },
+    [],
+  );
 
   // Matches how professores.tsx re-runs its own fetch: a plain useCallback
   // driven by both the mount effect and the retry button.
@@ -50,8 +63,10 @@ export default function ProfessorDetalhe(): JSX.Element {
     setEstado({ status: "loading" });
     try {
       const perfil = await getDocente(accessToken ?? "", siape);
+      if (!montadoRef.current) return;
       setEstado({ status: "ready", perfil });
     } catch {
+      if (!montadoRef.current) return;
       setEstado({ status: "error" });
     }
   }, [accessToken, siape]);

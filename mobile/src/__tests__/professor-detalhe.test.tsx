@@ -5,6 +5,29 @@ import { getDocente } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DocentePerfil } from "@/lib/types";
 
+// React 19 no longer warns (or throws) when a state update fires on an
+// already-unmounted component — it silently no-ops, which is exactly why
+// asserting on the absence of a console warning is not a reliable signal
+// here (confirmed empirically: it passes with or without the montadoRef
+// guard). So this wraps the real useState to record every value passed to
+// its setter, giving the "never updates state after unmount" test something
+// concrete to assert on regardless of what React does with the call.
+const mockSetEstadoCalls: unknown[] = [];
+jest.mock("react", () => {
+  const actualReact = jest.requireActual("react");
+  return {
+    ...actualReact,
+    useState: (initial: unknown) => {
+      const [state, setState] = actualReact.useState(initial);
+      const setStateEspiado = (value: unknown) => {
+        mockSetEstadoCalls.push(value);
+        return setState(value);
+      };
+      return [state, setStateEspiado];
+    },
+  };
+});
+
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
@@ -76,6 +99,7 @@ function perfil(overrides: Partial<DocentePerfil> = {}): DocentePerfil {
 describe("Professor detail screen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSetEstadoCalls.length = 0;
     mockedAuth.mockReturnValue({ accessToken: "token" } as ReturnType<typeof useAuth>);
   });
 
@@ -143,5 +167,35 @@ describe("Professor detail screen", () => {
 
     expect(await screen.findByText("IC- 2012")).toBeTruthy();
     expect(mockedGet).toHaveBeenCalledTimes(2);
+  });
+
+  // Backing out of the screen while getDocente is still in flight must not
+  // leave a dangling state update. The original inline effect guarded this
+  // with a `cancelado` flag; extracting the fetch into `carregar` for the
+  // retry button above must not lose that protection.
+  it("never updates state after the screen unmounts while the fetch is still in flight", async () => {
+    let resolver: ((perfil: DocentePerfil) => void) | undefined;
+    mockedGet.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolver = resolve;
+        }),
+    );
+
+    const { unmount } = await render(<ProfessorDetalhe />);
+    // The mount effect's own "loading" setEstado has already fired by now —
+    // only calls made from here on (i.e. after unmount) are the ones that
+    // would prove the guard missing.
+    mockSetEstadoCalls.length = 0;
+
+    await unmount();
+
+    // Resolves only after the screen is gone. A missing guard calls setEstado
+    // with the ready perfil right here.
+    await act(async () => {
+      resolver?.(perfil());
+    });
+
+    expect(mockSetEstadoCalls).toEqual([]);
   });
 });
