@@ -56,6 +56,25 @@ describe('parseDocenteProducao', () => {
     }
   });
 
+  // Dropping the student name is what makes two distinct TCCs collapse into
+  // an identical { titulo, ano } — two students on the same theme in the same
+  // year is ordinary, and SIGAA also repeats rows verbatim (the same
+  // inflation already deduped for "Orientações de Pós-Graduação"). Emitting
+  // indistinguishable entries pushed the duplicate onto every client: the
+  // mobile detail screen keys the list on titulo+ano and threw.
+  it('does not emit TCCs made indistinguishable by dropping the student name', () => {
+    const html = `<h2>Trabalho de Fim de Curso (3)</h2>
+      <ul class="listagem">
+        <li>Aplicações de Aprendizado de Máquina, ANA SOUZA COSTA, 06/2026</li>
+        <li>Aplicações de Aprendizado de Máquina, BRUNO LIMA ROCHA, 06/2026</li>
+        <li>Aplicações de Aprendizado de Máquina, CARLA DIAS NUNES, 06/2025</li>
+      </ul>`;
+    expect(parseDocenteProducao(html).tccsOrientados).toEqual([
+      { titulo: 'Aplicações de Aprendizado de Máquina', ano: 2026 },
+      { titulo: 'Aplicações de Aprendizado de Máquina', ano: 2025 },
+    ]);
+  });
+
   it('keeps a comma inside a TCC title by splitting from the right', () => {
     const html = `<h2>Trabalho de Fim de Curso (1)</h2>
       <table class="listagem"><tr><td>

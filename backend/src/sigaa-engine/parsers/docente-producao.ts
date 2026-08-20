@@ -66,7 +66,13 @@ export function parseDocenteProducao(html: string): DocenteProducao {
   // --- supervised TCCs: "Título, ALUNO, MM/AAAA" ------------------------
   // Split from the RIGHT: a title may contain commas, the trailing two fields
   // never do. Splitting left-first corrupts every title with a comma in it.
+  // Deduped on titulo+ano, for the same reason the supervisions below are:
+  // SIGAA repeats rows, and dropping the student name collapses two students
+  // on one theme in one year into an identical entry. Consumers key this list
+  // by its contents — there is nothing left to tell those apart, so emitting
+  // both only hands them an unusable duplicate.
   const tccs: { titulo: string; ano: number }[] = [];
+  const tccsVistos = new Set<string>();
   for (const linha of linhasDaSecao($, 'trabalho de fim de curso')) {
     const ano = ANO_PATTERN.exec(linha);
     if (!ano) {
@@ -80,9 +86,16 @@ export function parseDocenteProducao(html: string): DocenteProducao {
     // Everything before the student's name is the title. The name itself is
     // dropped here and never leaves this function.
     const titulo = semData.slice(0, ultimaVirgula).trim();
-    if (titulo) {
-      tccs.push({ titulo, ano: Number.parseInt(ano[2], 10) });
+    if (!titulo) {
+      continue;
     }
+    const anoNumero = Number.parseInt(ano[2], 10);
+    const chave = `${anoNumero}-${semAcento(titulo)}`;
+    if (tccsVistos.has(chave)) {
+      continue;
+    }
+    tccsVistos.add(chave);
+    tccs.push({ titulo, ano: anoNumero });
   }
 
   // --- supervisions: "Nível, Aluno, início - fim, situação" -------------
