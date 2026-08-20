@@ -10,7 +10,7 @@ import type {
   CurriculoRepository,
   EstruturaCurricularSalva,
 } from './curriculo.repository';
-import { calcularStaleAfter } from './stale';
+import { calcularStaleAfter, diretorioDesatualizado } from './stale';
 
 const LISTA_PATH = '/sigaa/public/curso/lista.jsf';
 const CURRICULO_PATH = '/sigaa/public/curso/curriculo.jsf';
@@ -26,6 +26,10 @@ export class SemEstruturaAtivaError extends Error {
 export class CursoDesconhecidoError extends Error {
   constructor(cursoId: string) {
     super(`Course ${cursoId} is not in the directory`);
+    // Explicit, like the other named sigaa-engine errors: SigaaExceptionFilter
+    // maps status codes off `exception.name`, which without this would be
+    // the inherited "Error" instead of "CursoDesconhecidoError".
+    this.name = 'CursoDesconhecidoError';
   }
 }
 
@@ -55,11 +59,14 @@ export class CurriculoService {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  /** Refreshes the directory only when it has never been populated. */
+  /** Refreshes the directory when it has never been populated, or has gone stale. */
   async listarCursos(): Promise<CursoListaItem[]> {
     const existentes = await this.repository.buscarCursos();
     if (existentes.length > 0) {
-      return existentes;
+      const atualizadoEm = await this.repository.buscarDiretorioAtualizadoEm();
+      if (atualizadoEm && !diretorioDesatualizado(atualizadoEm, this.agora())) {
+        return existentes;
+      }
     }
     const resposta = await this.http.request({ method: 'GET', path: LISTA_PATH });
     if (resposta.status !== 200) {
@@ -72,13 +79,13 @@ export class CurriculoService {
 
   /**
    * Resolves and persists a course's active curriculum structure. Serves the
-   * cached row as-is when it exists — this method does not check staleness
-   * itself; that is the caller's call (a stale row is still a valid answer,
-   * per the design spec's invalidation rule of "served anyway").
+   * cached row only when it is still fresh (`staleAfter` in the future) —
+   * a stale row falls through to a real re-resolution, per the design
+   * spec's "missing or stale" invalidation rule.
    */
   async resolverCurso(cursoId: string): Promise<EstruturaCurricularSalva> {
     const jaSalva = await this.repository.buscarEstrutura(cursoId);
-    if (jaSalva) {
+    if (jaSalva && jaSalva.staleAfter > this.agora()) {
       return jaSalva;
     }
 
@@ -95,7 +102,14 @@ export class CurriculoService {
       throw new SemEstruturaAtivaError(cursoId);
     }
 
-    const matrizHtml = await session.postar(CURRICULO_PATH, ativa.jsfParams);
+    // A real browser also submits the enclosing form's own hidden fields
+    // (e.g. formCurriculosCurso=formCurriculosCurso, nivel=G) alongside the
+    // ajax action's own params — without the form-marker field in
+    // particular, JSF has no way to tell the form was submitted at all.
+    const matrizHtml = await session.postar(CURRICULO_PATH, {
+      ...ativa.formFields,
+      ...ativa.jsfParams,
+    });
     const resumo = parseEstruturaResumo(matrizHtml);
 
     const componentesDetalhados = await withLimitedConcurrency(
@@ -109,24 +123,28 @@ export class CurriculoService {
         // genuine fetch failure.
         let detalheHtml: string;
         try {
-          detalheHtml = await session.postar(RESUMO_PATH, {
-            formulario: 'formulario',
-            id: componente.idSigaa,
-            publico: 'public',
-          });
+          // capturarViewState: false — these run concurrently against one
+          // shared session; see CurriculoPublicSession.postar's doc comment.
+          detalheHtml = await session.postar(
+            RESUMO_PATH,
+            { ...resumo.formFields, ...componente.jsfParams },
+            { capturarViewState: false },
+          );
         } catch (erro) {
           this.logger.warn(
             `Falha ao buscar detalhe do componente ${componente.codigo}: ${erro}`,
           );
+          const { jsfParams: _jsfParams, ...componenteSalvo } = componente;
           return {
-            ...componente,
+            ...componenteSalvo,
             unidadeResponsavel: null,
             preRequisito: null,
             coRequisito: null,
             equivalencias: null,
           };
         }
-        return { ...componente, ...parseComponenteResumo(detalheHtml) };
+        const { jsfParams: _jsfParams, ...componenteSalvo } = componente;
+        return { ...componenteSalvo, ...parseComponenteResumo(detalheHtml) };
       },
     );
 
@@ -147,10 +165,20 @@ export class CurriculoService {
   }
 
   /**
-   * `User.curso` reads e.g. "ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador" —
-   * name, unidade sigla and campus joined by "/" and " - ". Only the name and
+   * `User.curso` reads e.g. "ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador" for
+   * a real undergrad's own profile (captured in
+   * sigaa-engine/parsers/__fixtures__/portal-discente-perfil.html) — name,
+   * unidade sigla and campus joined by "/" and " - ". Only the name and
    * campus are matched against the directory (the unidade sigla on the
    * profile side does not always agree with lista.jsf's own grouping).
+   *
+   * That same real fixture is a case in point for why `nome` needs fuzzy,
+   * not exact, matching: the profile spells it "ENGENHARIA DE COMPUTAÇÃO"
+   * while the real course directory (curso-lista.html) spells the same
+   * course "ENGENHARIA DA COMPUTAÇÃO" — SIGAA itself is inconsistent about
+   * the connector word. `normalizarNome` strips single-letter-preposition
+   * words (de/da/do/das/dos) before comparing so this real-world spelling
+   * drift doesn't break the match.
    */
   async resolverPorNomeUsuario(nomeCurso: string): Promise<EstruturaCurricularSalva> {
     const [antesDoTraco] = nomeCurso.split(' - ');
@@ -159,9 +187,14 @@ export class CurriculoService {
 
     const cursos = await this.listarCursos();
     const normalizado = (s: string) => s.trim().toUpperCase();
+    const normalizarNome = (s: string) =>
+      normalizado(s)
+        .replace(/\b(DE|DA|DO|DAS|DOS)\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
     const encontrado = cursos.find(
       (c) =>
-        normalizado(c.nome) === normalizado(nome) &&
+        normalizarNome(c.nome) === normalizarNome(nome) &&
         c.nivel === 'G' &&
         (!campus || normalizado(c.sede) === normalizado(campus)),
     );
