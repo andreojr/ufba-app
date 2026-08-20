@@ -30,7 +30,7 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 - Remover "Ajustes" das tabs inferiores.
 - Header com foto de perfil + ícone de engrenagem (configurações) fica global em todas as páginas.
 
-## 7. Página de professores (perfil, não avaliação)
+## 7. Página de professores (perfil, não avaliação) ✅ feito
 - Baseado na investigação em [PROFESSORES_INVESTIGATION.md](PROFESSORES_INVESTIGATION.md).
 - Descartada a ideia de avaliação (evitar atrito/problema com os professores).
 - O SIGAA já disponibiliza um perfil de cada professor, só que praticamente ninguém sabe que existe. Página pública, nem precisa de login: https://sigaa.ufba.br/sigaa/public/docente/busca_docentes.jsf
