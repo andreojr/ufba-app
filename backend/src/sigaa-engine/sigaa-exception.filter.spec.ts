@@ -7,6 +7,7 @@ import {
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
+import { CursoDesconhecidoError } from '../curriculo/curriculo.service';
 
 function fakeHost() {
   const json = jest.fn();
@@ -57,6 +58,19 @@ describe('SigaaExceptionFilter', () => {
     filter.catch(new SigaaRateLimitedError(), host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.TOO_MANY_REQUESTS);
+  });
+
+  it('maps CursoDesconhecidoError to 404', () => {
+    const { host, status, json } = fakeHost();
+    const error = new CursoDesconhecidoError('999');
+
+    filter.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.NOT_FOUND,
+      message: error.message,
+    });
   });
 
   it('leaves an existing HttpException (e.g. NotImplementedException) untouched', () => {

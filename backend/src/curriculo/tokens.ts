@@ -1,0 +1,1 @@
+export const CURRICULO_SERVICE = Symbol('CURRICULO_SERVICE');
