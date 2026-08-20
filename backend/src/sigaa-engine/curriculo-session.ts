@@ -26,6 +26,7 @@ export class CurriculoPublicSession {
 
   async abrir(path: string): Promise<string> {
     const resposta = await this.http.request({ method: 'GET', path });
+    this.assertStatusOk(resposta, path);
     this.capture(resposta);
     if (!this.viewState) {
       throw new Error(`SIGAA page carried no ViewState: ${path}`);
@@ -33,7 +34,24 @@ export class CurriculoPublicSession {
     return resposta.body;
   }
 
-  async postar(path: string, campos: Record<string, string>): Promise<string> {
+  /**
+   * `opcoes.capturarViewState` (default `true`) controls whether this
+   * response's ViewState (if any) replaces the session's current one.
+   * Callers running several `postar`s concurrently against one shared
+   * session (e.g. the per-component detail fetches in CurriculoService) must
+   * pass `false` — otherwise two concurrent responses racing to update
+   * `this.viewState` could hand a later postar the wrong conversation state.
+   * This is currently moot for those leaf responses (they carry no
+   * ViewState at all, so `capture` would be a no-op either way), but the
+   * option makes that safe structurally rather than by accident of the
+   * server's current behaviour.
+   */
+  async postar(
+    path: string,
+    campos: Record<string, string>,
+    opcoes: { capturarViewState?: boolean } = {},
+  ): Promise<string> {
+    const capturarViewState = opcoes.capturarViewState ?? true;
     if (!this.viewState) {
       throw new Error('CurriculoPublicSession.abrir must run before postar');
     }
@@ -43,16 +61,28 @@ export class CurriculoPublicSession {
       cookie: this.jsessionId,
       body: { ...campos, 'javax.faces.ViewState': this.viewState },
     });
-    this.capture(resposta);
+    this.assertStatusOk(resposta, path);
+    this.capture(resposta, capturarViewState);
     return resposta.body;
   }
 
-  private capture(response: SigaaHttpResponse): void {
+  private assertStatusOk(response: SigaaHttpResponse, path: string): void {
+    if (response.status !== 200) {
+      throw new Error(
+        `Unexpected SIGAA response for ${path}: status ${response.status}`,
+      );
+    }
+  }
+
+  private capture(response: SigaaHttpResponse, capturarViewState = true): void {
     const cookie = (response.headers['set-cookie'] ?? '').match(
       JSESSIONID_PATTERN,
     );
     if (cookie) {
       this.jsessionId = cookie[0];
+    }
+    if (!capturarViewState) {
+      return;
     }
     const viewState = response.body.match(VIEW_STATE_PATTERN);
     if (viewState) {

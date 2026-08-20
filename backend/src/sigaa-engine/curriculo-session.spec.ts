@@ -99,4 +99,47 @@ describe('CurriculoPublicSession', () => {
       'javax.faces.ViewState': 'j_id1',
     });
   });
+
+  it('throws on a non-200 status from abrir, before attempting to extract a ViewState', async () => {
+    const http = fakeHttp([{ status: 500, body: 'internal error' }]);
+    const session = new CurriculoPublicSession(http);
+    await expect(session.abrir('/x')).rejects.toThrow(
+      'Unexpected SIGAA response for /x: status 500',
+    );
+  });
+
+  it('throws on a non-200 status from postar, without touching the captured ViewState', async () => {
+    const http = fakeHttp([
+      {
+        status: 200,
+        headers: { 'set-cookie': 'JSESSIONID=ABC123.node1; Path=/' },
+        body: VIEW_STATE_HTML('j_id1'),
+      },
+      { status: 302, body: '' },
+    ]);
+    const session = new CurriculoPublicSession(http);
+    await session.abrir('/x');
+    await expect(session.postar('/y', {})).rejects.toThrow(
+      'Unexpected SIGAA response for /y: status 302',
+    );
+  });
+
+  it('does not update the ViewState when capturarViewState is false, even if the response carries a new one', async () => {
+    const http = fakeHttp([
+      {
+        status: 200,
+        headers: { 'set-cookie': 'JSESSIONID=ABC123.node1; Path=/' },
+        body: VIEW_STATE_HTML('j_id1'),
+      },
+      { status: 200, body: VIEW_STATE_HTML('j_id2') },
+    ]);
+    const session = new CurriculoPublicSession(http);
+    await session.abrir('/x');
+    await session.postar('/detalhe', {}, { capturarViewState: false });
+
+    await session.postar('/depois', {});
+    expect(http.requests[2].body).toMatchObject({
+      'javax.faces.ViewState': 'j_id1',
+    });
+  });
 });
