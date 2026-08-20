@@ -1,6 +1,6 @@
 import { Chip, ListGroup, Typography, useThemeColor } from "heroui-native";
 import { useEffect, useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
@@ -18,6 +18,7 @@ import {
   type SavedSigaaDocument,
 } from "@/lib/sigaa-documents";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { identidadeAppBar } from "@/lib/user-name";
 
 /**
  * Every state but `idle` carries the copy already on the device (when there is
@@ -37,9 +38,21 @@ function documentOf(state: DocState): SavedSigaaDocument | null {
   return state.status === "idle" ? null : state.document;
 }
 
-function formatDocMeta(document: SavedSigaaDocument): string {
+/**
+ * "<data> · <tamanho>" — no "baixado em" here: the card above already says
+ * "Baixado" next to the checkmark, so repeating it in this row (which only
+ * shows once the doc is on the device, in the "No aparelho" list) would be
+ * the same fact twice. Both values are numeric, so both render in the
+ * monospace font; the separator stays in the surrounding text's own font.
+ */
+function DocMeta({ document }: { document: SavedSigaaDocument }): JSX.Element {
   const kb = Math.max(1, Math.round(document.size / 1024));
-  return `baixado em ${document.savedAt.toLocaleDateString("pt-BR")} · ${kb} KB`;
+  return (
+    <>
+      <Text className="font-mono">{document.savedAt.toLocaleDateString("pt-BR")}</Text> ·{" "}
+      <Text className="font-mono">{kb} KB</Text>
+    </>
+  );
 }
 
 /**
@@ -64,6 +77,7 @@ async function generateDocument(
 export default function DocumentosTab(): JSX.Element {
   const auth = useAuth();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
 
   const [states, setStates] = useState<Record<DocumentKey, DocState>>({
     atestado: { status: "idle" },
@@ -128,7 +142,7 @@ export default function DocumentosTab(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Documentos" />
+      <AppBar title="Documentos" {...identidade} />
       <ScrollView
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pb-8"
@@ -180,7 +194,7 @@ export default function DocumentosTab(): JSX.Element {
                 <View className="flex-row items-center gap-2.5">
                   <AppIcon name="IconCheck" size={16} color={successSoftForeground} />
                   <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
-                    {formatDocMeta(state.document)}
+                    Baixado
                   </Typography.Paragraph>
                   <Pressable onPress={() => download(key)} className="h-9 px-3 justify-center">
                     <Typography.Paragraph type="body-sm" weight="medium" className="text-accent">
@@ -224,7 +238,9 @@ export default function DocumentosTab(): JSX.Element {
                     </ListGroup.ItemPrefix>
                     <ListGroup.ItemContent>
                       <ListGroup.ItemTitle>{DOCUMENT_DEFS[key].title}</ListGroup.ItemTitle>
-                      <ListGroup.ItemDescription>{formatDocMeta(document)}</ListGroup.ItemDescription>
+                      <ListGroup.ItemDescription>
+                        <DocMeta document={document} />
+                      </ListGroup.ItemDescription>
                     </ListGroup.ItemContent>
                     <ListGroup.ItemSuffix />
                   </ListGroup.Item>

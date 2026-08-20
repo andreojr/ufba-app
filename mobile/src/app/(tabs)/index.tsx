@@ -30,7 +30,7 @@ import {
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import type { PeriodoLetivo } from "@/lib/types";
-import { buildGreeting, getInitials } from "@/lib/user-name";
+import { buildGreeting, identidadeAppBar } from "@/lib/user-name";
 
 const EMPTY_WEEK: ScheduleBlock[][] = [[], [], [], [], []];
 
@@ -73,7 +73,7 @@ export default function HomeTab(): JSX.Element {
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const studentName = auth.status === "signedIn" ? auth.user.name : "";
-  const studentAvatarUrl = auth.status === "signedIn" ? auth.user.avatarUrl : null;
+  const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
   const { toast } = useToast();
 
   // One ticking clock for the whole screen. Read at render instead, every one of
@@ -136,7 +136,7 @@ export default function HomeTab(): JSX.Element {
         setState({ status: "error", message: describeApiError(error) });
       }
     },
-    [accessToken, days],
+    [accessToken, days]
   );
 
   useEffect(() => {
@@ -194,7 +194,7 @@ export default function HomeTab(): JSX.Element {
   // day yet" — the same masking that emptied the column, said out loud.
   const periodoLetivo = state.status === "ready" ? state.periodoLetivo : null;
   const selectedDayIsOutsidePeriodo = Boolean(
-    periodoLetivo && days[selectedDay] && !isWithinPeriodo(days[selectedDay].date, periodoLetivo),
+    periodoLetivo && days[selectedDay] && !isWithinPeriodo(days[selectedDay].date, periodoLetivo)
   );
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -247,9 +247,9 @@ export default function HomeTab(): JSX.Element {
               opacity: dayIndex === selectedDay ? 1 : 0.45,
             },
           };
-        }),
+        })
       ),
-    [week, selectedDay, columnWidth],
+    [week, selectedDay, columnWidth]
   );
 
   return (
@@ -268,8 +268,7 @@ export default function HomeTab(): JSX.Element {
             {greeting.suffix}
           </>
         }
-        initials={getInitials(studentName)}
-        avatarUrl={studentAvatarUrl}
+        {...identidade}
       />
       <ScrollView
         className="flex-1 px-6"
@@ -322,49 +321,60 @@ export default function HomeTab(): JSX.Element {
 
         {state.status === "ready" && (
           <>
-            <View className="rounded-3xl bg-accent p-4 gap-3">
-              {nextClass ? (
-                <>
-                  <View className="flex-row items-center gap-2">
-                    <View className="rounded-full bg-white/20 px-2.5 py-1">
+            {/* One connected group, top to bottom: next class, semester
+                countdown, weekly grid — the countdown sits between the two
+                schedule-shaped cards it relates to instead of floating above
+                them on its own. */}
+            <View className="gap-0.5">
+              <View className="rounded-t-3xl rounded-b-md bg-accent p-4 gap-3">
+                {nextClass ? (
+                  <>
+                    <View className="flex-row items-center gap-2">
+                      <View className="rounded-full bg-white/20 px-2.5 py-1">
+                        <Typography.Paragraph
+                          testID="next-class-when"
+                          type="body-xs"
+                          className="text-white"
+                          weight="medium"
+                        >
+                          {nextClassWhen}
+                        </Typography.Paragraph>
+                      </View>
                       <Typography.Paragraph
-                        testID="next-class-when"
-                        type="body-xs"
-                        className="text-white"
+                        type="body-sm"
+                        className="flex-1 text-white font-mono"
                         weight="medium"
                       >
-                        {nextClassWhen}
+                        {formatMinutes(nextClass.block.inicioMin)} –{" "}
+                        {formatMinutes(nextClass.block.fimMin)}
+                      </Typography.Paragraph>
+                      <AppIcon name="IconCaretRight" size={16} color="rgba(250,250,250,0.7)" />
+                    </View>
+                    <View className="gap-0.5">
+                      <Typography.Heading type="h5" className="text-white">
+                        {nextClass.block.nome}
+                      </Typography.Heading>
+                      <Typography.Paragraph type="body-sm" className="text-white/80">
+                        {nextClass.block.codigo ?? "—"}
+                        {nextClass.block.predio ? ` · ${nextClass.block.predio}` : ""}
+                        {nextClass.block.sala ? ` · ${nextClass.block.sala}` : ""}
                       </Typography.Paragraph>
                     </View>
-                    <Typography.Paragraph type="body-sm" className="flex-1 text-white" weight="medium">
-                      {formatMinutes(nextClass.block.inicioMin)} –{" "}
-                      {formatMinutes(nextClass.block.fimMin)}
-                    </Typography.Paragraph>
-                    <AppIcon name="IconCaretRight" size={16} color="rgba(250,250,250,0.7)" />
-                  </View>
-                  <View className="gap-0.5">
-                    <Typography.Heading type="h5" className="text-white">
-                      {nextClass.block.nome}
-                    </Typography.Heading>
-                    <Typography.Paragraph type="body-sm" className="text-white/80">
-                      {nextClass.block.codigo ?? "—"}
-                      {nextClass.block.predio ? ` · ${nextClass.block.predio}` : ""}
-                      {nextClass.block.sala ? ` · ${nextClass.block.sala}` : ""}
-                    </Typography.Paragraph>
-                  </View>
-                </>
-              ) : (
-                <Typography.Paragraph type="body-sm" className="text-white">
-                  Nenhuma aula agendada essa semana.
-                </Typography.Paragraph>
-              )}
-            </View>
+                  </>
+                ) : (
+                  <Typography.Paragraph type="body-sm" className="text-white">
+                    Nenhuma aula agendada essa semana.
+                  </Typography.Paragraph>
+                )}
+              </View>
 
-            <View className="rounded-3xl bg-surface-secondary p-4 gap-3">
               {state.periodoLetivo && (
-                <SemesterTrack periodo={state.periodoLetivo} now={now} />
+                <View className="rounded-md bg-surface-secondary p-4">
+                  <SemesterTrack periodo={state.periodoLetivo} now={now} />
+                </View>
               )}
-              <View className="gap-0">
+
+              <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-0">
                 <View className="flex-row gap-2">
                   {/* Spacer matching the time-label gutter below, so the day
                       buttons land exactly over their grid columns. */}
@@ -388,7 +398,11 @@ export default function HomeTab(): JSX.Element {
                           >
                             {day.label}
                           </Typography.Paragraph>
-                          <Typography.Paragraph type="body-sm" weight="medium">
+                          <Typography.Paragraph
+                            type="body-sm"
+                            weight="medium"
+                            className="font-mono"
+                          >
                             {day.num}
                           </Typography.Paragraph>
                           {day.isToday && (
@@ -408,60 +422,64 @@ export default function HomeTab(): JSX.Element {
 
                 <View className="flex-row gap-2">
                   <View style={{ width: TIME_GUTTER_WIDTH, height: SCHEDULE_GRID_HEIGHT }}>
-                  {HOUR_LABELS.map((hour) => (
-                    <Typography.Paragraph
-                      key={hour}
-                      type="body-xs"
-                      color="muted"
-                      style={{
-                        position: "absolute",
-                        top: (hour * 60 - GRID_START_MIN) * PX_PER_MIN - 8,
-                      }}
-                    >
-                      {hour < 10 ? `0${hour}` : hour}
-                    </Typography.Paragraph>
-                  ))}
-                </View>
-                <View
-                  className="rounded-br-3xl overflow-hidden"
-                  style={{ flex: 1, height: SCHEDULE_GRID_HEIGHT, position: "relative" }}
-                  onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
-                >
-                  {GRID_TIME_MARKS.map((mark) => (
-                    <View
-                      key={mark}
-                      className="absolute left-0 right-0 h-px bg-white/5"
-                      style={{
-                        top: (mark - GRID_START_MIN) * PX_PER_MIN,
-                        // 22:10 closes the last slot and is also the grid's own
-                        // bottom edge, which the card already draws.
-                        opacity: mark === GRID_END_MIN ? 0 : 1,
-                      }}
-                    />
-                  ))}
-                  {days.map((day, index) => (
-                    <Pressable
-                      key={day.key}
-                      onPress={() => setSelectedDay(index)}
-                      className={`absolute bottom-0 top-0 ${
-                        index === selectedDay ? "bg-white/[0.04]" : ""
-                      }`}
-                      style={{ left: index * columnWidth, width: columnWidth }}
-                    />
-                  ))}
-                  {blocks.map((block) => (
-                    <Pressable
-                      key={block.key}
-                      onPress={() => setSelectedDay(block.dayIndex)}
-                      style={block.style}
-                    >
-                      <Typography.Paragraph type="body-xs" style={{ color: block.color, fontSize: 9 }}>
-                        {block.label}
+                    {HOUR_LABELS.map((hour) => (
+                      <Typography.Paragraph
+                        key={hour}
+                        type="body-xs"
+                        color="muted"
+                        className="font-mono"
+                        style={{
+                          position: "absolute",
+                          top: (hour * 60 - GRID_START_MIN) * PX_PER_MIN - 8,
+                        }}
+                      >
+                        {hour < 10 ? `0${hour}` : hour}
                       </Typography.Paragraph>
-                    </Pressable>
-                  ))}
+                    ))}
+                  </View>
+                  <View
+                    className="rounded-br-3xl overflow-hidden"
+                    style={{ flex: 1, height: SCHEDULE_GRID_HEIGHT, position: "relative" }}
+                    onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}
+                  >
+                    {GRID_TIME_MARKS.map((mark) => (
+                      <View
+                        key={mark}
+                        className="absolute left-0 right-0 h-px bg-white/5"
+                        style={{
+                          top: (mark - GRID_START_MIN) * PX_PER_MIN,
+                          // 22:10 closes the last slot and is also the grid's own
+                          // bottom edge, which the card already draws.
+                          opacity: mark === GRID_END_MIN ? 0 : 1,
+                        }}
+                      />
+                    ))}
+                    {days.map((day, index) => (
+                      <Pressable
+                        key={day.key}
+                        onPress={() => setSelectedDay(index)}
+                        className={`absolute bottom-0 top-0 ${
+                          index === selectedDay ? "bg-white/[0.04]" : ""
+                        }`}
+                        style={{ left: index * columnWidth, width: columnWidth }}
+                      />
+                    ))}
+                    {blocks.map((block) => (
+                      <Pressable
+                        key={block.key}
+                        onPress={() => setSelectedDay(block.dayIndex)}
+                        style={block.style}
+                      >
+                        <Typography.Paragraph
+                          type="body-xs"
+                          style={{ color: block.color, fontSize: 9 }}
+                        >
+                          {block.label}
+                        </Typography.Paragraph>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-              </View>
               </View>
             </View>
 
@@ -483,13 +501,16 @@ export default function HomeTab(): JSX.Element {
                   >
                     <View
                       className="w-1 self-stretch rounded-full"
-                      style={{ backgroundColor: SCHEDULE_PALETTE[entry.colorIndex].bar, minHeight: 36 }}
+                      style={{
+                        backgroundColor: SCHEDULE_PALETTE[entry.colorIndex].bar,
+                        minHeight: 36,
+                      }}
                     />
                     <View className="w-14">
-                      <Typography.Paragraph type="body-sm" weight="medium">
+                      <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
                         {formatMinutes(entry.inicioMin)}
                       </Typography.Paragraph>
-                      <Typography.Paragraph type="body-xs" color="muted">
+                      <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
                         {formatMinutes(entry.fimMin)}
                       </Typography.Paragraph>
                     </View>

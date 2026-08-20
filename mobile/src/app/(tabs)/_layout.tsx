@@ -71,11 +71,14 @@ export default function TabsLayout(): JSX.Element {
           tabBarIcon: ({ color }) => <TabIcon name="IconFileText" color={color} />,
         }}
       />
+      {/* Reachable only from the AppBar's cog now, not the tab bar itself — the
+          route stays registered here (Expo Router needs it to resolve
+          `/ajustes`) but `href: null` is what actually hides its tab. */}
       <Tabs.Screen
         name="ajustes"
         options={{
           title: "Ajustes",
-          tabBarIcon: ({ color }) => <TabIcon name="IconGear" color={color} />,
+          href: null,
         }}
       />
     </Tabs>

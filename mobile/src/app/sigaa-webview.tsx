@@ -1,6 +1,6 @@
 import CookieManager from "@react-native-cookies/cookies";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Spinner, Typography, useThemeColor } from "heroui-native";
+import { Spinner, Typography } from "heroui-native";
 import { useEffect, useState, type JSX } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,10 +24,11 @@ const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
  * engine drives, and those wouldn't carry a header we set. Cookies in the jar,
  * though, ride along automatically on every request that engine makes.
  */
+const UFBA_BLUE = "#2B3A8F";
+
 export default function SigaaWebViewScreen(): JSX.Element {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const foregroundColor = useThemeColor("foreground");
   const { sessionCookie, targetUrl } = useLocalSearchParams<{
     sessionCookie: string;
     targetUrl: string;
@@ -70,14 +71,18 @@ export default function SigaaWebViewScreen(): JSX.Element {
     <View className="flex-1 bg-background">
       <View
         className="flex-row items-center justify-between px-6 pb-3.5 self-stretch"
-        style={{ paddingTop: insets.top + 14 }}
+        style={{ paddingTop: insets.top + 14, backgroundColor: UFBA_BLUE }}
       >
         <View className="flex-row items-center gap-2">
-          <UfbaCrest size={22} />
-          <Typography.Heading type="h4">SIGAA | UFBA</Typography.Heading>
+          <View className="items-center justify-center rounded-full bg-white p-1">
+            <UfbaCrest size={22} />
+          </View>
+          <Typography.Heading type="h4" style={{ color: "#FFFFFF" }}>
+            SIGAA | UFBA
+          </Typography.Heading>
         </View>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <AppIcon name="IconX" size={24} color={foregroundColor} />
+          <AppIcon name="IconX" size={24} color="#FFFFFF" />
         </Pressable>
       </View>
 

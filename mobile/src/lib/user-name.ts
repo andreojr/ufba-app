@@ -1,5 +1,7 @@
 /** Helpers for showing the signed-in student's name — shared by the app bar and Ajustes. */
 
+import type { GoogleUserInfo } from "./types";
+
 function words(name: string): string[] {
   return name.trim().split(/\s+/).filter(Boolean);
 }
@@ -34,4 +36,21 @@ export function buildGreeting(name: string, now: Date): Greeting {
   return firstName
     ? { prefix: `${greeting}, `, name: firstName, suffix: "!" }
     : { prefix: `${greeting}!`, name: null, suffix: "" };
+}
+
+/** What the AppBar's trailing cog + avatar needs, straight from the signed-in user. */
+export interface IdentidadeAppBar {
+  initials: string;
+  avatarUrl: string | null;
+}
+
+/**
+ * Every internal screen but Ajustes itself shows the same cog + avatar,
+ * standardised here instead of each screen re-deriving it from `useAuth()`.
+ * `user` is null before sign-in resolves — `getInitials` already returns ""
+ * for an empty name, and AppBar treats "" || null as no trailing content, so
+ * the header simply shows nothing until the session loads.
+ */
+export function identidadeAppBar(user: GoogleUserInfo | null): IdentidadeAppBar {
+  return { initials: getInitials(user?.name ?? ""), avatarUrl: user?.avatarUrl ?? null };
 }
