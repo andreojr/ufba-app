@@ -1,5 +1,6 @@
 import {
   ApiError,
+  getArvoreDependencias,
   getDocente,
   getMe,
   getTrajetoria,
@@ -371,6 +372,50 @@ describe("postDocentesSemestre", () => {
       json: async () => ({ message: "SIGAA fora do ar" }),
     });
     await expect(postDocentesSemestre("token", [])).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("getArvoreDependencias", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("faz GET em /curriculo/meu-curso/componentes/:codigo/arvore-dependencias com o curso na query", async () => {
+    const mockResponse = { nos: [{ codigo: "MATA02", nome: "Cálculo A", periodo: 1 }], arestas: [] };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockResponse,
+    });
+
+    const resultado = await getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02");
+
+    expect(resultado).toEqual(mockResponse);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `http://192.168.1.10:3000/curriculo/meu-curso/componentes/MATA02/arvore-dependencias?curso=${encodeURIComponent("ENGENHARIA/PGCOMP - Salvador")}`,
+      {
+        method: "GET",
+        headers: { Authorization: "Bearer token-123" },
+        body: undefined,
+        signal: expect.any(AbortSignal),
+      },
+    );
+  });
+
+  it("throws ApiError when the backend responds with a non-2xx status", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+
+    await expect(getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02")).rejects.toThrow(
+      ApiError,
+    );
   });
 });
 

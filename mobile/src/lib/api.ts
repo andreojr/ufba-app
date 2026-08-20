@@ -1,4 +1,5 @@
 import type {
+  ArvoreDependenciasResponse,
   DocentePerfil,
   DocenteResumo,
   GoogleUserInfo,
@@ -312,4 +313,21 @@ export async function getDocente(
   siape: string,
 ): Promise<DocentePerfil> {
   return request<DocentePerfil>(`/docentes/${siape}`, { method: "GET", accessToken });
+}
+
+/**
+ * Grafo de descendentes (matérias que têm `codigo` como pré-requisito,
+ * direta ou transitivamente) dentro da grade ativa do curso do usuário
+ * logado. Mesma conveniência de `/curriculo/meu-curso`: recebe o nome bruto
+ * de `User.curso` em vez de resolver `cursoId` num passo à parte.
+ */
+export async function getArvoreDependencias(
+  accessToken: string,
+  curso: string,
+  codigo: string,
+): Promise<ArvoreDependenciasResponse> {
+  return request<ArvoreDependenciasResponse>(
+    `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/arvore-dependencias?curso=${encodeURIComponent(curso)}`,
+    { method: "GET", accessToken },
+  );
 }
