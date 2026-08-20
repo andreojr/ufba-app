@@ -7,20 +7,24 @@
    level up from this src/global.css file. */
 @source '../node_modules/heroui-native/lib';
 
-/* Gradline brand accent (purple), replacing HeroUI Native's default blue.
-   Every `accent`/`accent-soft` class — and the default `Button` variant —
-   derives from this single token instead of the hex values hardcoded across
-   the mockup screens. See https://heroui.com/docs/native/getting-started/theming */
+/* UFBA institutional accent (navy blue from the crest, see UfbaCrest.tsx),
+   replacing the previous Gradline-brand purple. Every `accent`/`accent-soft`
+   class — and the default `Button` variant — derives from this single token
+   instead of the hex values hardcoded across the mockup screens. See
+   https://heroui.com/docs/native/getting-started/theming
+   Dark mode uses a lighter tint of the same hue (~231°) for contrast against
+   the dark background — plain navy reads muddy there — so its foreground
+   flips to a near-black navy instead of white. */
 @layer theme {
   @variant light {
-    --accent: #7c3aed;
+    --accent: #2b3a8f;
     --accent-foreground: #fafafa;
     --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
   }
 
   @variant dark {
-    --accent: #7c3aed;
-    --accent-foreground: #fafafa;
+    --accent: #6478d1;
+    --accent-foreground: #10152e;
     --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
   }
 }

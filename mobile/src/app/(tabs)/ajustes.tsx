@@ -1,11 +1,14 @@
 import { useRouter } from "expo-router";
-import { Avatar, Button, ListGroup, Spinner, Typography, useThemeColor, useToast } from "heroui-native";
+import { Avatar, Button, Chip, ListGroup, Spinner, Tabs, Typography, useThemeColor, useToast } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SvgUri } from "react-native-svg";
+import { Uniwind, useUniwind } from "uniwind";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
+import { ClassroomIcon } from "@/components/ClassroomIcon";
+import { MoodleIcon } from "@/components/MoodleIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
 import { getSchedule, postScheduleSync } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
@@ -16,6 +19,8 @@ import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { saveThemePreference, type ThemePreference } from "@/lib/theme-preference";
+import { dangerToast } from "@/lib/toast-helpers";
 import { getInitials } from "@/lib/user-name";
 
 // Matches heroui-native's Avatar "lg" size (--spacing * 16 = 64px) so the SVG fills
@@ -68,8 +73,10 @@ export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, segmentForegroundColor] = useThemeColor(["muted", "segment-foreground"]);
   const { toast } = useToast();
+  const { theme, hasAdaptiveThemes } = useUniwind();
+  const themePreference: ThemePreference = hasAdaptiveThemes ? "system" : (theme as ThemePreference);
   const [isExportingCalendar, setIsExportingCalendar] = useState(false);
   const [isSyncingSchedule, setIsSyncingSchedule] = useState(false);
   // Seeded from the cache on mount so the sync item can say how old its data
@@ -131,31 +138,27 @@ export default function AjustesTab(): JSX.Element {
     try {
       const schedule = await readOrSyncSchedule();
       if (!schedule) {
-        toast.show({ variant: "danger", label: "Vincule sua conta do SIGAA para exportar." });
+        toast.show(dangerToast({ label: "Vincule sua conta do SIGAA para exportar." }));
         return;
       }
       if (!schedule.periodoLetivo) {
-        toast.show({
-          variant: "danger",
-          label: "Período letivo desconhecido — não é possível exportar ainda.",
-        });
+        toast.show(dangerToast({ label: "Período letivo desconhecido — não é possível exportar ainda." }));
         return;
       }
 
       const count = await exportScheduleToDeviceCalendar(schedule.turmas, schedule.periodoLetivo);
       toast.show({
         variant: "success",
-        label: `${count} aula${count === 1 ? "" : "s"} exportada${count === 1 ? "" : "s"} para o calendário "Gradline".`,
+        label: `${count} aula${count === 1 ? "" : "s"} exportada${count === 1 ? "" : "s"} para o calendário "UFBA".`,
       });
     } catch (error) {
       if (error instanceof CalendarPermissionDeniedError) {
-        toast.show({
-          variant: "danger",
-          label: "Permissão de calendário negada. Habilite o acesso nos ajustes do aparelho.",
-        });
+        toast.show(
+          dangerToast({ label: "Permissão de calendário negada. Habilite o acesso nos ajustes do aparelho." })
+        );
       } else {
         console.warn("Failed to export the schedule to the device calendar", error);
-        toast.show({ variant: "danger", label: describeApiError(error) });
+        toast.show(dangerToast({ label: describeApiError(error) }));
       }
     } finally {
       setIsExportingCalendar(false);
@@ -173,7 +176,7 @@ export default function AjustesTab(): JSX.Element {
     try {
       const credentials = await getSigaaCredentials();
       if (!credentials) {
-        toast.show({ variant: "danger", label: "Vincule sua conta do SIGAA para sincronizar." });
+        toast.show(dangerToast({ label: "Vincule sua conta do SIGAA para sincronizar." }));
         return;
       }
 
@@ -188,7 +191,7 @@ export default function AjustesTab(): JSX.Element {
       toast.show({ variant: "success", label: "Horário sincronizado com o SIGAA." });
     } catch (error) {
       console.warn("Failed to sync the SIGAA schedule", error);
-      toast.show({ variant: "danger", label: describeApiError(error) });
+      toast.show(dangerToast({ label: describeApiError(error) }));
     } finally {
       setIsSyncingSchedule(false);
     }
@@ -212,6 +215,14 @@ export default function AjustesTab(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleThemePreferenceChange = useCallback((value: string) => {
+    const preference = value as ThemePreference;
+    Uniwind.setTheme(preference);
+    saveThemePreference(preference).catch((error: unknown) => {
+      console.warn("Failed to persist the theme preference", error);
+    });
+  }, []);
+
   const linkedMeta =
     sigaaLink.status === "linked"
       ? sigaaLink.syncMode === "cloud"
@@ -221,7 +232,7 @@ export default function AjustesTab(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Ajustes" />
+      <AppBar title="Perfil" />
       <ScrollView
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
@@ -332,6 +343,41 @@ export default function AjustesTab(): JSX.Element {
 
         <View className="gap-2.5">
           <Typography.Paragraph type="body-xs" color="muted">
+            Aparência
+          </Typography.Paragraph>
+          <Tabs value={themePreference} onValueChange={handleThemePreferenceChange} variant="primary">
+            <Tabs.List className="w-full">
+              <Tabs.Indicator />
+              <Tabs.Trigger value="light" testID="theme-light-trigger" className="flex-1">
+                {({ isSelected }) => (
+                  <>
+                    <AppIcon name="IconSun" size={16} color={isSelected ? segmentForegroundColor : mutedColor} />
+                    <Tabs.Label>Claro</Tabs.Label>
+                  </>
+                )}
+              </Tabs.Trigger>
+              <Tabs.Trigger value="dark" testID="theme-dark-trigger" className="flex-1">
+                {({ isSelected }) => (
+                  <>
+                    <AppIcon name="IconMoon" size={16} color={isSelected ? segmentForegroundColor : mutedColor} />
+                    <Tabs.Label>Escuro</Tabs.Label>
+                  </>
+                )}
+              </Tabs.Trigger>
+              <Tabs.Trigger value="system" testID="theme-system-trigger" className="flex-1">
+                {({ isSelected }) => (
+                  <>
+                    <AppIcon name="IconContrast" size={16} color={isSelected ? segmentForegroundColor : mutedColor} />
+                    <Tabs.Label>Sistema</Tabs.Label>
+                  </>
+                )}
+              </Tabs.Trigger>
+            </Tabs.List>
+          </Tabs>
+        </View>
+
+        <View className="gap-2.5">
+          <Typography.Paragraph type="body-xs" color="muted">
             Minha conta
           </Typography.Paragraph>
           <ListGroup>
@@ -346,17 +392,47 @@ export default function AjustesTab(): JSX.Element {
               <ListGroup.ItemSuffix />
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
-            <ListGroup.Item>
+            <ListGroup.Item testID="documentos-item" onPress={() => router.push("/documentos")}>
               <ListGroup.ItemPrefix>
-                <AppIcon name="IconChartLineUp" size={22} color={mutedColor} />
+                <AppIcon name="IconFileText" size={22} color={mutedColor} />
               </ListGroup.ItemPrefix>
               <ListGroup.ItemContent>
-                <ListGroup.ItemTitle>Avisos de nota</ListGroup.ItemTitle>
+                <ListGroup.ItemTitle>Meus documentos</ListGroup.ItemTitle>
                 <ListGroup.ItemDescription>
-                  Notificar assim que o professor lança
+                  Histórico escolar e atestado de matrícula em PDF
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix />
+            </ListGroup.Item>
+            <View className="h-px bg-white/10 mx-4" />
+            <ListGroup.Item testID="link-moodle-item" disabled className="opacity-50">
+              <ListGroup.ItemPrefix>
+                <MoodleIcon size={22} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Vincular Moodle</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>
+                <Chip variant="secondary" size="sm">
+                  Em breve
+                </Chip>
+              </ListGroup.ItemSuffix>
+            </ListGroup.Item>
+            <View className="h-px bg-white/10 mx-4" />
+            <ListGroup.Item testID="link-classroom-item" disabled className="opacity-50">
+              <ListGroup.ItemPrefix>
+                <ClassroomIcon size={22} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Vincular Classroom</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>
+                <Chip variant="secondary" size="sm">
+                  Em breve
+                </Chip>
+              </ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>
         </View>
@@ -378,7 +454,7 @@ export default function AjustesTab(): JSX.Element {
                 <ListGroup.ItemTitle>Exportar horário para o calendário</ListGroup.ItemTitle>
                 <ListGroup.ItemDescription>
                   {isSigaaLinked
-                    ? "Cria um calendário \"Gradline\" no aparelho com suas aulas do semestre"
+                    ? "Cria um calendário \"UFBA\" no aparelho com suas aulas do semestre"
                     : "Vincule sua conta do SIGAA para exportar"}
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>

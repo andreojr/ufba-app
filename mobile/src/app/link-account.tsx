@@ -22,6 +22,7 @@ import { AppIcon } from "@/components/AppIcon";
 import { isSyncModeSelectable, SyncModeSelector } from "@/components/SyncModeSelector";
 import { describeApiError } from "@/lib/api-errors";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { dangerToast } from "@/lib/toast-helpers";
 import type { SyncMode } from "@/lib/types";
 
 // "000.000.000-00" — the longest a masked CPF can ever get, used as the
@@ -52,10 +53,10 @@ export default function LinkAccountScreen(): JSX.Element {
     sigaaLink.status === "linked" && isSyncModeSelectable(sigaaLink.syncMode) ? sigaaLink.syncMode : "device"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accentSoftForeground, successSoftForeground, dangerSoftForeground] = useThemeColor([
+  const [accentSoftForeground, successSoftForeground, dangerForeground] = useThemeColor([
     "accent-soft-foreground",
     "success-soft-foreground",
-    "danger-soft-foreground",
+    "danger-foreground",
   ]);
   const insets = useSafeAreaInsets();
   // Not a HeroUI semantic token (useThemeColor only knows its fixed list), so this
@@ -84,11 +85,12 @@ export default function LinkAccountScreen(): JSX.Element {
       router.replace("/(tabs)");
     } catch (error) {
       console.warn("SIGAA link failed", error);
-      toast.show({
-        variant: "danger",
-        label: describeApiError(error),
-        icon: <AppIcon name="IconErrorCircle" size={20} color={dangerSoftForeground} />,
-      });
+      toast.show(
+        dangerToast({
+          label: describeApiError(error),
+          icon: <AppIcon name="IconErrorCircle" size={20} color={dangerForeground} />,
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }

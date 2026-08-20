@@ -63,8 +63,24 @@ jest.mock("heroui-native", () => {
         secureTextEntry={secureTextEntry}
       />
     ),
+    // Minimal stand-in for the real compound Toast — dangerToast() (see
+    // @/lib/toast-helpers) renders through this via the "custom component"
+    // toast.show() pattern, so tests can render what was passed to it.
+    Toast: Object.assign(({ children }: any) => <View>{children}</View>, {
+      Title: ({ children }: any) => <Text testID="toast-title">{children}</Text>,
+      Description: ({ children }: any) => <Text testID="toast-description">{children}</Text>,
+    }),
   };
 });
+
+/** Renders the last toast.show() call's `component` (see @/lib/toast-helpers's
+ * dangerToast) and returns its title text — the danger toast's actual visible
+ * content, since it no longer passes a plain `{ variant, label }` object. */
+async function lastDangerToastText(): Promise<string> {
+  const [options] = mockToastShow.mock.calls[mockToastShow.mock.calls.length - 1];
+  const { getByTestId } = await render(options.component({ id: "toast", hide: jest.fn() }));
+  return getByTestId("toast-title").props.children;
+}
 
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 
@@ -144,9 +160,7 @@ describe("LinkAccountScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "danger", label: "Credenciais inválidas", icon: expect.anything() }),
-    );
+    expect(await lastDangerToastText()).toBe("Credenciais inválidas");
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -161,13 +175,7 @@ describe("LinkAccountScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "danger",
-        label: "Muitas tentativas. Aguarde um momento e tente de novo.",
-        icon: expect.anything(),
-      }),
-    );
+    expect(await lastDangerToastText()).toBe("Muitas tentativas. Aguarde um momento e tente de novo.");
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -182,13 +190,7 @@ describe("LinkAccountScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "danger",
-        label: "Algo deu errado no servidor. Tente novamente.",
-        icon: expect.anything(),
-      }),
-    );
+    expect(await lastDangerToastText()).toBe("Algo deu errado no servidor. Tente novamente.");
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -203,13 +205,7 @@ describe("LinkAccountScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "danger",
-        label: "Não foi possível conectar ao servidor.",
-        icon: expect.anything(),
-      }),
-    );
+    expect(await lastDangerToastText()).toBe("Não foi possível conectar ao servidor.");
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

@@ -1,23 +1,23 @@
 {
   "expo": {
-    "name": "Gradline",
-    "slug": "gradline",
+    "name": "UFBA",
+    "slug": "ufba",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "heroui-native-app",
+    "scheme": "ufba-app",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gradline.app"
+      "bundleIdentifier": "com.gradline.ufba"
     },
     "android": {
-      "package": "com.gradline.app",
+      "package": "com.gradline.ufba",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#18181B"
+        "backgroundColor": "#FFFFFF"
       },
-      "backgroundColor": "#18181B",
+      "backgroundColor": "#FFFFFF",
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
@@ -28,7 +28,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#18181B"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "@react-native-google-signin/google-signin",
@@ -36,7 +36,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "O Gradline usa o calendário para exportar o horário de aulas do semestre.",
+          "calendarPermission": "O app usa o calendário para exportar o horário de aulas do semestre.",
           "remindersPermission": false
         }
       ],

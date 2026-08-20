@@ -80,18 +80,18 @@ describe("exportScheduleToDeviceCalendar", () => {
     expect(mockedCreateEvent).not.toHaveBeenCalled();
   });
 
-  it("creates a fresh Gradline calendar when none exists yet", async () => {
+  it("creates a fresh UFBA calendar when none exists yet", async () => {
     await exportScheduleToDeviceCalendar([turma()], PERIODO);
 
     expect(mockedDeleteCalendar).not.toHaveBeenCalled();
     expect(mockedCreateCalendar).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Gradline" })
+      expect.objectContaining({ title: "UFBA" })
     );
   });
 
-  it("deletes the previous Gradline calendar instead of duplicating it", async () => {
+  it("deletes the previous UFBA calendar instead of duplicating it", async () => {
     mockedGetCalendars.mockResolvedValue([
-      { id: "old-cal", title: "Gradline" } as any,
+      { id: "old-cal", title: "UFBA" } as any,
       { id: "other-cal", title: "Aniversários" } as any,
     ]);
 

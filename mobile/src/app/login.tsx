@@ -11,17 +11,16 @@ import {
 
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { GoogleLogo } from "@/components/GoogleLogo";
-import { GradlineMark } from "@/components/GradlineMark";
 import { UfbaCrest } from "@/components/UfbaCrest";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { dangerToast } from "@/lib/toast-helpers";
 
 const ALLOWED_EMAIL_DOMAIN = "@ufba.br";
-const UFBA_DOMAIN_TOAST = {
-  variant: "danger" as const,
+const UFBA_DOMAIN_TOAST = dangerToast({
   label: "Conta não autorizada",
-  description: "Entre com seu e-mail institucional @ufba.br para acessar o Gradline.",
-};
+  description: "Entre com seu e-mail institucional @ufba.br para acessar o app.",
+});
 
 type FeatureTone = "accent" | "success" | "warning";
 
@@ -82,7 +81,7 @@ export default function LoginScreen(): JSX.Element {
         if (error instanceof ApiError && error.status === 403) {
           toast.show(UFBA_DOMAIN_TOAST);
         } else {
-          toast.show("Não foi possível entrar, tente de novo.");
+          toast.show(dangerToast({ label: "Não foi possível entrar, tente de novo." }));
         }
       }
     } finally {
@@ -100,19 +99,13 @@ export default function LoginScreen(): JSX.Element {
         contentContainerClassName="flex-grow justify-center gap-7"
         showsVerticalScrollIndicator={false}
       >
-        <GradlineMark width={48} />
+        <UfbaCrest size={56} />
 
         <View className="gap-3">
-          <Typography.Heading type="h1">Gradline</Typography.Heading>
+          <Typography.Heading type="h1">UFBA</Typography.Heading>
           <Typography.Paragraph color="muted" className="max-w-[300px]">
             Suas notas e seu horário, sem passar pelo SIGAA.
           </Typography.Paragraph>
-          <View className="flex-row items-center gap-2 pt-0.5">
-            <UfbaCrest size={22} />
-            <Typography.Paragraph type="body-xs" color="muted">
-              Conectado ao SIGAA da UFBA
-            </Typography.Paragraph>
-          </View>
         </View>
 
         <View className="gap-3.5">

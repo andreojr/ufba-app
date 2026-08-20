@@ -15,6 +15,7 @@ import {
   type AvatarSeedHistoryState,
 } from "@/lib/avatar-seed-history";
 import { buildAvatarUrl } from "@/lib/dicebear";
+import { dangerToast } from "@/lib/toast-helpers";
 
 const SEED_PATTERN = /seed=([^&]+)/;
 
@@ -37,7 +38,7 @@ export default function AvatarPickerScreen(): JSX.Element {
   const auth = useAuth();
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
-  const [foregroundColor, dangerSoftForeground] = useThemeColor(["foreground", "danger-soft-foreground"]);
+  const [foregroundColor, dangerForeground] = useThemeColor(["foreground", "danger-foreground"]);
 
   // Seeds seen so far this session (bounded window, see lib/avatar-seed-history) —
   // lets "seta pra esquerda" step back to an avatar the student already passed
@@ -120,11 +121,12 @@ export default function AvatarPickerScreen(): JSX.Element {
       router.back();
     } catch (error) {
       console.warn("Failed to save avatar", error);
-      toast.show({
-        variant: "danger",
-        label: describeApiError(error),
-        icon: <AppIcon name="IconErrorCircle" size={20} color={dangerSoftForeground} />,
-      });
+      toast.show(
+        dangerToast({
+          label: describeApiError(error),
+          icon: <AppIcon name="IconErrorCircle" size={20} color={dangerForeground} />,
+        })
+      );
     } finally {
       setIsSaving(false);
     }

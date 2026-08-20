@@ -13,9 +13,15 @@ const BAHIA_UTC_OFFSET_MIN = 3 * 60;
 const BAHIA_TIME_ZONE = "America/Bahia";
 const MINUTES_PER_DAY = 24 * 60;
 
-/** Name of the dedicated device calendar this module owns. Re-exporting deletes and recreates it, so it never accumulates duplicates. */
-const GRADLINE_CALENDAR_TITLE = "Gradline";
-const GRADLINE_CALENDAR_COLOR = "#7C3AED";
+/**
+ * Name of the dedicated device calendar this module owns. Re-exporting deletes and
+ * recreates it, so it never accumulates duplicates. Renamed from "Gradline" as part
+ * of the UFBA rebrand — anyone who exported before that still has an orphaned
+ * "Gradline" calendar on their device (this lookup only matches the current title),
+ * but the app wasn't published yet when this changed, so no live users are affected.
+ */
+const UFBA_CALENDAR_TITLE = "UFBA";
+const UFBA_CALENDAR_COLOR = "#2B3A8F";
 
 /** Maps `TurmaSlot.dia` to the JS `Date#getDay()` index. */
 const WEEKDAY_TO_JS_DAY: Record<string, number> = {
@@ -105,34 +111,34 @@ async function ensureCalendarPermission(): Promise<void> {
  * real source on the device (the default calendar's own source works fine
  * for that), while Android is happy with a plain local, unsynced account.
  */
-async function gradlineCalendarSource(): Promise<Calendar.Source> {
+async function ufbaCalendarSource(): Promise<Calendar.Source> {
   if (Platform.OS === "ios") {
     const defaultCalendar = await Calendar.getDefaultCalendarAsync();
     return defaultCalendar.source;
   }
-  return { isLocalAccount: true, name: GRADLINE_CALENDAR_TITLE, type: Calendar.SourceType.LOCAL };
+  return { isLocalAccount: true, name: UFBA_CALENDAR_TITLE, type: Calendar.SourceType.LOCAL };
 }
 
 /**
  * Deletes any calendar this module created before (so re-exporting never
  * duplicates events) and creates a fresh one, returning its id.
  */
-async function ensureFreshGradlineCalendar(): Promise<string> {
+async function ensureFreshUfbaCalendar(): Promise<string> {
   const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-  const existing = calendars.find((calendar) => calendar.title === GRADLINE_CALENDAR_TITLE);
+  const existing = calendars.find((calendar) => calendar.title === UFBA_CALENDAR_TITLE);
   if (existing) {
     await Calendar.deleteCalendarAsync(existing.id);
   }
 
-  const source = await gradlineCalendarSource();
+  const source = await ufbaCalendarSource();
   return Calendar.createCalendarAsync({
-    title: GRADLINE_CALENDAR_TITLE,
-    color: GRADLINE_CALENDAR_COLOR,
+    title: UFBA_CALENDAR_TITLE,
+    color: UFBA_CALENDAR_COLOR,
     entityType: Calendar.EntityTypes.EVENT,
     sourceId: source.id,
     source,
-    name: GRADLINE_CALENDAR_TITLE,
-    ownerAccount: "gradline",
+    name: UFBA_CALENDAR_TITLE,
+    ownerAccount: "ufba",
     accessLevel: Calendar.CalendarAccessLevel.OWNER,
   });
 }
@@ -141,7 +147,7 @@ async function ensureFreshGradlineCalendar(): Promise<string> {
  * Exports the given schedule as native, recurring calendar events — one per
  * class slot, weekly through the end of the academic term (or the turma's
  * own `vigência`, whichever is narrower). Events land in a dedicated
- * "Gradline" calendar rather than the user's own, which this function
+ * "UFBA" calendar rather than the user's own, which this function
  * deletes and recreates on every call so re-exporting never duplicates
  * events. Throws `CalendarPermissionDeniedError` if the user declines
  * calendar access.
@@ -151,7 +157,7 @@ export async function exportScheduleToDeviceCalendar(
   periodoLetivo: PeriodoLetivo
 ): Promise<number> {
   await ensureCalendarPermission();
-  const calendarId = await ensureFreshGradlineCalendar();
+  const calendarId = await ensureFreshUfbaCalendar();
 
   let count = 0;
   for (const turma of turmas) {

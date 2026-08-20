@@ -1,10 +1,13 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
+import { useUniwind } from "uniwind";
+
 import { ApiError, getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { saveThemePreference } from "@/lib/theme-preference";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 import AjustesTab from "@/app/(tabs)/ajustes";
@@ -12,6 +15,15 @@ import AjustesTab from "@/app/(tabs)/ajustes";
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
+jest.mock("@/lib/theme-preference", () => ({
+  saveThemePreference: jest.fn().mockResolvedValue(undefined),
+}));
+
+const mockUniwindSetTheme = jest.fn();
+jest.mock("uniwind", () => ({
+  useUniwind: jest.fn(),
+  Uniwind: { setTheme: (...args: unknown[]) => mockUniwindSetTheme(...args) },
+}));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   // Defaults to the never-synced state: most tests in this file have nothing
@@ -40,7 +52,38 @@ jest.mock("react-native-safe-area-context", () => ({
 const mockToastShow = jest.fn();
 
 jest.mock("heroui-native", () => {
+  const React = jest.requireActual("react");
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
+
+  // Minimal stand-in for the real compound Tabs: a context carries the
+  // controlled value/onValueChange down to each Trigger, which fires it on press.
+  const TabsContext = React.createContext<{ value?: string; onValueChange?: (value: string) => void }>({});
+
+  const Tabs = Object.assign(
+    ({ children, value, onValueChange }: any) => (
+      <TabsContext.Provider value={{ value, onValueChange }}>
+        <View>{children}</View>
+      </TabsContext.Provider>
+    ),
+    {
+      List: ({ children }: any) => <View>{children}</View>,
+      Indicator: () => null,
+      Trigger: ({ value, children, testID }: any) => {
+        const ctx = React.useContext(TabsContext);
+        const isSelected = ctx.value === value;
+        return (
+          <TouchableOpacity
+            testID={testID}
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => ctx.onValueChange?.(value)}
+          >
+            {typeof children === "function" ? children({ isSelected, value }) : children}
+          </TouchableOpacity>
+        );
+      },
+      Label: ({ children }: any) => <Text>{children}</Text>,
+    }
+  );
 
   return {
     Avatar: Object.assign(({ children }: any) => <View>{children}</View>, {
@@ -51,6 +94,8 @@ jest.mock("heroui-native", () => {
         {typeof children === "string" ? <Text>{children}</Text> : children}
       </TouchableOpacity>
     ),
+    Chip: ({ children }: any) => <Text>{children}</Text>,
+    Tabs,
     ListGroup: Object.assign(({ children }: any) => <View>{children}</View>, {
       Item: ({ children, onPress, disabled, testID }: any) => (
         <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled}>
@@ -68,10 +113,26 @@ jest.mock("heroui-native", () => {
       Heading: ({ children }: any) => <Text>{children}</Text>,
       Paragraph: ({ children }: any) => <Text>{children}</Text>,
     },
+    // Minimal stand-in for the real compound Toast — dangerToast() (see
+    // @/lib/toast-helpers) renders through this via the "custom component"
+    // toast.show() pattern, so tests can render what was passed to it.
+    Toast: Object.assign(({ children }: any) => <View>{children}</View>, {
+      Title: ({ children }: any) => <Text testID="toast-title">{children}</Text>,
+      Description: ({ children }: any) => <Text testID="toast-description">{children}</Text>,
+    }),
     useThemeColor: () => "#000000",
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
+
+/** Renders the last toast.show() call's `component` (see @/lib/toast-helpers's
+ * dangerToast) and returns its title text — the danger toast's actual visible
+ * content, since it no longer passes a plain `{ variant, label }` object. */
+async function lastDangerToastText(): Promise<string> {
+  const [options] = mockToastShow.mock.calls[mockToastShow.mock.calls.length - 1];
+  const { getByTestId } = await render(options.component({ id: "toast", hide: jest.fn() }));
+  return getByTestId("toast-title").props.children;
+}
 
 jest.mock("@expo/vector-icons", () => {
   const { Text } = jest.requireActual("react-native");
@@ -80,7 +141,14 @@ jest.mock("@expo/vector-icons", () => {
 
 jest.mock("react-native-svg", () => {
   const { Text } = jest.requireActual("react-native");
-  return { SvgUri: ({ uri, testID }: any) => <Text testID={testID} uri={uri} /> };
+  const actual = jest.requireActual("react-native-svg");
+  // Only SvgUri needs stubbing (it resolves a network URI, unsuitable for tests) —
+  // everything else (Svg, Path, Defs, gradients...) stays real so MoodleIcon and
+  // ClassroomIcon, which render plain <Svg>/<Path> trees, still work here. `__esModule`
+  // must be carried over explicitly: it's non-enumerable on the real module, so the
+  // spread below silently drops it, and Babel's default-import interop then wraps this
+  // whole mock object as `Svg`'s value instead of unwrapping `actual.default`.
+  return { ...actual, __esModule: true, SvgUri: ({ uri, testID }: any) => <Text testID={testID} uri={uri} /> };
 });
 
 const mockedUseAuth = jest.mocked(useAuth);
@@ -89,6 +157,8 @@ const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
 const mockedGetSchedule = jest.mocked(getSchedule);
 const mockedPostScheduleSync = jest.mocked(postScheduleSync);
 const mockedExportScheduleToDeviceCalendar = jest.mocked(exportScheduleToDeviceCalendar);
+const mockedUseUniwind = jest.mocked(useUniwind);
+const mockedSaveThemePreference = jest.mocked(saveThemePreference);
 
 const mockRefreshUser = jest.fn();
 
@@ -142,6 +212,9 @@ describe("AjustesTab", () => {
     mockedGetSchedule.mockClear();
     mockedPostScheduleSync.mockClear();
     mockedExportScheduleToDeviceCalendar.mockClear();
+    mockUniwindSetTheme.mockClear();
+    mockedSaveThemePreference.mockClear();
+    mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
     mockSignedIn();
   });
 
@@ -283,6 +356,27 @@ describe("AjustesTab", () => {
     expect(queryByTestId("academic-card")).toBeNull();
   });
 
+  it("shows Perfil as the screen title, not Ajustes", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+    const { getByText, queryByText } = await render(<AjustesTab />);
+
+    expect(getByText("Perfil")).toBeTruthy();
+    expect(queryByText("Ajustes")).toBeNull();
+  });
+
+  it("navigates to documentos when 'Meus documentos' is pressed", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+    const { getByTestId } = await render(<AjustesTab />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("documentos-item"));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith("/documentos");
+  });
+
   describe("exportar horário para o calendário", () => {
     it("blocks the export item when the SIGAA account isn't linked", async () => {
       mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
@@ -383,7 +477,7 @@ describe("AjustesTab", () => {
 
         await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
         expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
-        expect(mockToastShow).toHaveBeenCalledWith(expect.objectContaining({ variant: "danger" }));
+        expect(await lastDangerToastText()).toMatch(/período letivo desconhecido/i);
       });
 
       it("shows a toast asking to enable calendar access when permission is denied", async () => {
@@ -395,14 +489,8 @@ describe("AjustesTab", () => {
           fireEvent.press(getByTestId("export-calendar-item"));
         });
 
-        await waitFor(() =>
-          expect(mockToastShow).toHaveBeenCalledWith(
-            expect.objectContaining({
-              variant: "danger",
-              label: expect.stringMatching(/permiss/i),
-            })
-          )
-        );
+        await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+        expect(await lastDangerToastText()).toMatch(/permiss/i);
       });
 
       it("shows a generic error toast when fetching the schedule fails", async () => {
@@ -414,11 +502,8 @@ describe("AjustesTab", () => {
           fireEvent.press(getByTestId("export-calendar-item"));
         });
 
-        await waitFor(() =>
-          expect(mockToastShow).toHaveBeenCalledWith(
-            expect.objectContaining({ variant: "danger", label: "Credenciais inválidas" })
-          )
-        );
+        await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+        expect(await lastDangerToastText()).toBe("Credenciais inválidas");
         expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
       });
     });
@@ -480,12 +565,56 @@ describe("AjustesTab", () => {
           fireEvent.press(getByTestId("sync-schedule-item"));
         });
 
-        await waitFor(() =>
-          expect(mockToastShow).toHaveBeenCalledWith(
-            expect.objectContaining({ variant: "danger", label: "Credenciais inválidas" })
-          )
-        );
+        await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+        expect(await lastDangerToastText()).toBe("Credenciais inválidas");
       });
+    });
+  });
+
+  describe("aparência", () => {
+    it("shows Claro selected when the theme is light and not following the system", async () => {
+      mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+      const { getByTestId } = await render(<AjustesTab />);
+
+      expect(getByTestId("theme-light-trigger").props.accessibilityState?.selected).toBe(true);
+      expect(getByTestId("theme-dark-trigger").props.accessibilityState?.selected).toBe(false);
+    });
+
+    it("shows Sistema selected when following the device color scheme", async () => {
+      mockedUseUniwind.mockReturnValue({ theme: "dark", hasAdaptiveThemes: true });
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+      const { getByTestId } = await render(<AjustesTab />);
+
+      expect(getByTestId("theme-system-trigger").props.accessibilityState?.selected).toBe(true);
+    });
+
+    it("switches to dark and persists the preference when Escuro is pressed", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+      const { getByTestId } = await render(<AjustesTab />);
+
+      await act(async () => {
+        fireEvent.press(getByTestId("theme-dark-trigger"));
+      });
+
+      expect(mockUniwindSetTheme).toHaveBeenCalledWith("dark");
+      await waitFor(() => expect(mockedSaveThemePreference).toHaveBeenCalledWith("dark"));
+    });
+
+    it("switches back to following the system when Sistema is pressed", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+      const { getByTestId } = await render(<AjustesTab />);
+
+      await act(async () => {
+        fireEvent.press(getByTestId("theme-system-trigger"));
+      });
+
+      expect(mockUniwindSetTheme).toHaveBeenCalledWith("system");
+      await waitFor(() => expect(mockedSaveThemePreference).toHaveBeenCalledWith("system"));
     });
   });
 });

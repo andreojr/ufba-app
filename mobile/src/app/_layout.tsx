@@ -14,11 +14,13 @@ import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider, useThemeColor } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Uniwind } from "uniwind";
 
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { configureGoogleSignin } from "@/lib/google-signin";
 import { MockAppStateProvider } from "@/lib/mock-app-state";
 import { SigaaLinkProvider, useSigaaLink } from "@/lib/sigaa-link-context";
+import { getThemePreference } from "@/lib/theme-preference";
 
 import "../global.css";
 
@@ -58,6 +60,7 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
           <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
+          <Stack.Screen name="documentos" />
           <Stack.Screen
             name="sigaa-webview"
             options={{
@@ -86,6 +89,26 @@ export default function RootLayout(): JSX.Element | null {
 
   useEffect(() => {
     configureGoogleSignin();
+  }, []);
+
+  // Uniwind starts up following the system color scheme; apply the saved
+  // preference (defaulting to "light") before the first paint the user sees.
+  // Guarded by `isMounted`: in dev, React can mount → unmount → remount this
+  // component in quick succession, and this effect's promise can still be
+  // in flight when that happens. Without the guard, it resolves against the
+  // torn-down first mount and calls Uniwind.setTheme() on views Fabric has
+  // already discarded — surfacing as a native
+  // "Unable to find viewState for tag N" crash.
+  useEffect(() => {
+    let isMounted = true;
+    void getThemePreference().then((preference) => {
+      if (isMounted) {
+        Uniwind.setTheme(preference);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   if (!fontsLoaded) {

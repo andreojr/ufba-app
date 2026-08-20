@@ -1,14 +1,5 @@
 import type { JSX } from "react";
-import Svg, {
-  ClipPath,
-  Defs,
-  G,
-  Path,
-  Rect,
-  Text as SvgText,
-  TextPath,
-  Use,
-} from "react-native-svg";
+import Svg, { ClipPath, Defs, G, Path, Rect, Text as SvgText, Use } from "react-native-svg";
 
 /** UFBA crest, used as a small trust mark ("Conectado ao SIGAA da UFBA"). */
 export function UfbaCrest({ size = 22 }: { size?: number }): JSX.Element {
@@ -79,16 +70,21 @@ export function UfbaCrest({ size = 22 }: { size?: number }): JSX.Element {
         />
       </G>
 
-      <Path id="mottoPath" d="M28 203 C 94 218 162 218 228 203" fill="none" />
+      {/* Plain (uncurved) text, not <TextPath> — the curve was subtle enough not to
+          be missed, and textPath centering (startOffset + textAnchor) turned out to
+          be unreliable across renderers: react-native-svg on-device truncated the
+          motto mid-word ("VIRTUTE SP…"), and librsvg (used to rasterize the app
+          icon) didn't render textPath text at all. Plain text has neither problem. */}
       <SvgText
+        x={128}
+        y={208}
         fill="#FFFFFF"
-        fontSize={18}
+        fontSize={20}
         fontFamily="Georgia, 'Times New Roman', serif"
-        letterSpacing={1}
+        letterSpacing={0.6}
+        textAnchor="middle"
       >
-        <TextPath href="#mottoPath" startOffset="50%" textAnchor="middle">
-          VIRTUTE SPIRITUS
-        </TextPath>
+        VIRTUTE SPIRITUS
       </SvgText>
       <SvgText
         x={128}

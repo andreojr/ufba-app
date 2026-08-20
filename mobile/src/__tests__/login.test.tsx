@@ -37,7 +37,7 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 jest.mock("heroui-native", () => {
-  const { Text, TouchableOpacity } = jest.requireActual("react-native");
+  const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
   return {
     useToast: () => ({ toast: { show: mockToastShow } }),
@@ -52,8 +52,28 @@ jest.mock("heroui-native", () => {
       Heading: ({ children }: any) => <Text>{children}</Text>,
       Paragraph: ({ children }: any) => <Text>{children}</Text>,
     },
+    // Minimal stand-in for the real compound Toast — dangerToast() (see
+    // @/lib/toast-helpers) renders through this via the "custom component"
+    // toast.show() pattern, so tests can render what was passed to it.
+    Toast: Object.assign(({ children }: any) => <View>{children}</View>, {
+      Title: ({ children }: any) => <Text testID="toast-title">{children}</Text>,
+      Description: ({ children }: any) => <Text testID="toast-description">{children}</Text>,
+    }),
   };
 });
+
+/** Renders the last toast.show() call's `component` (see @/lib/toast-helpers's
+ * dangerToast) and returns its title/description text — the danger toast's
+ * actual visible content, since it no longer passes a plain `{ variant, label }`
+ * object. */
+async function lastDangerToast(): Promise<{ label: string; description: string | null }> {
+  const [options] = mockToastShow.mock.calls[mockToastShow.mock.calls.length - 1];
+  const { getByTestId, queryByTestId } = await render(options.component({ id: "toast", hide: jest.fn() }));
+  return {
+    label: getByTestId("toast-title").props.children,
+    description: queryByTestId("toast-description")?.props.children ?? null,
+  };
+}
 
 const mockedUseAuth = jest.mocked(useAuth);
 const mockedGoogleSignin = jest.mocked(GoogleSignin);
@@ -130,12 +150,7 @@ describe("LoginScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "danger",
-        description: expect.stringContaining("@ufba.br"),
-      }),
-    );
+    expect((await lastDangerToast()).description).toEqual(expect.stringContaining("@ufba.br"));
     expect(signIn).not.toHaveBeenCalled();
     expect(mockedGoogleSignin.signOut).toHaveBeenCalled();
   });
@@ -156,11 +171,6 @@ describe("LoginScreen", () => {
     });
 
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
-    expect(mockToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variant: "danger",
-        description: expect.stringContaining("@ufba.br"),
-      }),
-    );
+    expect((await lastDangerToast()).description).toEqual(expect.stringContaining("@ufba.br"));
   });
 });

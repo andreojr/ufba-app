@@ -1,0 +1,52 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="none">
+  <defs>
+    <path id="flameOuter" d="M0 -44 C 9 -33 17 -25 17 -12 C 17 1 9 9 0 9 C -9 9 -17 1 -17 -12 C -17 -25 -9 -33 0 -44 Z" />
+    <path id="flameInner" d="M0 -28 C 5 -21 10 -16 10 -8 C 10 0 5 5 0 5 C -5 5 -10 0 -10 -8 C -10 -16 -5 -21 0 -28 Z" />
+    <path id="leaf" d="M0 0 C 5 -17 18 -30 42 -33 C 39 -12 25 1 7 4 C 2 4 0 2 0 0 Z" />
+    <clipPath id="shieldClip">
+      <path d="M60 92 C 82 86 174 86 196 92 L 196 150 C 196 180 166 194 128 202 C 90 194 60 180 60 150 Z" />
+    </clipPath>
+  </defs>
+
+  <g stroke="#4A4238" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <g fill="#D9C49C">
+      <rect x="72" y="84" width="13" height="164" rx="6" />
+      <rect x="121" y="84" width="13" height="164" rx="6" />
+      <rect x="170" y="84" width="13" height="164" rx="6" />
+    </g>
+
+    <g>
+      <use href="#flameOuter" x="78" y="58" fill="#F2A33C" />
+      <use href="#flameOuter" x="128" y="58" fill="#F2A33C" />
+      <use href="#flameOuter" x="178" y="58" fill="#F2A33C" />
+      <g stroke="none" fill="#F7E6A6">
+        <use href="#flameInner" x="78" y="58" />
+        <use href="#flameInner" x="128" y="58" />
+        <use href="#flameInner" x="178" y="58" />
+      </g>
+    </g>
+
+    <g fill="#D9C49C">
+      <rect x="63" y="58" width="30" height="20" rx="7" />
+      <rect x="113" y="58" width="30" height="20" rx="7" />
+      <rect x="163" y="58" width="30" height="20" rx="7" />
+    </g>
+
+    <path fill="#2B3A8F" d="M60 92 C 82 86 174 86 196 92 L 196 150 C 196 180 166 194 128 202 C 90 194 60 180 60 150 Z" />
+
+    <g clip-path="url(#shieldClip)" stroke="none" fill="#FFFFFF">
+      <path d="M96 188 C 118 164 140 142 164 112 L 172 118 C 148 148 124 170 104 194 Z" />
+      <use href="#leaf" transform="translate(164,116) rotate(-30)" />
+      <use href="#leaf" transform="translate(160,122) rotate(-95) scale(0.95)" />
+      <use href="#leaf" transform="translate(132,148) rotate(-120) scale(0.85)" />
+      <use href="#leaf" transform="translate(136,152) rotate(40) scale(0.8)" />
+      <use href="#leaf" transform="translate(106,176) rotate(-175) scale(0.75)" />
+      <use href="#leaf" transform="translate(110,180) rotate(70) scale(0.7)" />
+    </g>
+
+    <path fill="#F4F2EC" d="M18 156 C 44 178 84 188 128 188 C 172 188 212 178 238 156 L 238 186 C 212 204 172 212 128 212 C 84 212 44 204 18 186 Z" />
+    <path fill="#2B3A8F" d="M26 180 C 92 196 164 196 230 180 L 230 208 C 164 224 92 224 26 208 Z" />
+    <path fill="#2B3A8F" d="M90 222 C 114 229 142 229 166 222 L 166 242 C 142 249 114 249 90 242 Z" />
+  </g>
+
+</svg>
