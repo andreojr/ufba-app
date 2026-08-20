@@ -162,6 +162,32 @@ describe("Professores screen", () => {
     expect(await screen.findByText("FULANO DE TAL")).toBeTruthy();
   });
 
+  // The count-and-term line at the top of the list — omits the term when the
+  // schedule has none (the portal-home fallback per ScheduleResponse).
+  it("shows how many docentes were resolved and the current term", async () => {
+    mockedSchedule.mockResolvedValue({
+      turmas: [turma("MATA65", "CG", "FULANO DE TAL")],
+      periodoLetivo: { semestre: "2026.2", inicio: "2026-08-19", fim: "2026-12-19" },
+      fetchedAt: "2026-08-19T12:00:00.000Z",
+    });
+    mockedPost.mockResolvedValue([
+      resumo("FULANO DE TAL", {
+        siape: "1815041",
+        nome: "FULANO DE TAL",
+        departamento: "DCC",
+        unidade: null,
+        selos: {
+          contato: true, formacao: false, areasInteresse: false,
+          lattes: false, orientacoes: false, semestresLecionando: 3,
+        },
+      }),
+    ]);
+    await render(<ProfessoresScreen />);
+    expect(await screen.findByText("1")).toBeTruthy();
+    expect(screen.getByText(/docente em/)).toBeTruthy();
+    expect(screen.getByText("2026.2")).toBeTruthy();
+  });
+
   // Three empty states that must not look alike.
   it("shows a turma whose atestado named no docente as its own muted row", async () => {
     mockedPost.mockResolvedValue([]);

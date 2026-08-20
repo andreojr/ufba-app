@@ -9,7 +9,6 @@ import type { DocenteResumo } from "@/lib/types";
 jest.mock("heroui-native", () => {
   const { Text } = jest.requireActual("react-native");
   return {
-    Chip: ({ children }: any) => <Text>{children}</Text>,
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
       Paragraph: ({ children, testID }: any) => <Text testID={testID}>{children}</Text>,
@@ -57,11 +56,11 @@ describe("DocenteCard", () => {
 
   it("advertises what is inside so a tap is never wasted", async () => {
     await render(<DocenteCard resumo={resumo()} onPress={jest.fn()} />);
-    expect(await screen.findByText("Contato")).toBeTruthy();
-    expect(screen.getByText("Formação")).toBeTruthy();
-    expect(screen.getByText("Lattes")).toBeTruthy();
-    expect(screen.queryByText("Áreas")).toBeNull();
-    expect(screen.getByText("8 semestres")).toBeTruthy();
+    expect(await screen.findByText("Contato · Formação · Lattes")).toBeTruthy();
+    expect(screen.queryByText(/Áreas/)).toBeNull();
+    // 8 semestres reads as "Há 4 anos" — a raw semester count means nothing
+    // to a student, see formatTempoLecionando.
+    expect(screen.getByText("Há 4 anos")).toBeTruthy();
   });
 
   it("navigates with the siape when tapped", async () => {
@@ -81,7 +80,7 @@ describe("DocenteCard", () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it("falls back to a singular label for a single term", async () => {
+  it("keeps a single semester as-is instead of rounding it into a year", async () => {
     const base = resumo();
     await render(
       <DocenteCard
@@ -89,6 +88,6 @@ describe("DocenteCard", () => {
         onPress={jest.fn()}
       />,
     );
-    expect(await screen.findByText("1 semestre")).toBeTruthy();
+    expect(await screen.findByText("Há 1 semestre")).toBeTruthy();
   });
 });

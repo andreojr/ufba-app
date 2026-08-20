@@ -1,18 +1,24 @@
 import { useRouter } from "expo-router";
 import { Button, Spinner, Typography, useToast } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { DocenteCard } from "@/components/DocenteCard";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
-import type { DocenteResumo } from "@/lib/types";
+import type { DocenteResumo, PeriodoLetivo } from "@/lib/types";
+import { identidadeAppBar } from "@/lib/user-name";
 
 type Estado =
   | { status: "loading" }
-  | { status: "ready"; docentes: DocenteResumo[]; semDocente: { codigo: string; nome: string }[] }
+  | {
+      status: "ready";
+      docentes: DocenteResumo[];
+      semDocente: { codigo: string; nome: string }[];
+      periodoLetivo: PeriodoLetivo | null;
+    }
   | { status: "empty" }
   | { status: "unsynced" }
   | { status: "error"; message: string };
@@ -30,6 +36,7 @@ export default function ProfessoresScreen(): JSX.Element {
   // useAuth() returns a discriminated union — accessToken only exists once
   // signed in — matching how trajetoria.tsx reads it.
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
   const { toast } = useToast();
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
   const [avisoLento, setAvisoLento] = useState(false);
@@ -89,7 +96,7 @@ export default function ProfessoresScreen(): JSX.Element {
       const docentes = await postDocentesSemestre(accessToken ?? "", comDocente);
       clearTimeout(timer);
       timerRef.current = null;
-      setEstado({ status: "ready", docentes, semDocente });
+      setEstado({ status: "ready", docentes, semDocente, periodoLetivo: horario.periodoLetivo });
     } catch (error) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
@@ -109,12 +116,8 @@ export default function ProfessoresScreen(): JSX.Element {
 
   return (
     <View className="flex-1">
-      <AppBar title="Professores" />
-      <ScrollView contentContainerClassName="px-4 pb-8">
-        <Typography.Heading type="h5" className="mb-1 mt-2">
-          Professores
-        </Typography.Heading>
-
+      <AppBar title="Professores" {...identidade} />
+      <ScrollView contentContainerClassName="px-4 pb-8 pt-2">
         {estado.status === "loading" ? (
           <View className="mt-6 items-center gap-3">
             <Spinner />
@@ -155,6 +158,19 @@ export default function ProfessoresScreen(): JSX.Element {
 
         {estado.status === "ready" ? (
           <View className="mt-4">
+            {estado.docentes.length > 0 ? (
+              <Typography.Paragraph type="body-sm" weight="medium" color="muted" className="mb-3">
+                <Text className="font-mono text-foreground">{estado.docentes.length}</Text>{" "}
+                {estado.docentes.length === 1 ? "docente" : "docentes"}
+                {estado.periodoLetivo ? (
+                  <>
+                    {" em "}
+                    <Text className="font-mono">{estado.periodoLetivo.semestre}</Text>
+                  </>
+                ) : null}
+              </Typography.Paragraph>
+            ) : null}
+
             {estado.docentes.map((docente) => (
               <DocenteCard
                 key={docente.perfil?.siape ?? docente.nomeOriginal}
@@ -163,14 +179,26 @@ export default function ProfessoresScreen(): JSX.Element {
               />
             ))}
 
-            {estado.semDocente.map((turma) => (
-              <View key={turma.codigo} className="mb-3 rounded-2xl border border-border p-4 opacity-55">
-                <Typography.Paragraph type="body-sm">{turma.codigo}</Typography.Paragraph>
-                <Typography.Paragraph type="body-xs" color="muted">
-                  Docente não informado no atestado
+            {estado.semDocente.length > 0 ? (
+              <View className="mt-1 gap-2">
+                <Typography.Paragraph type="body-xs" weight="medium" color="muted">
+                  Turmas sem docente no atestado
                 </Typography.Paragraph>
+                {estado.semDocente.map((turma) => (
+                  <View
+                    key={turma.codigo}
+                    className="rounded-2xl bg-surface-secondary p-4 opacity-55 flex-row items-center gap-3"
+                  >
+                    <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
+                      {turma.codigo}
+                    </Typography.Paragraph>
+                    <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
+                      Docente não informado no atestado
+                    </Typography.Paragraph>
+                  </View>
+                ))}
               </View>
-            ))}
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
