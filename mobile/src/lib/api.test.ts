@@ -1,8 +1,10 @@
 import {
   ApiError,
+  getDocente,
   getMe,
   getTrajetoria,
   postAvatar,
+  postDocentesSemestre,
   postGoogleLogin,
   postSigaaAtestado,
   postSigaaHistorico,
@@ -325,5 +327,79 @@ describe("trajetória endpoints", () => {
 
     jest.advanceTimersByTime(30_000);
     await assertion;
+  });
+});
+
+describe("postDocentesSemestre", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts the turmas and returns the parsed resumos", async () => {
+    const resumos = [{ nomeOriginal: "FULANO", componentes: [], perfil: null }];
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => resumos,
+    });
+
+    const turmas = [{ codigo: "MATA65", nome: "CG", docente: "FULANO" }];
+    await expect(postDocentesSemestre("token", turmas)).resolves.toEqual(resumos);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/docentes/semestre",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ turmas }),
+      }),
+    );
+  });
+
+  it("surfaces a failed response as an ApiError", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({ message: "SIGAA fora do ar" }),
+    });
+    await expect(postDocentesSemestre("token", [])).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("getDocente", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("gets the profile by siape", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ siape: "1815041" }),
+    });
+
+    await expect(getDocente("token", "1815041")).resolves.toMatchObject({
+      siape: "1815041",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/docentes/1815041",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });
