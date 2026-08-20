@@ -269,3 +269,70 @@ model DocenteLookup {
 
   @@map("docente_lookup")
 }
+
+// Global directory of UFBA courses (all níveis — graduação, especialização,
+// mestrado, doutorado — nivel comes straight off each row's own link).
+// Replaced by completo on refresh, same rationale as CachedSchedule: it is
+// the whole lista.jsf, ~284 rows, so there is no reason to upsert row by row.
+model Curso {
+  idSigaa      String   @id @map("id_sigaa")
+  nome         String
+  sede         String
+  nivel        String
+  atualizadoEm DateTime @default(now()) @map("atualizado_em")
+
+  estruturas EstruturaCurricular[]
+
+  @@map("cursos")
+}
+
+// A specific curriculum structure (G20251, T20252, 186140...) of a curso.
+// Resolved on demand, per course, and always the structure SIGAA marks
+// "Ativa" — see the design spec's Scope section for why an older structure a
+// student is actually on is not resolved here.
+model EstruturaCurricular {
+  idSigaa                        String   @id @map("id_sigaa")
+  cursoId                        String   @map("curso_id")
+  codigo                         String // "G20251" — matches Historico.curriculo's prefix
+  anoPeriodoImplementacao        String   @map("ano_periodo_implementacao")
+  cargaHorariaTotal              Int      @map("carga_horaria_total")
+  cargaHorariaObrigatoria        Int      @map("carga_horaria_obrigatoria")
+  cargaHorariaOptativaMinima     Int      @map("carga_horaria_optativa_minima")
+  cargaHorariaComplementarMinima Int      @map("carga_horaria_complementar_minima")
+  prazoMinimoSemestres           Int      @map("prazo_minimo_semestres")
+  prazoMedioSemestres            Int      @map("prazo_medio_semestres")
+  prazoMaximoSemestres           Int      @map("prazo_maximo_semestres")
+
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+  staleAfter DateTime @map("stale_after")
+
+  curso       Curso                  @relation(fields: [cursoId], references: [idSigaa])
+  componentes ComponenteCurricular[]
+
+  @@unique([cursoId, codigo])
+  @@map("estruturas_curriculares")
+}
+
+model ComponenteCurricular {
+  id                    String  @id @default(uuid())
+  estruturaCurricularId String  @map("estrutura_curricular_id")
+  // The component's own SIGAA id (e.g. "30548") — used to fetch its detail page.
+  idSigaa               String  @map("id_sigaa")
+  codigo                String
+  nome                  String
+  cargaHoraria          Int     @map("carga_horaria")
+  natureza              String // OBRIGATORIA | OPTATIVA | COMPLEMENTAR
+  periodo               Int? // null for optativas/complementares
+
+  // Free on the same detail-page fetch as pré-requisito/equivalências — no
+  // extra request.
+  unidadeResponsavel String? @map("unidade_responsavel")
+  preRequisito       String? @map("pre_requisito") // raw text: "(FISD36 E FISD42) OU (ENGJ18)"
+  coRequisito        String? @map("co_requisito")
+  equivalencias      String? @map("equivalencias") // raw text: "(ENG295A) OU (ENG295B)"
+
+  estruturaCurricular EstruturaCurricular @relation(fields: [estruturaCurricularId], references: [idSigaa], onDelete: Cascade)
+
+  @@unique([estruturaCurricularId, codigo])
+  @@map("componentes_curriculares")
+}
