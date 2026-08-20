@@ -1,5 +1,4 @@
-import { useRouter } from "expo-router";
-import { Button, Spinner, Typography, useThemeColor, useToast } from "heroui-native";
+import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
@@ -7,9 +6,8 @@ import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
 import { LocationBadge } from "@/components/LocationBadge";
 import { SemesterTrack } from "@/components/SemesterTrack";
-import { UfbaCrest } from "@/components/UfbaCrest";
 import { describeApiError } from "@/lib/api-errors";
-import { postSchedule, postSigaaSession } from "@/lib/api";
+import { getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { savePeriodoCache } from "@/lib/periodo-cache";
 import { isWithinPeriodo } from "@/lib/periodo-letivo";
@@ -27,9 +25,10 @@ import {
   SCHEDULE_START_MIN,
   type ScheduleBlock,
 } from "@/lib/sigaa-schedule";
+import { relativeFreshness } from "@/lib/relative-freshness";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
-import type { PeriodoLetivo } from "@/lib/types";
+import type { PeriodoLetivo, Turma } from "@/lib/types";
 import { buildGreeting, identidadeAppBar } from "@/lib/user-name";
 
 const EMPTY_WEEK: ScheduleBlock[][] = [[], [], [], [], []];
@@ -60,21 +59,12 @@ type LoadState =
       loadedAt: Date;
     };
 
-function relativeFreshness(loadedAt: Date, now: Date): string {
-  const minutes = Math.max(0, Math.round((now.getTime() - loadedAt.getTime()) / 60_000));
-  if (minutes < 1) return "agora mesmo";
-  if (minutes === 1) return "há 1 min";
-  return `há ${minutes} min`;
-}
-
 export default function HomeTab(): JSX.Element {
-  const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const studentName = auth.status === "signedIn" ? auth.user.name : "";
   const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
-  const { toast } = useToast();
 
   // One ticking clock for the whole screen. Read at render instead, every one of
   // these would be frozen at whatever the clock said when the screen mounted:
@@ -95,9 +85,62 @@ export default function HomeTab(): JSX.Element {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [refreshing, setRefreshing] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
-  const [isOpeningSigaa, setIsOpeningSigaa] = useState(false);
-  const [mutedColor, dangerSoftForeground] = useThemeColor(["muted", "danger-soft-foreground"]);
+  const mutedColor = useThemeColor("muted");
 
+  // Applies whatever the backend returned (cache read or fresh sync) — shared
+  // by both paths so the week-masking and periodo-caching logic lives in one
+  // place.
+  const applySchedule = useCallback(
+    (turmas: Turma[], periodoLetivo: PeriodoLetivo | null, fetchedAt: Date) => {
+      if (periodoLetivo) {
+        // Cached for screens that never call /schedule — Trajetória reads this
+        // to tell whether the term is over. Fire and forget: a failed write
+        // must not turn a good schedule fetch into an error.
+        void savePeriodoCache(periodoLetivo).catch((error: unknown) => {
+          console.warn("Failed to cache the academic term", error);
+        });
+      }
+      setState({
+        status: "ready",
+        // Masked here, before anything reads the week: a turma's slots say
+        // "Segunda" without saying which Monday, so a term starting mid-week
+        // would otherwise fill the days that came before it.
+        week: maskWeekToPeriodo(buildWeekSchedule(turmas), days, periodoLetivo),
+        periodoLetivo,
+        loadedAt: fetchedAt,
+      });
+    },
+    [days]
+  );
+
+  // Re-scrapes the SIGAA site and persists the result — the only path that
+  // actually touches the real SIGAA server. Used for the very first sync
+  // (nothing cached yet) and for pull-to-refresh.
+  const syncSchedule = useCallback(
+    async (credentials: Awaited<ReturnType<typeof getSigaaCredentials>>, silent: boolean) => {
+      if (!accessToken || !credentials) {
+        return;
+      }
+      if (!silent) {
+        setState({ status: "loading" });
+      }
+      try {
+        const response = await postScheduleSync(accessToken, credentials);
+        if (!("turmas" in response)) {
+          throw new Error("O SIGAA não retornou nenhuma turma.");
+        }
+        applySchedule(response.turmas, response.periodoLetivo, new Date(response.fetchedAt));
+      } catch (error) {
+        console.warn("Failed to sync SIGAA schedule", error);
+        setState({ status: "error", message: describeApiError(error) });
+      }
+    },
+    [accessToken, applySchedule]
+  );
+
+  // Cheap read from our own database. Falls back to a live sync exactly once
+  // — the first time a user opens the app after linking, before anything has
+  // ever been cached for them.
   const loadSchedule = useCallback(
     async (silent = false) => {
       if (!accessToken) {
@@ -113,30 +156,18 @@ export default function HomeTab(): JSX.Element {
         setState({ status: "loading" });
       }
       try {
-        const { turmas, periodoLetivo } = await postSchedule(accessToken, credentials);
-        if (periodoLetivo) {
-          // Cached for screens that never call /schedule — Trajetória reads this
-          // to tell whether the term is over. Fire and forget: a failed write
-          // must not turn a good schedule fetch into an error.
-          void savePeriodoCache(periodoLetivo).catch((error: unknown) => {
-            console.warn("Failed to cache the academic term", error);
-          });
+        const cached = await getSchedule(accessToken);
+        if (!("turmas" in cached)) {
+          await syncSchedule(credentials, silent);
+          return;
         }
-        setState({
-          status: "ready",
-          // Masked here, before anything reads the week: a turma's slots say
-          // "Segunda" without saying which Monday, so a term starting mid-week
-          // would otherwise fill the days that came before it.
-          week: maskWeekToPeriodo(buildWeekSchedule(turmas), days, periodoLetivo),
-          periodoLetivo,
-          loadedAt: new Date(),
-        });
+        applySchedule(cached.turmas, cached.periodoLetivo, new Date(cached.fetchedAt));
       } catch (error) {
         console.warn("Failed to load SIGAA schedule", error);
         setState({ status: "error", message: describeApiError(error) });
       }
     },
-    [accessToken, days]
+    [accessToken, applySchedule, syncSchedule]
   );
 
   useEffect(() => {
@@ -147,45 +178,17 @@ export default function HomeTab(): JSX.Element {
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
 
+  // Pull-to-refresh always re-scrapes: it's the explicit "I want the freshest
+  // possible data" gesture, not just a re-read of what's already cached.
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadSchedule(true);
-    setRefreshing(false);
-  }, [loadSchedule]);
-
-  const handleOpenSigaa = useCallback(async () => {
     if (!accessToken) {
       return;
     }
-    if (sigaaLink.status !== "linked") {
-      router.push("/link-account");
-      return;
-    }
-
     const credentials = await getSigaaCredentials();
-    if (!credentials) {
-      router.push("/link-account");
-      return;
-    }
-
-    setIsOpeningSigaa(true);
-    try {
-      const session = await postSigaaSession(accessToken, credentials);
-      router.push({
-        pathname: "/sigaa-webview",
-        params: { sessionCookie: session.sessionCookie, targetUrl: session.targetUrl },
-      });
-    } catch (error) {
-      console.warn("Failed to open SIGAA", error);
-      toast.show({
-        variant: "danger",
-        label: describeApiError(error),
-        icon: <AppIcon name="IconErrorCircle" size={20} color={dangerSoftForeground} />,
-      });
-    } finally {
-      setIsOpeningSigaa(false);
-    }
-  }, [accessToken, sigaaLink.status, router, toast, dangerSoftForeground]);
+    setRefreshing(true);
+    await syncSchedule(credentials, true);
+    setRefreshing(false);
+  }, [accessToken, syncSchedule]);
 
   const week = state.status === "ready" ? state.week : EMPTY_WEEK;
   const daySchedule = week[selectedDay] ?? [];
@@ -271,6 +274,7 @@ export default function HomeTab(): JSX.Element {
         {...identidade}
       />
       <ScrollView
+        testID="home-schedule-scroll"
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
@@ -535,23 +539,6 @@ export default function HomeTab(): JSX.Element {
             </View>
           </>
         )}
-
-        <View className="gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full flex-row gap-2.5"
-            isDisabled={isOpeningSigaa}
-            onPress={handleOpenSigaa}
-          >
-            {isOpeningSigaa ? <Spinner /> : <UfbaCrest size={22} />}
-            <Button.Label>Abrir o SIGAA</Button.Label>
-            {!isOpeningSigaa && <AppIcon name="IconArrowSquareOut" size={18} color={mutedColor} />}
-          </Button>
-          <Typography.Paragraph type="body-xs" color="muted" align="center">
-            Abre já logado. Você não digita nada.
-          </Typography.Paragraph>
-        </View>
       </ScrollView>
     </View>
   );

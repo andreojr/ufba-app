@@ -7,11 +7,13 @@ import { SvgUri } from "react-native-svg";
 import { AppBar } from "@/components/AppBar";
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
-import { postSchedule } from "@/lib/api";
+import { getSchedule, postScheduleSync } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
 import { buildAvatarUrl } from "@/lib/dicebear";
+import { relativeFreshness } from "@/lib/relative-freshness";
+import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { getInitials } from "@/lib/user-name";
@@ -69,9 +71,56 @@ export default function AjustesTab(): JSX.Element {
   const mutedColor = useThemeColor("muted");
   const { toast } = useToast();
   const [isExportingCalendar, setIsExportingCalendar] = useState(false);
+  const [isSyncingSchedule, setIsSyncingSchedule] = useState(false);
+  // Seeded from the cache on mount so the sync item can say how old its data
+  // is without forcing a live SIGAA scrape just to render the screen.
+  const [scheduleFetchedAt, setScheduleFetchedAt] = useState<Date | null>(null);
 
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const isSigaaLinked = sigaaLink.status === "linked";
+
+  useEffect(() => {
+    if (!isSigaaLinked || !accessToken) {
+      return;
+    }
+    getSchedule(accessToken)
+      .then((response: ScheduleResponse) => {
+        if ("turmas" in response) {
+          setScheduleFetchedAt(new Date(response.fetchedAt));
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("Failed to read the cached schedule", error);
+      });
+  }, [isSigaaLinked, accessToken]);
+
+  // Reads the cache first — this is the one place that must never bypass it
+  // for a routine export — and falls back to a live sync only the first time,
+  // when the user has never synced at all.
+  const readOrSyncSchedule = useCallback(async (): Promise<
+    Extract<ScheduleResponse, { turmas: unknown }> | null
+  > => {
+    if (!accessToken) {
+      return null;
+    }
+    const cached = await getSchedule(accessToken);
+    if ("turmas" in cached) {
+      return cached;
+    }
+    const credentials = await getSigaaCredentials();
+    if (!credentials) {
+      return null;
+    }
+    const synced = await postScheduleSync(accessToken, {
+      login: credentials.login,
+      senha: credentials.senha,
+    });
+    if ("turmas" in synced) {
+      setScheduleFetchedAt(new Date(synced.fetchedAt));
+      return synced;
+    }
+    return null;
+  }, [accessToken]);
 
   const handleExportCalendar = useCallback(async () => {
     if (!isSigaaLinked || !accessToken) {
@@ -80,14 +129,12 @@ export default function AjustesTab(): JSX.Element {
 
     setIsExportingCalendar(true);
     try {
-      const credentials = await getSigaaCredentials();
-      if (!credentials) {
+      const schedule = await readOrSyncSchedule();
+      if (!schedule) {
         toast.show({ variant: "danger", label: "Vincule sua conta do SIGAA para exportar." });
         return;
       }
-
-      const { turmas, periodoLetivo } = await postSchedule(accessToken, credentials);
-      if (!periodoLetivo) {
+      if (!schedule.periodoLetivo) {
         toast.show({
           variant: "danger",
           label: "Período letivo desconhecido — não é possível exportar ainda.",
@@ -95,7 +142,7 @@ export default function AjustesTab(): JSX.Element {
         return;
       }
 
-      const count = await exportScheduleToDeviceCalendar(turmas, periodoLetivo);
+      const count = await exportScheduleToDeviceCalendar(schedule.turmas, schedule.periodoLetivo);
       toast.show({
         variant: "success",
         label: `${count} aula${count === 1 ? "" : "s"} exportada${count === 1 ? "" : "s"} para o calendário "Gradline".`,
@@ -112,6 +159,38 @@ export default function AjustesTab(): JSX.Element {
       }
     } finally {
       setIsExportingCalendar(false);
+    }
+  }, [isSigaaLinked, accessToken, readOrSyncSchedule, toast]);
+
+  // Unconditional live scrape — the explicit "sincronizar agora" gesture, same
+  // convention as Trajetória's sync button.
+  const handleSyncSchedule = useCallback(async () => {
+    if (!isSigaaLinked || !accessToken) {
+      return;
+    }
+
+    setIsSyncingSchedule(true);
+    try {
+      const credentials = await getSigaaCredentials();
+      if (!credentials) {
+        toast.show({ variant: "danger", label: "Vincule sua conta do SIGAA para sincronizar." });
+        return;
+      }
+
+      const response = await postScheduleSync(accessToken, {
+        login: credentials.login,
+        senha: credentials.senha,
+      });
+      if (!("turmas" in response)) {
+        throw new Error("O SIGAA não retornou nenhuma turma.");
+      }
+      setScheduleFetchedAt(new Date(response.fetchedAt));
+      toast.show({ variant: "success", label: "Horário sincronizado com o SIGAA." });
+    } catch (error) {
+      console.warn("Failed to sync the SIGAA schedule", error);
+      toast.show({ variant: "danger", label: describeApiError(error) });
+    } finally {
+      setIsSyncingSchedule(false);
     }
   }, [isSigaaLinked, accessToken, toast]);
 
@@ -304,6 +383,27 @@ export default function AjustesTab(): JSX.Element {
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+            </ListGroup.Item>
+            <View className="h-px bg-white/10 mx-4" />
+            <ListGroup.Item
+              testID="sync-schedule-item"
+              disabled={!isSigaaLinked || isSyncingSchedule}
+              onPress={handleSyncSchedule}
+            >
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconArrowsClockwise" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Sincronizar horário com o SIGAA</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {!isSigaaLinked
+                    ? "Vincule sua conta do SIGAA para sincronizar"
+                    : scheduleFetchedAt
+                      ? `Sincronizado ${relativeFreshness(scheduleFetchedAt, new Date())}`
+                      : "Nunca sincronizado"}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>{isSyncingSchedule ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>
         </View>

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
-import { ApiError, postSchedule, postSigaaSession } from "@/lib/api";
+import { ApiError, getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { savePeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -14,8 +14,8 @@ jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
-  postSchedule: jest.fn(),
-  postSigaaSession: jest.fn(),
+  getSchedule: jest.fn(),
+  postScheduleSync: jest.fn(),
 }));
 // Mocked, not automocked: the screen calls `.catch()` on the returned promise,
 // and a bare jest.fn() returns undefined.
@@ -32,8 +32,6 @@ const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
-
-const mockToastShow = jest.fn();
 
 jest.mock("heroui-native", () => {
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
@@ -69,7 +67,6 @@ jest.mock("heroui-native", () => {
     },
     useThemeColor: (tokens: string | string[]) =>
       Array.isArray(tokens) ? tokens.map(() => "#000000") : "#000000",
-    useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
 
@@ -95,8 +92,8 @@ jest.mock("react-native-svg", () => {
 const mockedUseAuth = jest.mocked(useAuth);
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
-const mockedPostSchedule = jest.mocked(postSchedule);
-const mockedPostSigaaSession = jest.mocked(postSigaaSession);
+const mockedGetSchedule = jest.mocked(getSchedule);
+const mockedPostScheduleSync = jest.mocked(postScheduleSync);
 const mockedSavePeriodoCache = jest.mocked(savePeriodoCache);
 
 const ALL_WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -126,7 +123,11 @@ const PERIODO_LETIVO = {
 };
 
 function scheduleResponse(periodoLetivo: PeriodoLetivo | null = PERIODO_LETIVO) {
-  return { turmas: [turmaEveryWeekday()], periodoLetivo };
+  return {
+    turmas: [turmaEveryWeekday()],
+    periodoLetivo,
+    fetchedAt: "2026-08-19T03:35:00.000Z",
+  };
 }
 
 /**
@@ -151,8 +152,7 @@ describe("HomeTab", () => {
       user: { id: "1", email: "a@ufba.br", name: "Ana", avatarUrl: null },
     } as any);
     mockPush.mockClear();
-    mockToastShow.mockClear();
-    mockedPostSigaaSession.mockClear();
+    mockedPostScheduleSync.mockClear();
     mockedSavePeriodoCache.mockClear();
   });
 
@@ -250,7 +250,7 @@ describe("HomeTab", () => {
   it("renders the fetched schedule, including a course scheduled every weekday", async () => {
     mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
-    mockedPostSchedule.mockResolvedValue(scheduleResponse());
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
     const { getByText, getAllByText } = await render(<HomeTab />);
 
@@ -272,7 +272,7 @@ describe("HomeTab", () => {
         syncMode: "device",
       });
       // turmaEveryWeekday runs 08:00–09:00 every weekday.
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
     });
 
     afterEach(() => {
@@ -333,7 +333,7 @@ describe("HomeTab", () => {
         senha: "segredo",
         syncMode: "device",
       });
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
     });
 
     afterEach(() => {
@@ -384,7 +384,7 @@ describe("HomeTab", () => {
     // a class's exact start and end are already on its own card below.
     mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
-    mockedPostSchedule.mockResolvedValue(scheduleResponse());
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
     const { getByText, getAllByText, queryByText } = await render(<HomeTab />);
     await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -416,7 +416,7 @@ describe("HomeTab", () => {
 
     it("counts the term down on the schedule grid", async () => {
       pinToOpeningDay();
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
       const { getByText } = await render(<HomeTab />);
 
@@ -425,7 +425,7 @@ describe("HomeTab", () => {
 
     it("marks the ends of the term track with the months it spans", async () => {
       pinToOpeningDay();
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
       const { getByText } = await render(<HomeTab />);
 
@@ -437,7 +437,7 @@ describe("HomeTab", () => {
       // The bug: Monday the 17th listed Monday's classes even though the term
       // only opens on Wednesday the 19th.
       pinToOpeningDay();
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
       const { getByTestId, getByText, getAllByText } = await render(<HomeTab />);
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -451,7 +451,7 @@ describe("HomeTab", () => {
 
     it("still lists classes on a weekday inside the term", async () => {
       pinToOpeningDay();
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
       const { getByTestId, getAllByText, queryByText } = await render(<HomeTab />);
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -468,7 +468,7 @@ describe("HomeTab", () => {
       // Fallback path: no periodoLetivo means nothing to mask against, so the
       // schedule must degrade to today's behaviour rather than going blank.
       pinToOpeningDay();
-      mockedPostSchedule.mockResolvedValue(scheduleResponse(null));
+      mockedGetSchedule.mockResolvedValue(scheduleResponse(null));
 
       const { getByTestId, getAllByText, queryByText } = await render(<HomeTab />);
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -486,7 +486,7 @@ describe("HomeTab", () => {
       // the end date its staleness nudge reads.
       mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
       mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
-      mockedPostSchedule.mockResolvedValue(scheduleResponse());
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
       const { getAllByText } = await render(<HomeTab />);
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -497,7 +497,7 @@ describe("HomeTab", () => {
     it("caches nothing when the backend could not read the term", async () => {
       mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
       mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
-      mockedPostSchedule.mockResolvedValue(scheduleResponse(null));
+      mockedGetSchedule.mockResolvedValue(scheduleResponse(null));
 
       const { getAllByText } = await render(<HomeTab />);
       await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
@@ -509,7 +509,7 @@ describe("HomeTab", () => {
   it("shows an error message with a retry button when the fetch fails", async () => {
     mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
-    mockedPostSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
+    mockedGetSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
     const { getByText } = await render(<HomeTab />);
 
@@ -517,57 +517,55 @@ describe("HomeTab", () => {
     expect(getByText("Tentar de novo")).toBeTruthy();
   });
 
-  it("opens the SIGAA WebView with the session cookie when 'Abrir o SIGAA' is pressed", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
-    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
-    mockedPostSchedule.mockResolvedValue(scheduleResponse());
-    mockedPostSigaaSession.mockResolvedValue({
-      sessionCookie: "JSESSIONID=abc123.sigaapl06",
-      targetUrl: "https://sigaa.ufba.br/sigaa/portais/discente/discente.jsf",
+  describe("persistência estruturada (item 2 do roadmap)", () => {
+    beforeEach(() => {
+      mockedUseSigaaLink.mockReturnValue({
+        status: "linked",
+        syncMode: "device",
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
+      mockedGetSigaaCredentials.mockResolvedValue({
+        login: "123",
+        senha: "segredo",
+        syncMode: "device",
+      });
     });
 
-    const { getByText, getAllByText } = await render(<HomeTab />);
-    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    it("reads the cached schedule instead of re-scraping SIGAA on every open", async () => {
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
-    await act(async () => {
-      fireEvent.press(getByText("Abrir o SIGAA"));
+      const { getAllByText } = await render(<HomeTab />);
+
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+      expect(mockedPostScheduleSync).not.toHaveBeenCalled();
     });
 
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: "/sigaa-webview",
-      params: {
-        sessionCookie: "JSESSIONID=abc123.sigaapl06",
-        targetUrl: "https://sigaa.ufba.br/sigaa/portais/discente/discente.jsf",
-      },
+    it("syncs automatically exactly once when the user has never synced before", async () => {
+      mockedGetSchedule.mockResolvedValue({ sincronizado: false });
+      mockedPostScheduleSync.mockResolvedValue(scheduleResponse());
+
+      const { getAllByText } = await render(<HomeTab />);
+
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+      expect(mockedPostScheduleSync).toHaveBeenCalledTimes(1);
+    });
+
+    it("pull-to-refresh re-scrapes SIGAA instead of just re-reading the cache", async () => {
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
+      mockedPostScheduleSync.mockResolvedValue(scheduleResponse());
+
+      const { getAllByText, getByTestId } = await render(<HomeTab />);
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+      expect(mockedPostScheduleSync).not.toHaveBeenCalled();
+
+      const scroll = getByTestId("home-schedule-scroll");
+      await act(async () => {
+        await scroll.props.refreshControl.props.onRefresh();
+      });
+
+      expect(mockedPostScheduleSync).toHaveBeenCalledTimes(1);
     });
   });
 
-  it("sends the user to link-account instead of opening SIGAA when unlinked", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByText } = await render(<HomeTab />);
-
-    await act(async () => {
-      fireEvent.press(getByText("Abrir o SIGAA"));
-    });
-
-    expect(mockPush).toHaveBeenCalledWith("/link-account");
-    expect(mockedPostSigaaSession).not.toHaveBeenCalled();
-  });
-
-  it("shows a toast when opening SIGAA fails", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
-    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
-    mockedPostSchedule.mockResolvedValue(scheduleResponse());
-    mockedPostSigaaSession.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
-
-    const { getByText } = await render(<HomeTab />);
-
-    await act(async () => {
-      fireEvent.press(getByText("Abrir o SIGAA"));
-    });
-
-    expect(mockToastShow).toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: "/sigaa-webview" }));
-  });
 });

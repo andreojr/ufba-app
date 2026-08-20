@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
-import { ApiError, postSchedule } from "@/lib/api";
+import { ApiError, getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -14,7 +14,11 @@ jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
-  postSchedule: jest.fn(),
+  // Defaults to the never-synced state: most tests in this file have nothing
+  // to say about the schedule, and a bare jest.fn() resolving to undefined
+  // breaks the screen's mount-time cache read.
+  getSchedule: jest.fn().mockResolvedValue({ sincronizado: false }),
+  postScheduleSync: jest.fn(),
 }));
 jest.mock("@/lib/calendar-export", () => {
   const actual = jest.requireActual("@/lib/calendar-export");
@@ -82,7 +86,8 @@ jest.mock("react-native-svg", () => {
 const mockedUseAuth = jest.mocked(useAuth);
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
-const mockedPostSchedule = jest.mocked(postSchedule);
+const mockedGetSchedule = jest.mocked(getSchedule);
+const mockedPostScheduleSync = jest.mocked(postScheduleSync);
 const mockedExportScheduleToDeviceCalendar = jest.mocked(exportScheduleToDeviceCalendar);
 
 const mockRefreshUser = jest.fn();
@@ -134,7 +139,8 @@ describe("AjustesTab", () => {
   beforeEach(() => {
     mockRefreshUser.mockClear();
     mockToastShow.mockClear();
-    mockedPostSchedule.mockClear();
+    mockedGetSchedule.mockClear();
+    mockedPostScheduleSync.mockClear();
     mockedExportScheduleToDeviceCalendar.mockClear();
     mockSignedIn();
   });
@@ -313,11 +319,15 @@ describe("AjustesTab", () => {
           senha: "segredo",
           syncMode: "device",
         });
-        mockedPostSchedule.mockResolvedValue({ turmas: [turma()], periodoLetivo: PERIODO_LETIVO });
+        mockedGetSchedule.mockResolvedValue({
+          turmas: [turma()],
+          periodoLetivo: PERIODO_LETIVO,
+          fetchedAt: new Date().toISOString(),
+        });
         mockedExportScheduleToDeviceCalendar.mockResolvedValue(1);
       });
 
-      it("exports the freshly-fetched schedule to the device calendar when pressed", async () => {
+      it("exports the cached schedule to the device calendar when pressed, without re-scraping SIGAA", async () => {
         const { getByTestId } = await render(<AjustesTab />);
 
         await act(async () => {
@@ -333,10 +343,37 @@ describe("AjustesTab", () => {
         expect(mockToastShow).toHaveBeenCalledWith(
           expect.objectContaining({ variant: "success" })
         );
+        expect(mockedPostScheduleSync).not.toHaveBeenCalled();
+      });
+
+      it("syncs once before exporting when nothing is cached yet", async () => {
+        mockedGetSchedule.mockResolvedValue({ sincronizado: false });
+        mockedPostScheduleSync.mockResolvedValue({
+          turmas: [turma()],
+          periodoLetivo: PERIODO_LETIVO,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("export-calendar-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockedExportScheduleToDeviceCalendar).toHaveBeenCalledWith(
+            [turma()],
+            PERIODO_LETIVO
+          )
+        );
       });
 
       it("shows a toast instead of exporting when the term isn't known yet", async () => {
-        mockedPostSchedule.mockResolvedValue({ turmas: [turma()], periodoLetivo: null });
+        mockedGetSchedule.mockResolvedValue({
+          turmas: [turma()],
+          periodoLetivo: null,
+          fetchedAt: new Date().toISOString(),
+        });
 
         const { getByTestId } = await render(<AjustesTab />);
 
@@ -369,7 +406,7 @@ describe("AjustesTab", () => {
       });
 
       it("shows a generic error toast when fetching the schedule fails", async () => {
-        mockedPostSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
+        mockedGetSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
         const { getByTestId } = await render(<AjustesTab />);
 
@@ -383,6 +420,71 @@ describe("AjustesTab", () => {
           )
         );
         expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("sincronizar horário manualmente", () => {
+      beforeEach(() => {
+        mockedUseSigaaLink.mockReturnValue({
+          status: "linked",
+          syncMode: "device",
+          link: jest.fn(),
+          unlink: jest.fn(),
+        });
+        mockedGetSigaaCredentials.mockResolvedValue({
+          login: "123",
+          senha: "segredo",
+          syncMode: "device",
+        });
+        mockedGetSchedule.mockResolvedValue({ sincronizado: false });
+      });
+
+      it("blocks the sync item when the SIGAA account isn't linked", async () => {
+        mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        expect(getByTestId("sync-schedule-item").props.accessibilityState?.disabled).toBe(true);
+      });
+
+      it("re-scrapes SIGAA and reports success when pressed", async () => {
+        mockedPostScheduleSync.mockResolvedValue({
+          turmas: [turma()],
+          periodoLetivo: PERIODO_LETIVO,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("sync-schedule-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockToastShow).toHaveBeenCalledWith(
+            expect.objectContaining({ variant: "success" })
+          )
+        );
+        expect(mockedPostScheduleSync).toHaveBeenCalledWith("token", {
+          login: "123",
+          senha: "segredo",
+        });
+      });
+
+      it("shows an error toast when the sync fails", async () => {
+        mockedPostScheduleSync.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
+
+        const { getByTestId } = await render(<AjustesTab />);
+
+        await act(async () => {
+          fireEvent.press(getByTestId("sync-schedule-item"));
+        });
+
+        await waitFor(() =>
+          expect(mockToastShow).toHaveBeenCalledWith(
+            expect.objectContaining({ variant: "danger", label: "Credenciais inválidas" })
+          )
+        );
       });
     });
   });
