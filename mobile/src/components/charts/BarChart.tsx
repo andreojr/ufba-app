@@ -1,6 +1,7 @@
 import { Typography, useThemeColor } from "heroui-native";
 import type { JSX } from "react";
 import { ScrollView, Text, View } from "react-native";
+import { GestureDetector, type NativeGesture } from "react-native-gesture-handler";
 
 export interface Barra {
   rotulo: string;
@@ -10,6 +11,13 @@ export interface Barra {
 interface BarChartProps {
   barras: Barra[];
   altura?: number;
+  /**
+   * Lets a page-level swipe gesture (e.g. the trajectory's tab switcher) defer
+   * to this chart's own horizontal scroll instead of racing it — see
+   * `requireExternalGestureToFail` on the gesture that owns this. Omitted in
+   * this component's own tests, where no such outer gesture exists.
+   */
+  scrollGesture?: NativeGesture;
 }
 
 const ALTURA_PADRAO = 120;
@@ -21,9 +29,10 @@ const LARGURA_MINIMA_BARRA = 4;
 // themselves (a fixed MARGEM_Y taken out of a short chart) left too little
 // height for the bars to show real contrast between close values.
 const ESPACO_LABEL = 44;
-// Purple, low-opacity: a value label that reads as an annotation floating
-// over the bar, not another line of body text competing with it.
-const COR_VALOR = "rgba(124, 58, 237, 0.55)";
+// A lighter violet than the accent bars themselves: a value label that reads
+// as an annotation floating over the bar, not another line of body text
+// competing with it.
+const COR_VALOR = "rgba(196, 181, 253, 0.75)";
 
 /**
  * The carga-horária-per-período bar chart. Bars scale to the tallest one in
@@ -32,7 +41,7 @@ const COR_VALOR = "rgba(124, 58, 237, 0.55)";
  * horizontally once there are more terms than fit the screen, rather than
  * squeezing them together.
  */
-export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX.Element {
+export function BarChart({ barras, altura = ALTURA_PADRAO, scrollGesture }: BarChartProps): JSX.Element {
   const accent = useThemeColor("accent");
 
   if (barras.length === 0) {
@@ -46,7 +55,7 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
     Math.max((barra.valor / maiorValor) * altura, LARGURA_MINIMA_BARRA),
   );
 
-  return (
+  const conteudo = (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="bar-chart-scroll">
       <View testID="bar-chart" style={{ width: largura }}>
         <View style={{ width: largura, height: altura + ESPACO_LABEL }}>
@@ -81,6 +90,7 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
                 width: larguraColuna,
                 textAlign: "center",
                 fontSize: 10,
+                fontFamily: "SourceCodePro_400Regular",
                 fontWeight: "600",
                 color: COR_VALOR,
                 transform: [{ rotate: "-90deg" }],
@@ -93,7 +103,7 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
         <View className="flex-row border-t border-white/10 pt-1.5">
           {barras.map((barra, indice) => (
             <View key={indice} className="items-center" style={{ width: larguraColuna }}>
-              <Typography.Paragraph type="body-xs" color="muted">
+              <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
                 {barra.rotulo}
               </Typography.Paragraph>
             </View>
@@ -101,5 +111,13 @@ export function BarChart({ barras, altura = ALTURA_PADRAO }: BarChartProps): JSX
         </View>
       </View>
     </ScrollView>
+  );
+
+  // Wrapped only when a page-level swipe is in the picture — this component's
+  // own tests render it bare, with no such gesture to defer to.
+  return scrollGesture ? (
+    <GestureDetector gesture={scrollGesture}>{conteudo}</GestureDetector>
+  ) : (
+    conteudo
   );
 }

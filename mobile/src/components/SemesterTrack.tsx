@@ -39,7 +39,7 @@ export function SemesterTrack({ periodo, now }: SemesterTrackProps): JSX.Element
           <Typography.Paragraph
             type="body-xs"
             weight="medium"
-            className="text-accent-soft-foreground"
+            className="text-accent-soft-foreground font-mono"
           >
             {periodo.semestre}
           </Typography.Paragraph>

@@ -1,6 +1,7 @@
 import { Typography, useThemeColor } from "heroui-native";
 import type { JSX } from "react";
 import { ScrollView, Text, View } from "react-native";
+import { GestureDetector, type NativeGesture } from "react-native-gesture-handler";
 import Svg, { Circle, Polyline } from "react-native-svg";
 
 import { formatarCoeficiente } from "@/lib/trajetoria";
@@ -16,17 +17,26 @@ export interface PontoLinha {
 interface LineChartProps {
   pontos: PontoLinha[];
   altura?: number;
+  /**
+   * Lets a page-level swipe gesture (e.g. the trajectory's tab switcher) defer
+   * to this chart's own horizontal scroll instead of racing it — see
+   * `requireExternalGestureToFail` on the gesture that owns this. Omitted in
+   * this component's own tests, where no such outer gesture exists.
+   */
+  scrollGesture?: NativeGesture;
 }
 
 const ALTURA_PADRAO = 120;
 const LARGURA_MINIMA = 280;
 // Wide enough that a point's floating label doesn't crowd its neighbour.
 const ESPACO_POR_PONTO = 56;
-// The first/last point's floating value tilts -45° from roughly its own x
-// position, which pushes its rendered (rotated) box further left than the
-// point itself — margem 8 wasn't enough and the label clipped off the
-// chart's left edge.
-const MARGEM_X = 20;
+// The label tilts -45° up and to the right of its own point (see COR_VALOR's
+// Text below), so the two ends need different room: the left edge only has
+// to clear a point sitting flush against it, while the right edge also has
+// to clear that same point's own label, which reaches further right than the
+// point itself.
+const MARGEM_ESQUERDA = 8;
+const MARGEM_DIREITA = 40;
 // Only what a dot needs to clear the plot's own top/bottom edge — this
 // margin comes straight out of `altura`, and the label has its own dedicated
 // headroom (ESPACO_LABEL) above the plot now, so it no longer has to compete
@@ -43,9 +53,10 @@ const ESPACO_LABEL = 26;
 // chart — the opposite of the contrast auto-scaling this domain is meant to
 // expose.
 const MARGEM_DOMINIO = 0.02;
-// Purple, low-opacity: a value label that reads as an annotation floating
-// over the point, not another line of body text competing with it.
-const COR_VALOR = "rgba(124, 58, 237, 0.55)";
+// A lighter violet than the accent line itself: a value label that reads as
+// an annotation floating over the point, not another line of body text
+// competing with it.
+const COR_VALOR = "rgba(196, 181, 253, 0.75)";
 
 /**
  * The CR-per-período line chart. The y-axis is scaled to the series' own
@@ -54,7 +65,7 @@ const COR_VALOR = "rgba(124, 58, 237, 0.55)";
  * movement into a near-straight line. Scrolls horizontally once there are
  * more terms than fit the screen, rather than squeezing them together.
  */
-export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): JSX.Element {
+export function LineChart({ pontos, altura = ALTURA_PADRAO, scrollGesture }: LineChartProps): JSX.Element {
   const accent = useThemeColor("accent");
 
   if (pontos.length === 0) {
@@ -68,7 +79,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
     altura,
     MARGEM_Y,
   );
-  const xs = posicoesX(pontos.length, largura, MARGEM_X);
+  const xs = posicoesX(pontos.length, largura, MARGEM_ESQUERDA, MARGEM_DIREITA);
 
   const coordenadas = pontos
     .map((ponto, indice) =>
@@ -76,7 +87,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
     )
     .filter((c): c is { x: number; y: number; valor: number } => c !== null);
 
-  return (
+  const conteudo = (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="line-chart-scroll">
       <View testID="line-chart" style={{ width: largura }}>
         <View style={{ width: largura, height: altura + ESPACO_LABEL }}>
@@ -110,6 +121,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
                 left: coordenada.x + 4,
                 top: ESPACO_LABEL + coordenada.y - 22,
                 fontSize: 10,
+                fontFamily: "SourceCodePro_400Regular",
                 fontWeight: "600",
                 color: COR_VALOR,
                 transform: [{ rotate: "-45deg" }],
@@ -125,7 +137,7 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
         >
           {pontos.map((ponto, indice) => (
             <View key={indice} className="items-center" style={{ width: largura / pontos.length }}>
-              <Typography.Paragraph type="body-xs" color="muted">
+              <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
                 {ponto.rotulo}
               </Typography.Paragraph>
             </View>
@@ -133,5 +145,13 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO }: LineChartProps): J
         </View>
       </View>
     </ScrollView>
+  );
+
+  // Wrapped only when a page-level swipe is in the picture — this component's
+  // own tests render it bare, with no such gesture to defer to.
+  return scrollGesture ? (
+    <GestureDetector gesture={scrollGesture}>{conteudo}</GestureDetector>
+  ) : (
+    conteudo
   );
 }

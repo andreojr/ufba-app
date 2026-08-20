@@ -54,6 +54,12 @@ describe("posicoesX", () => {
     expect(posicoesX(1, 100, 10)).toEqual([50]);
   });
 
+  it("insets each end by its own margem when they differ", () => {
+    // A chart whose labels lean right needs more room on that side than the
+    // left — the points themselves shift right to make space for it.
+    expect(posicoesX(3, 100, 0, 30)).toEqual([0, 35, 70]);
+  });
+
   it("returns nothing for an empty series", () => {
     expect(posicoesX(0, 100, 10)).toEqual([]);
   });

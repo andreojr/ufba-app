@@ -44,16 +44,27 @@ export function escalaLinear(
 
 /**
  * Evenly spaced x positions for `quantidade` points across `largura`, inset by
- * `margem` pixels on each end — a light touch, just enough that the first and
- * last point don't sit flush against the chart's edge.
+ * `margemEsquerda`/`margemDireita` pixels on their respective ends — a light
+ * touch, just enough that the first and last point don't sit flush against
+ * the chart's edge. The two margins default to the same value, but a chart
+ * whose floating labels lean toward one side (e.g. a -45° tilt to the right)
+ * can widen just that side instead of padding both evenly.
  */
-export function posicoesX(quantidade: number, largura: number, margem: number): number[] {
+export function posicoesX(
+  quantidade: number,
+  largura: number,
+  margemEsquerda: number,
+  margemDireita: number = margemEsquerda,
+): number[] {
   if (quantidade === 0) {
     return [];
   }
   if (quantidade === 1) {
     return [largura / 2];
   }
-  const larguraUtil = largura - margem * 2;
-  return Array.from({ length: quantidade }, (_, i) => margem + (i / (quantidade - 1)) * larguraUtil);
+  const larguraUtil = largura - margemEsquerda - margemDireita;
+  return Array.from(
+    { length: quantidade },
+    (_, i) => margemEsquerda + (i / (quantidade - 1)) * larguraUtil,
+  );
 }

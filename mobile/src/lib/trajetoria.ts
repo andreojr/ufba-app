@@ -7,6 +7,51 @@ export interface PeriodoTrajetoria {
   componentes: ComponenteCursado[];
 }
 
+/** Which insight the tabs at the top of the trajectory focus on. */
+export type Insight = "cr" | "cargaHoraria";
+
+/** Left to right: swiping toward the next one moves right through this list. */
+const ORDEM_INSIGHT: readonly Insight[] = ["cr", "cargaHoraria"];
+
+/** Below this, a pan reads as a tap or a scroll correction, not a swipe. */
+const LIMIAR_SWIPE_PX = 40;
+
+/** Which way a swipe steps through the tabs — left moves to the next one. */
+export type DirecaoSwipe = "esquerda" | "direita";
+
+/**
+ * Which way a completed pan gesture is swiping — null when it doesn't count
+ * as a swipe at all: too short, or leaning more vertical than horizontal,
+ * which is a scroll the vertical ScrollView should keep instead. Marked as a
+ * worklet so the trajectory screen's gesture can call it directly on the UI
+ * thread, at the moment the finger lifts — not just from plain JS, which is
+ * all this file's own tests exercise.
+ */
+export function direcaoDoSwipe(translationX: number, translationY: number): DirecaoSwipe | null {
+  "worklet";
+  if (Math.abs(translationX) < LIMIAR_SWIPE_PX || Math.abs(translationX) <= Math.abs(translationY)) {
+    return null;
+  }
+  // Swiping left drags the *next* card into view, same convention as a page
+  // carousel — so a negative translationX (finger moving left) steps forward.
+  return translationX < 0 ? "esquerda" : "direita";
+}
+
+/**
+ * Which insight a swipe in `direcao` should land on — clamped, not circular:
+ * stepping past the last tab (or before the first) simply does nothing, the
+ * same way a real tab view would.
+ */
+export function proximoInsight(atual: Insight, translationX: number, translationY: number): Insight {
+  const direcao = direcaoDoSwipe(translationX, translationY);
+  if (!direcao) {
+    return atual;
+  }
+  const indice = ORDEM_INSIGHT.indexOf(atual);
+  const proximo = direcao === "esquerda" ? indice + 1 : indice - 1;
+  return ORDEM_INSIGHT[proximo] ?? atual;
+}
+
 /** Enrolled — the transcript's marker for the term that hasn't closed yet. */
 const SITUACAO_MATRICULADO = "MATR";
 
@@ -132,6 +177,21 @@ export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
     porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
   }
   return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos }));
+}
+
+/**
+ * Situações that must not add hours to the carga horária chart: trancada and
+ * cancelada are abandoned — the student never carried that load to a result.
+ * Everything else — reprovada, and matriculada-sem-nota for the term still in
+ * progress — occupied the student's semester and counts.
+ */
+const SITUACOES_FORA_DA_CARGA_HORARIA: readonly string[] = ["TRANC", "CANC"];
+
+/** Which of a period's components should count toward its carga horária. */
+export function componentesComCargaHorariaContada(
+  componentes: ComponenteCursado[],
+): ComponenteCursado[] {
+  return componentes.filter((c) => !SITUACOES_FORA_DA_CARGA_HORARIA.includes(c.situacao));
 }
 
 /** Total carga horária of a set of components — a period's, most of the time. */

@@ -89,6 +89,9 @@ jest.mock("heroui-native", () => {
   return {
     Menu,
     Tabs,
+    Avatar: Object.assign(({ children }: any) => <View>{children}</View>, {
+      Fallback: ({ children }: any) => <Text>{children}</Text>,
+    }),
     Button: ({ children, onPress }: any) => (
       <TouchableOpacity onPress={onPress}>
         <Text>{children}</Text>
@@ -228,17 +231,20 @@ describe("Trajetória", () => {
     // The course's total requirement is fixed at the end of the progress bar
     // regardless of tab — visible even before switching to Carga Horária.
     expect(screen.getByText("3.610 h")).toBeTruthy();
-    // The main card shows only one of the two stats at a time.
-    expect(screen.queryByText("2.100 h")).toBeNull();
+    // Both stats stay mounted at all times now — the card slides between
+    // them rather than swapping one out — so Carga Horária's is already in
+    // the tree even before switching to it.
+    expect(screen.getByText("2.100 h")).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(screen.getByText("Carga Horária"));
     });
 
     // Just the hours done, pt-BR thousands separator — the total moved to
-    // the progress bar and isn't repeated here anymore.
+    // the progress bar and isn't repeated here anymore. The CR side's own
+    // value stays mounted too, just slid off screen.
     expect(screen.getByText("2.100 h")).toBeTruthy();
-    expect(screen.queryByText("8,16")).toBeNull();
+    expect(screen.getByText("8,16")).toBeTruthy();
     // The progress row is shared by both tabs, not tied to either stat.
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
   });
@@ -623,10 +629,14 @@ describe("Trajetória", () => {
       fireEvent.press(screen.getByText("Carga Horária"));
     });
 
-    // The grade is gone from the switched tab; only the hours remain.
+    // The grade shown per-matéria in the timeline below is still tied to
+    // `insight` directly (unrelated to the sliding summary card above) and
+    // really does swap out. The two chart components, though, both stay
+    // mounted at all times now — the card above slides between them rather
+    // than swapping one out.
     expect(screen.queryByText("8,0")).toBeNull();
     expect(screen.getByTestId("bar-chart")).toBeTruthy();
-    expect(screen.queryByTestId("line-chart")).toBeNull();
+    expect(screen.getByTestId("line-chart")).toBeTruthy();
   });
 
   it("ends the trajectory with a linha de chegada card", async () => {

@@ -2,6 +2,7 @@ import {
   agruparPorAno,
   agruparPorSemestre,
   calcularCrAcumulado,
+  componentesComCargaHorariaContada,
   contarFaltantes,
   formatarCoeficiente,
   formatarImpacto,
@@ -9,7 +10,9 @@ import {
   historicoDesatualizado,
   impactoNoCr,
   percentualConcluido,
+  direcaoDoSwipe,
   poolPlanejavel,
+  proximoInsight,
   rotuloSituacao,
   rotulosPorAno,
   somarCargaHoraria,
@@ -239,6 +242,84 @@ describe("somarCargaHoraria", () => {
 
   it("returns zero for an empty period", () => {
     expect(somarCargaHoraria([])).toBe(0);
+  });
+});
+
+describe("componentesComCargaHorariaContada", () => {
+  it("keeps a component that was approved, failed, dispensed, transferred or is still enrolled", () => {
+    const componentes = [
+      componente({ codigo: "A", situacao: "APR" }),
+      componente({ codigo: "B", situacao: "REP" }),
+      componente({ codigo: "C", situacao: "REPF" }),
+      componente({ codigo: "D", situacao: "REPMF" }),
+      componente({ codigo: "E", situacao: "DISP" }),
+      componente({ codigo: "F", situacao: "CUMP" }),
+      componente({ codigo: "G", situacao: "INCORP" }),
+      componente({ codigo: "H", situacao: "TRANS" }),
+      componente({ codigo: "I", situacao: "MATR", nota: null }),
+    ];
+
+    expect(componentesComCargaHorariaContada(componentes).map((c) => c.codigo)).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+    ]);
+  });
+
+  it("drops a locked or cancelled component", () => {
+    const componentes = [
+      componente({ codigo: "A", situacao: "TRANC" }),
+      componente({ codigo: "B", situacao: "CANC" }),
+    ];
+
+    expect(componentesComCargaHorariaContada(componentes)).toEqual([]);
+  });
+});
+
+describe("direcaoDoSwipe", () => {
+  it("reads a leftward drag past the threshold", () => {
+    expect(direcaoDoSwipe(-60, 0)).toBe("esquerda");
+  });
+
+  it("reads a rightward drag past the threshold", () => {
+    expect(direcaoDoSwipe(60, 0)).toBe("direita");
+  });
+
+  it("returns null below the swipe threshold", () => {
+    expect(direcaoDoSwipe(-20, 0)).toBeNull();
+  });
+
+  it("returns null for a drag leaning more vertical than horizontal", () => {
+    expect(direcaoDoSwipe(-60, 80)).toBeNull();
+  });
+});
+
+describe("proximoInsight", () => {
+  it("steps to cargaHoraria on a clear leftward swipe from cr", () => {
+    expect(proximoInsight("cr", -60, 0)).toBe("cargaHoraria");
+  });
+
+  it("steps back to cr on a clear rightward swipe from cargaHoraria", () => {
+    expect(proximoInsight("cargaHoraria", 60, 0)).toBe("cr");
+  });
+
+  it("clamps rather than wrapping past the first or last tab", () => {
+    expect(proximoInsight("cr", 60, 0)).toBe("cr");
+    expect(proximoInsight("cargaHoraria", -60, 0)).toBe("cargaHoraria");
+  });
+
+  it("ignores a drag that hasn't cleared the swipe threshold", () => {
+    expect(proximoInsight("cr", -20, 0)).toBe("cr");
+  });
+
+  it("ignores a drag that leans more vertical than horizontal — a scroll, not a swipe", () => {
+    expect(proximoInsight("cr", -60, 80)).toBe("cr");
   });
 });
 
