@@ -318,21 +318,21 @@ investigation has the evidence.
 
 ### Where the list of docentes comes from
 
-Turmas are not shared state today — the home screen fetches its own and
-that is that. If the professores tab fetched them itself it would pay
-login plus atestado (~3-5s) *before* resolution even starts, on every
-open, including when the global cache is warm.
+**Amended 2026-08-19, after roadmap item 2 landed.** This section originally
+specified a device-side `turmas-cache.ts` written by the home screen,
+because fetching the schedule cost a SIGAA login plus the atestado (~3-5s)
+and turmas were not shared state between screens.
 
-Instead: `mobile/src/lib/turmas-cache.ts`, modelled on the existing
-`periodo-cache.ts`, whose own comment establishes the pattern ("kept so
-screens that never call `/schedule` can still tell..."). The home writes
-`{ semestre, turmas: [{codigo, nome, docente}] }` after a successful
-schedule fetch; the professores tab reads it and posts straight to
-`/docentes/semestre` — no credentials, no login, no atestado. With the
-global cache warm the tab opens essentially instantly.
+That premise is gone. The backend now persists the schedule, and
+`getSchedule(accessToken)` is a plain cached read — no credentials, no
+SIGAA round trip. The Professores tab calls it directly and derives the
+docente names from `turmas`, then posts them to `/docentes/semestre`. No
+local cache, no home-screen write.
 
-Fallback for a user who opens the tab before the home has ever run: the
-screen fetches the schedule itself, exactly as the home does.
+`getSchedule` returns
+`{ sincronizado: false } | { turmas, periodoLetivo, fetchedAt }`, which adds
+a fourth screen state to the three below: **never synced** — distinct from
+"no turmas", and it points the user at Início.
 
 ### Files
 
@@ -341,7 +341,6 @@ screen fetches the schedule itself, exactly as the home does.
 | `src/app/(tabs)/professores.tsx` | list screen |
 | `src/app/professor/[siape].tsx` | detail route (outside the tabs, like `avatar-picker`) |
 | `src/components/DocenteCard.tsx` | card, badges, disabled state |
-| `src/lib/turmas-cache.ts` | local cache of the term's turmas |
 | `src/lib/api.ts` | `postDocentesSemestre`, `getDocente` |
 | `src/lib/types.ts` | `DocenteResumo`, `DocentePerfil` |
 | `src/components/AppIcon.tsx` | add `IconChalkboardTeacher` |

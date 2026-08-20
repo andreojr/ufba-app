@@ -2744,14 +2744,20 @@ git commit -m "feat(backend): expose the docentes endpoints"
 
 ---
 
-### Task 11: Mobile types, API client and the turmas cache
+### Task 11: Mobile types and API client
+
+> **Plan amendment (ruled before execution).** An earlier draft of this task
+> created `mobile/src/lib/turmas-cache.ts` and had the home screen write the
+> term's turmas into it, because fetching the schedule used to cost a SIGAA
+> login plus the atestado. That is no longer true: the backend now persists the
+> schedule, and `getSchedule(accessToken)` is a plain cached read with no
+> credentials involved. The Professores screen calls it directly. The local
+> cache, its tests, and the home-screen edit are all dropped.
 
 **Files:**
 - Modify: `mobile/src/lib/types.ts`
 - Modify: `mobile/src/lib/api.ts`
-- Create: `mobile/src/lib/turmas-cache.ts`
-- Modify: `mobile/src/app/(tabs)/index.tsx` (write the cache after a successful fetch)
-- Test: `mobile/src/lib/turmas-cache.test.ts`
+- Test: `mobile/src/lib/api.test.ts` (extend the existing file)
 
 **Interfaces:**
 - Consumes: the backend endpoints from Task 10.
@@ -2773,141 +2779,115 @@ git commit -m "feat(backend): expose the docentes endpoints"
     disciplinas: DocenteDisciplina[]; tccsOrientados: { titulo: string; ano: number }[];
     orientacoes: { mestradoAndamento: number; mestradoConcluidas: number;
       doutoradoAndamento: number; doutoradoConcluidas: number } }
-  export interface TurmasCache { semestre: string;
-    turmas: { codigo: string; nome: string; docente: string | null }[] }
-
   // api.ts
   export async function postDocentesSemestre(accessToken: string,
     turmas: { codigo: string; nome: string; docente: string }[]): Promise<DocenteResumo[]>;
   export async function getDocente(accessToken: string, siape: string): Promise<DocentePerfil>;
-
-  // turmas-cache.ts
-  export async function getTurmasCache(): Promise<TurmasCache | null>;
-  export async function saveTurmasCache(cache: TurmasCache): Promise<void>;
   ```
+  The Professores screen gets its turmas from the existing
+  `getSchedule(accessToken): Promise<ScheduleResponse>`, whose type is the union
+  `{ sincronizado: false } | { turmas: Turma[]; periodoLetivo: PeriodoLetivo | null; fetchedAt: string }`.
+  `Turma.codigo` and `Turma.docente` are both `string | null`.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `mobile/src/lib/turmas-cache.test.ts`:
+Append to `mobile/src/lib/api.test.ts`, following the existing file's shape
+(it stubs `global.fetch` and asserts the exact URL, method, headers and body):
 
 ```ts
-import * as SecureStore from "expo-secure-store";
+describe("postDocentesSemestre", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
 
-import { getTurmasCache, saveTurmasCache } from "./turmas-cache";
-
-jest.mock("expo-secure-store");
-
-const mockedStore = SecureStore as jest.Mocked<typeof SecureStore>;
-
-describe("turmas-cache", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
   });
 
-  it("round-trips the term's turmas", async () => {
-    const cache = {
-      semestre: "2026.2",
-      turmas: [{ codigo: "MATA65", nome: "COMPUTAÇÃO GRÁFICA", docente: "FULANO" }],
-    };
-    await saveTurmasCache(cache);
-    const escrito = mockedStore.setItemAsync.mock.calls[0][1];
-    mockedStore.getItemAsync.mockResolvedValueOnce(escrito);
-
-    await expect(getTurmasCache()).resolves.toEqual(cache);
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
   });
 
-  it("returns null when nothing was ever written", async () => {
-    mockedStore.getItemAsync.mockResolvedValueOnce(null);
-    await expect(getTurmasCache()).resolves.toBeNull();
+  it("posts the turmas and returns the parsed resumos", async () => {
+    const resumos = [{ nomeOriginal: "FULANO", componentes: [], perfil: null }];
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => resumos,
+    });
+
+    const turmas = [{ codigo: "MATA65", nome: "CG", docente: "FULANO" }];
+    await expect(postDocentesSemestre("token", turmas)).resolves.toEqual(resumos);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/docentes/semestre",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ turmas }),
+      }),
+    );
   });
 
-  // A bad read must degrade to "no cache", never take the screen down.
-  it("returns null instead of throwing on corrupt JSON", async () => {
-    mockedStore.getItemAsync.mockResolvedValueOnce("{ not json");
-    await expect(getTurmasCache()).resolves.toBeNull();
+  it("surfaces a failed response as an ApiError", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({ message: "SIGAA fora do ar" }),
+    });
+    await expect(postDocentesSemestre("token", [])).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("getDocente", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
   });
 
-  it("returns null when the stored shape is not a turmas cache", async () => {
-    mockedStore.getItemAsync.mockResolvedValueOnce(JSON.stringify({ semestre: 3 }));
-    await expect(getTurmasCache()).resolves.toBeNull();
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("gets the profile by siape", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ siape: "1815041" }),
+    });
+
+    await expect(getDocente("token", "1815041")).resolves.toMatchObject({
+      siape: "1815041",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/docentes/1815041",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });
 ```
 
+Add `getDocente` and `postDocentesSemestre` to the import list at the top of the file.
+
 - [ ] **Step 2: Run it and watch it fail**
 
-Run from `mobile/`: `npm test -- src/lib/turmas-cache.test.ts`
-Expected: FAIL — cannot find module `./turmas-cache`.
+Run from `mobile/`: `npm test -- src/lib/api.test.ts`
+Expected: FAIL — `postDocentesSemestre` is not exported from `./api`.
 
-- [ ] **Step 3: Implement the cache**
+- [ ] **Step 3: Add the types**
 
-Create `mobile/src/lib/turmas-cache.ts`:
+Append the `DocenteSelos`, `DocenteResumo`, `DocenteDisciplina` and `DocentePerfil`
+interfaces from the **Interfaces** block above to `mobile/src/lib/types.ts`, each
+with a one-line comment saying which backend shape it mirrors (the file's existing
+convention — see the `ScheduleResponse` comment).
 
-```ts
-import * as SecureStore from "expo-secure-store";
+- [ ] **Step 4: Add the API functions**
 
-import type { TurmasCache } from "./types";
-
-/**
- * The term's turmas, kept so the Professores tab does not have to re-fetch the
- * schedule — which costs a SIGAA login plus the atestado (~3-5s) before it can
- * even start resolving profiles.
- *
- * Written by the home screen after a successful schedule fetch, in the same
- * spirit as periodo-cache.ts. Not secret; SecureStore is simply the app's one
- * persistence mechanism.
- */
-const TURMAS_KEY = "gradline.turmas";
-
-function isTurmasCache(value: unknown): value is TurmasCache {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const candidate = value as TurmasCache;
-  return (
-    typeof candidate.semestre === "string" &&
-    Array.isArray(candidate.turmas) &&
-    candidate.turmas.every(
-      (turma) =>
-        typeof turma?.codigo === "string" &&
-        typeof turma?.nome === "string" &&
-        (turma?.docente === null || typeof turma?.docente === "string"),
-    )
-  );
-}
-
-export async function getTurmasCache(): Promise<TurmasCache | null> {
-  try {
-    const raw = await SecureStore.getItemAsync(TURMAS_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return isTurmasCache(parsed) ? parsed : null;
-  } catch {
-    // A bad read degrades to "no cache", which sends the screen down its
-    // fetch-the-schedule fallback. Never let it take the screen down.
-    return null;
-  }
-}
-
-export async function saveTurmasCache(cache: TurmasCache): Promise<void> {
-  await SecureStore.setItemAsync(TURMAS_KEY, JSON.stringify(cache));
-}
-```
-
-- [ ] **Step 4: Run it and watch it pass**
-
-Run: `npm test -- src/lib/turmas-cache.test.ts`
-Expected: PASS, 4 tests.
-
-- [ ] **Step 5: Add the types**
-
-Append the `DocenteSelos`, `DocenteResumo`, `DocenteDisciplina`, `DocentePerfil` and `TurmasCache` interfaces from the **Interfaces** block above to `mobile/src/lib/types.ts`, each with a one-line comment saying which backend shape it mirrors (the file's existing convention — see the `ScheduleResponse` comment).
-
-- [ ] **Step 6: Add the API functions**
-
-Append to `mobile/src/lib/api.ts`, and add `DocentePerfil`/`DocenteResumo` to the type import at the top:
+Append to `mobile/src/lib/api.ts`, and add `DocentePerfil`/`DocenteResumo` to the
+type import at the top:
 
 ```ts
 // The first call for a set of docentes resolves them against SIGAA (one search
@@ -2935,39 +2915,23 @@ export async function getDocente(
 }
 ```
 
-- [ ] **Step 7: Have the home write the cache**
+- [ ] **Step 5: Run it and watch it pass**
 
-In `mobile/src/app/(tabs)/index.tsx`, immediately after the existing `savePeriodoCache` block (around line 117-125), add:
+Run: `npm test -- src/lib/api.test.ts`
+Expected: PASS, including the 3 new tests.
 
-```tsx
-        // Cached for the Professores tab, which otherwise would have to pay a
-        // login plus the atestado just to learn the docente names it already
-        // could have had. Fire and forget, same as the período above.
-        void saveTurmasCache({
-          semestre: periodoLetivo?.semestre ?? turmas[0]?.semestre ?? "",
-          turmas: turmas.map((t) => ({
-            codigo: t.codigo ?? "",
-            nome: t.nome,
-            docente: t.docente,
-          })),
-        }).catch((error: unknown) => {
-          console.warn("Failed to cache the term's turmas", error);
-        });
-```
-
-and add `import { saveTurmasCache } from "@/lib/turmas-cache";` to the imports.
-
-- [ ] **Step 8: Verify nothing regressed**
+- [ ] **Step 6: Verify nothing regressed**
 
 Run: `npm test && npm run typecheck && npm run lint`
-Expected: full suite green (the home tests still pass — the new write is fire-and-forget and `expo-secure-store` is already mocked in that suite; if the home test complains about an unmocked `setItemAsync`, add it to that file's existing SecureStore mock).
+Expected: full suite green.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add mobile/src/lib mobile/src/app/\(tabs\)/index.tsx
-git commit -m "feat(mobile): add docentes API client and cache the term's turmas"
+git add mobile/src/lib/api.ts mobile/src/lib/api.test.ts mobile/src/lib/types.ts
+git commit -m "feat(mobile): add the docentes API client"
 ```
+
 
 ---
 
@@ -3234,7 +3198,7 @@ git commit -m "feat(mobile): add the docente card with what's-inside badges"
 - Test: `mobile/src/__tests__/professores.test.tsx`
 
 **Interfaces:**
-- Consumes: `DocenteCard` (Task 12), `postDocentesSemestre` / `getTurmasCache` (Task 11), `useAuth` from `@/lib/auth-context`, `useSigaaLink` from `@/lib/sigaa-link-context`, `describeApiError` from `@/lib/api-errors`.
+- Consumes: `DocenteCard` (Task 12), `postDocentesSemestre` (Task 11), the existing `getSchedule` from `@/lib/api`, `useAuth` from `@/lib/auth-context`, `describeApiError` from `@/lib/api-errors`.
 - Produces: the `/professores` route.
 
 - [ ] **Step 1: Write the failing test**
@@ -3245,15 +3209,14 @@ Create `mobile/src/__tests__/professores.test.tsx`:
 import { render, screen, waitFor } from "@testing-library/react-native";
 
 import ProfessoresScreen from "@/app/(tabs)/professores";
-import { postDocentesSemestre } from "@/lib/api";
+import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { getTurmasCache } from "@/lib/turmas-cache";
-import type { DocenteResumo } from "@/lib/types";
+import type { DocenteResumo, Turma } from "@/lib/types";
 
 jest.mock("@/lib/auth-context");
-jest.mock("@/lib/turmas-cache");
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
+  getSchedule: jest.fn(),
   postDocentesSemestre: jest.fn(),
 }));
 
@@ -3296,11 +3259,22 @@ jest.mock("heroui-native", () => {
 });
 
 const mockedPost = postDocentesSemestre as jest.MockedFunction<typeof postDocentesSemestre>;
-const mockedCache = getTurmasCache as jest.MockedFunction<typeof getTurmasCache>;
+const mockedSchedule = getSchedule as jest.MockedFunction<typeof getSchedule>;
 const mockedAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 function resumo(nome: string, perfil: DocenteResumo["perfil"]): DocenteResumo {
   return { nomeOriginal: nome, componentes: [{ codigo: "MATA65", nome: "CG" }], perfil };
+}
+
+function turma(codigo: string, nome: string, docente: string | null): Turma {
+  return {
+    codigo,
+    nome,
+    docente,
+    slots: [],
+    vigencia: { inicio: "2026-08-19", fim: "2026-12-19" },
+    semestre: "2026.2",
+  };
 }
 
 describe("Professores screen", () => {
@@ -3308,12 +3282,13 @@ describe("Professores screen", () => {
     jest.clearAllMocks();
     // useAuth's real shape has more on it; the screen only reads accessToken.
     mockedAuth.mockReturnValue({ accessToken: "token" } as ReturnType<typeof useAuth>);
-    mockedCache.mockResolvedValue({
-      semestre: "2026.2",
+    mockedSchedule.mockResolvedValue({
       turmas: [
-        { codigo: "MATA65", nome: "CG", docente: "FULANO DE TAL" },
-        { codigo: "MATA59", nome: "SEM DOCENTE", docente: null },
+        turma("MATA65", "CG", "FULANO DE TAL"),
+        turma("MATA59", "SEM DOCENTE", null),
       ],
+      periodoLetivo: null,
+      fetchedAt: "2026-08-19T12:00:00.000Z",
     });
   });
 
@@ -3358,9 +3333,22 @@ describe("Professores screen", () => {
   });
 
   it("shows the full-screen empty state when there are no turmas at all", async () => {
-    mockedCache.mockResolvedValue({ semestre: "2026.2", turmas: [] });
+    mockedSchedule.mockResolvedValue({
+      turmas: [],
+      periodoLetivo: null,
+      fetchedAt: "2026-08-19T12:00:00.000Z",
+    });
     render(<ProfessoresScreen />);
     expect(await screen.findByText(/nenhuma matéria/i)).toBeTruthy();
+    expect(mockedPost).not.toHaveBeenCalled();
+  });
+
+  // The backend's schedule is a cached read that can legitimately be empty
+  // before the student has ever synced — a different state from "no turmas".
+  it("points the user at Início when the schedule was never synced", async () => {
+    mockedSchedule.mockResolvedValue({ sincronizado: false });
+    render(<ProfessoresScreen />);
+    expect(await screen.findByText(/sincronizar sua grade/i)).toBeTruthy();
     expect(mockedPost).not.toHaveBeenCalled();
   });
 
@@ -3389,16 +3377,16 @@ import { ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { DocenteCard } from "@/components/DocenteCard";
-import { postDocentesSemestre } from "@/lib/api";
+import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
-import { getTurmasCache } from "@/lib/turmas-cache";
 import type { DocenteResumo } from "@/lib/types";
 
 type Estado =
   | { status: "loading" }
   | { status: "ready"; docentes: DocenteResumo[]; semDocente: { codigo: string; nome: string }[] }
   | { status: "empty" }
+  | { status: "unsynced" }
   | { status: "error"; message: string };
 
 export default function ProfessoresScreen(): JSX.Element {
@@ -3410,29 +3398,34 @@ export default function ProfessoresScreen(): JSX.Element {
   const carregar = useCallback(async () => {
     setEstado({ status: "loading" });
 
-    const cache = await getTurmasCache();
-    const turmas = cache?.turmas ?? [];
-    if (turmas.length === 0) {
-      setEstado({ status: "empty" });
-      return;
-    }
-
-    // A turma whose atestado named no docente is a different empty state from a
-    // docente with no public profile — it never goes to the backend.
-    const semDocente = turmas
-      .filter((t) => !t.docente)
-      .map((t) => ({ codigo: t.codigo, nome: t.nome }));
-    const comDocente = turmas
-      .filter((t): t is typeof t & { docente: string } => Boolean(t.docente))
-      .map((t) => ({ codigo: t.codigo, nome: t.nome, docente: t.docente }));
-
-    // Cold path: every docente is resolved against SIGAA one search at a time.
-    // Warm path: the backend's cache is global, so this returns immediately.
-    toast.show({
-      label: "Buscando os perfis no SIGAA. Isso só acontece na primeira vez.",
-    });
-
     try {
+      // The backend persists the schedule, so this is a cached read: no
+      // credentials, no SIGAA round trip, same source the home screen uses.
+      const horario = await getSchedule(accessToken ?? "");
+      if (!("turmas" in horario)) {
+        setEstado({ status: "unsynced" });
+        return;
+      }
+      if (horario.turmas.length === 0) {
+        setEstado({ status: "empty" });
+        return;
+      }
+
+      // A turma whose atestado named no docente is a different empty state from
+      // a docente with no public profile — it never goes to the backend.
+      const semDocente = horario.turmas
+        .filter((t) => !t.docente)
+        .map((t) => ({ codigo: t.codigo ?? t.nome, nome: t.nome }));
+      const comDocente = horario.turmas
+        .filter((t) => Boolean(t.docente))
+        .map((t) => ({ codigo: t.codigo ?? "", nome: t.nome, docente: t.docente as string }));
+
+      // Cold path: every docente is resolved against SIGAA one search at a time.
+      // Warm path: the backend's cache is global, so this returns immediately.
+      toast.show({
+        label: "Buscando os perfis no SIGAA. Isso só acontece na primeira vez.",
+      });
+
       const docentes = await postDocentesSemestre(accessToken ?? "", comDocente);
       setEstado({ status: "ready", docentes, semDocente });
     } catch (error) {
@@ -3474,9 +3467,15 @@ export default function ProfessoresScreen(): JSX.Element {
           </View>
         ) : null}
 
+        {estado.status === "unsynced" ? (
+          <Typography.Paragraph type="body-sm" color="muted" className="mt-6">
+            Abra o Início para sincronizar sua grade e ver seus professores.
+          </Typography.Paragraph>
+        ) : null}
+
         {estado.status === "empty" ? (
           <Typography.Paragraph type="body-sm" color="muted" className="mt-6">
-            Nenhuma matéria neste semestre ainda. Abra o Início para sincronizar sua grade.
+            Nenhuma matéria neste semestre.
           </Typography.Paragraph>
         ) : null}
 
@@ -3509,7 +3508,7 @@ export default function ProfessoresScreen(): JSX.Element {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npm test -- src/__tests__/professores.test.tsx`
-Expected: PASS, 6 tests.
+Expected: PASS, 7 tests.
 
 RTL v14 renders asynchronously in this codebase. Use `findBy*` (as the tests above do) rather than `getBy*` immediately after `render`. If a test needs timers, advance them inside an async `act` and drain pending work before `useRealTimers`.
 
