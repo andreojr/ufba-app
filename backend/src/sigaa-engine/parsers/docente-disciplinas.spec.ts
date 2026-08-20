@@ -23,8 +23,10 @@ describe('parseDocenteDisciplinas', () => {
     expect(primeira.cargaHoraria).toBeGreaterThan(0);
   });
 
-  it('keeps o horário verbatim, in the form schedule-code.ts already parses', () => {
-    const comHorario = parseDocenteDisciplinas(fixture).find((d) => d.horario.length > 0);
+  it('keeps the horário verbatim, in the form schedule-code.ts already parses', () => {
+    const comHorario = parseDocenteDisciplinas(fixture).find(
+      (d) => d.horario.length > 0,
+    );
     expect(comHorario).toBeDefined();
     const codigo = comHorario!.horario.split(' ')[0];
     expect(parseSigaaScheduleCode(codigo).timeRanges.length).toBeGreaterThan(0);
