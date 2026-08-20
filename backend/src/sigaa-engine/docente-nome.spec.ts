@@ -13,9 +13,13 @@ describe('normalizarNomeDocente', () => {
   });
 
   it('leaves distinct names distinct so a prefix cannot swallow a longer name', () => {
-    // Measured: ALINE SILVA ⊂ ALINE SILVA DE MOURA is the one collision in 339.
-    expect(normalizarNomeDocente('ALINE SILVA')).not.toBe(
-      normalizarNomeDocente('ALINE SILVA DE MOURA'),
+    // Measured: ALINE SILVA is a substring of ALINE SILVA DE MOURA, and SIGAA's
+    // search returns both for the shorter query. The lookup key must still tell
+    // them apart after normalisation, or one docente's profile lands on the other.
+    expect(normalizarNomeDocente('Aline  Silva')).toBe('ALINE SILVA');
+    expect(normalizarNomeDocente('Aline Silva de Moura')).toBe('ALINE SILVA DE MOURA');
+    expect(normalizarNomeDocente('Aline  Silva')).not.toBe(
+      normalizarNomeDocente('Aline Silva de Moura'),
     );
   });
 
