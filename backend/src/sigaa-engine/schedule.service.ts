@@ -41,6 +41,25 @@ export class ScheduleService {
     const { turmas, perfil, periodoLetivo } =
       await this.downloader.fetchSchedule(credenciais);
 
+    // An empty scrape almost never means "the student really has zero
+    // turmas" — it means SIGAA answered with something the parsers couldn't
+    // read (maintenance, matrícula processing, a markup change). salvar()
+    // replaces the whole snapshot, so applying this blindly would wipe out a
+    // perfectly good previous sync with nothing recoverable. Only trust an
+    // empty result when there was nothing cached before either — that's a
+    // legitimate "first sync" or "off term" state, not data loss.
+    if (turmas.length === 0) {
+      const anterior = await this.repository.buscar(userId);
+      if (anterior && anterior.turmas.length > 0) {
+        this.logger.warn(
+          `SIGAA sync for ${userId} returned 0 turmas but ${anterior.turmas.length} were cached — refusing to overwrite, keeping the previous snapshot.`,
+        );
+        throw new Error(
+          'O SIGAA não retornou nenhuma turma nesta sincronização; o horário salvo anteriormente foi mantido.',
+        );
+      }
+    }
+
     try {
       await this.userRepository.updateSigaaProfile(userId, perfil);
     } catch (error) {

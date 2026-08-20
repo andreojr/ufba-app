@@ -143,4 +143,54 @@ describe('ScheduleService', () => {
 
     await expect(service.getCached('user-1')).resolves.toBeNull();
   });
+
+  it('refuses to overwrite a good cached schedule with an empty scrape', async () => {
+    const repositorio = repositorioFalso();
+    repositorio.buscar.mockResolvedValue({
+      turmas: turmasFalsas(),
+      periodoLetivo,
+      fetchedAt: new Date(),
+    });
+    const downloader = {
+      fetchSchedule: jest.fn(async () => ({
+        turmas: [],
+        perfil,
+        periodoLetivo: null,
+      })),
+    };
+
+    const service = new ScheduleService(
+      downloader,
+      userRepositorioFalso(),
+      repositorio,
+    );
+
+    await expect(service.sync('user-1', CREDENCIAIS)).rejects.toThrow();
+    expect(repositorio.salvar).not.toHaveBeenCalled();
+  });
+
+  it('accepts an empty scrape when nothing was cached before (first sync / off term)', async () => {
+    const repositorio = repositorioFalso();
+    repositorio.buscar.mockResolvedValueOnce(null).mockResolvedValue({
+      turmas: [],
+      periodoLetivo: null,
+      fetchedAt: new Date(),
+    });
+    const downloader = {
+      fetchSchedule: jest.fn(async () => ({
+        turmas: [],
+        perfil,
+        periodoLetivo: null,
+      })),
+    };
+
+    const service = new ScheduleService(
+      downloader,
+      userRepositorioFalso(),
+      repositorio,
+    );
+
+    await expect(service.sync('user-1', CREDENCIAIS)).resolves.toBeTruthy();
+    expect(repositorio.salvar).toHaveBeenCalledWith('user-1', [], null);
+  });
 });
