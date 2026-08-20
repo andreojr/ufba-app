@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import ProfessorDetalhe from "@/app/professor/[siape]";
 import { getDocente } from "@/lib/api";
@@ -27,8 +27,13 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 jest.mock("heroui-native", () => {
-  const { Text, View } = jest.requireActual("react-native");
+  const { Text, TouchableOpacity, View } = jest.requireActual("react-native");
   return {
+    Button: ({ children, onPress }: any) => (
+      <TouchableOpacity onPress={onPress}>
+        <Text>{children}</Text>
+      </TouchableOpacity>
+    ),
     Spinner: () => <View />,
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
@@ -121,5 +126,22 @@ describe("Professor detail screen", () => {
     mockedGet.mockRejectedValue(new Error("boom"));
     await render(<ProfessorDetalhe />);
     expect(await screen.findByText(/não foi possível/i)).toBeTruthy();
+  });
+
+  // The list screen already offers a retry on failure; the detail screen
+  // must not be the dead end that leaves a student stuck on a transient
+  // failure with no way forward but backing out of the screen entirely.
+  it("offers a retry when the profile cannot be loaded, and pressing it re-fetches", async () => {
+    mockedGet.mockRejectedValueOnce(new Error("boom"));
+    await render(<ProfessorDetalhe />);
+    expect(await screen.findByText(/não foi possível/i)).toBeTruthy();
+
+    mockedGet.mockResolvedValueOnce(perfil());
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar novamente"));
+    });
+
+    expect(await screen.findByText("IC- 2012")).toBeTruthy();
+    expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 });

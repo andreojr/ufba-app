@@ -7,7 +7,7 @@ import type { DocenteResumo } from "@/lib/types";
 // trajetoria.test.tsx. Note Typography is a compound component here:
 // Typography.Heading / Typography.Paragraph, never a bare <Typography>.
 jest.mock("heroui-native", () => {
-  const { Text, View } = jest.requireActual("react-native");
+  const { Text } = jest.requireActual("react-native");
   return {
     Chip: ({ children }: any) => <Text>{children}</Text>,
     Typography: {

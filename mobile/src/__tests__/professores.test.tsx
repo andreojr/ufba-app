@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 
 import ProfessoresScreen from "@/app/(tabs)/professores";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
@@ -87,10 +87,62 @@ describe("Professores screen", () => {
     });
   });
 
-  it("warns that the first load goes to SIGAA, so a long wait is not a hang", async () => {
+  // A slow response (the once-ever cold resolution) earns the toast and the
+  // fixed line under the spinner — the toast dismisses itself well before a
+  // cold SIGAA resolution ends, so the fixed line is what sustains the wait.
+  it("warns that the first load goes to SIGAA once the wait actually crosses the threshold", async () => {
+    jest.useFakeTimers();
     mockedPost.mockReturnValue(new Promise(() => {}));
     await render(<ProfessoresScreen />);
+
+    // Below the threshold: neither the toast nor the fixed line has
+    // appeared yet — the steady-state warm read never gets this far.
+    expect(screen.queryByText(/só na primeira vez/i)).toBeNull();
+    expect(mockToastShow).not.toHaveBeenCalled();
+
+    // act must be async here: with fake timers on, React's own render commit
+    // sits on the (mocked) scheduler queue, and only the async form flushes it.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
     expect(await screen.findByText(/só na primeira vez/i)).toBeTruthy();
+    expect(mockToastShow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: expect.stringMatching(/primeira vez/i),
+      }),
+    );
+
+    // Drain before switching back to real timers — React schedules its own
+    // work on the (fake) timer queue, and discarding it corrupts rendering
+    // for every test that runs after this one.
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  // The steady state (the whole point of the global cache): a fast response
+  // must never show the "first time only" claim — not the toast, not the
+  // fixed line — because for every student after the first, it's false.
+  it("never warns about SIGAA when the response is fast, the everyday warm-cache case", async () => {
+    mockedPost.mockResolvedValue([
+      resumo("FULANO DE TAL", {
+        siape: "1815041",
+        nome: "FULANO DE TAL",
+        departamento: "DCC",
+        unidade: null,
+        selos: {
+          contato: true, formacao: false, areasInteresse: false,
+          lattes: false, orientacoes: false, semestresLecionando: 3,
+        },
+      }),
+    ]);
+    await render(<ProfessoresScreen />);
+
+    expect(await screen.findByText("FULANO DE TAL")).toBeTruthy();
+    expect(screen.queryByText(/só na primeira vez/i)).toBeNull();
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 
   it("renders a card per docente once resolved", async () => {

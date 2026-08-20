@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { Button, Spinner, Typography, useToast } from "heroui-native";
-import { useCallback, useEffect, useState, type JSX } from "react";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
@@ -17,6 +17,13 @@ type Estado =
   | { status: "unsynced" }
   | { status: "error"; message: string };
 
+// The backend's docente cache is global, not per-user: only the very first
+// student to open a course pays the SIGAA resolution, everyone after gets a
+// database read in well under this. Below it, the request is the steady
+// state and gets no banner at all — above it, it's plausibly a cold
+// resolution and the wait deserves an explanation.
+const AVISO_LENTO_MS = 400;
+
 export default function ProfessoresScreen(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
@@ -25,9 +32,23 @@ export default function ProfessoresScreen(): JSX.Element {
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const { toast } = useToast();
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
+  const [avisoLento, setAvisoLento] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const montadoRef = useRef(true);
+
+  useEffect(
+    () => () => {
+      montadoRef.current = false;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    },
+    [],
+  );
 
   const carregar = useCallback(async () => {
     setEstado({ status: "loading" });
+    setAvisoLento(false);
 
     try {
       // The backend persists the schedule, so this is a cached read: no
@@ -51,15 +72,29 @@ export default function ProfessoresScreen(): JSX.Element {
         .filter((t) => Boolean(t.docente))
         .map((t) => ({ codigo: t.codigo ?? "", nome: t.nome, docente: t.docente as string }));
 
-      // Cold path: every docente is resolved against SIGAA one search at a time.
-      // Warm path: the backend's cache is global, so this returns immediately.
-      toast.show({
-        label: "Buscando os perfis no SIGAA. Isso só acontece na primeira vez.",
-      });
+      // Cold path: every docente is resolved against SIGAA one search at a
+      // time — slow enough to deserve an explanation. Warm path: the
+      // backend's cache is global, so this returns immediately and neither
+      // the toast nor the fixed line below should ever appear. Only announce
+      // the wait once there actually is one.
+      const timer = setTimeout(() => {
+        if (!montadoRef.current) return;
+        setAvisoLento(true);
+        toast.show({
+          label: "Buscando os perfis no SIGAA. Isso só acontece na primeira vez.",
+        });
+      }, AVISO_LENTO_MS);
+      timerRef.current = timer;
 
       const docentes = await postDocentesSemestre(accessToken ?? "", comDocente);
+      clearTimeout(timer);
+      timerRef.current = null;
       setEstado({ status: "ready", docentes, semDocente });
     } catch (error) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       setEstado({ status: "error", message: describeApiError(error) });
     }
     // `toast` deliberately left out: useToast() hands back a fresh wrapper
@@ -83,11 +118,15 @@ export default function ProfessoresScreen(): JSX.Element {
         {estado.status === "loading" ? (
           <View className="mt-6 items-center gap-3">
             <Spinner />
-            {/* The toast dismisses itself long before a cold resolution ends,
-                so the wait needs a line that stays put. */}
-            <Typography.Paragraph type="body-sm" color="muted" align="center">
-              Buscando perfis no SIGAA — só na primeira vez.
-            </Typography.Paragraph>
+            {/* Only rendered once the 400ms timer has actually fired — the
+                warm, steady-state read never reaches this. The toast
+                dismisses itself long before a cold resolution ends, so this
+                line stays put to sustain the wait past that point. */}
+            {avisoLento ? (
+              <Typography.Paragraph type="body-sm" color="muted" align="center">
+                Buscando perfis no SIGAA — só na primeira vez.
+              </Typography.Paragraph>
+            ) : null}
           </View>
         ) : null}
 

@@ -53,8 +53,8 @@ export interface Turma {
   nome: string;
   /**
    * Null when the backend had to fall back to the portal home, which omits it.
-   * Deliberately not rendered anywhere yet — captured because the atestado
-   * hands it over for free, kept for whichever screen ends up wanting it.
+   * This is what the Professores tab sends to POST /docentes/semestre to
+   * resolve each professor's public profile.
    */
   docente: string | null;
   slots: TurmaSlot[];

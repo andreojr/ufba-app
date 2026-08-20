@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
-import { Spinner, Typography } from "heroui-native";
-import { useEffect, useMemo, useState, type JSX } from "react";
+import { Button, Spinner, Typography } from "heroui-native";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { Linking, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
@@ -44,20 +44,21 @@ export default function ProfessorDetalhe(): JSX.Element {
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
 
-  useEffect(() => {
-    let cancelado = false;
-    void (async () => {
-      try {
-        const perfil = await getDocente(accessToken ?? "", siape);
-        if (!cancelado) setEstado({ status: "ready", perfil });
-      } catch {
-        if (!cancelado) setEstado({ status: "error" });
-      }
-    })();
-    return () => {
-      cancelado = true;
-    };
+  // Matches how professores.tsx re-runs its own fetch: a plain useCallback
+  // driven by both the mount effect and the retry button.
+  const carregar = useCallback(async () => {
+    setEstado({ status: "loading" });
+    try {
+      const perfil = await getDocente(accessToken ?? "", siape);
+      setEstado({ status: "ready", perfil });
+    } catch {
+      setEstado({ status: "error" });
+    }
   }, [accessToken, siape]);
+
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
 
   const semestres = useMemo(
     () => (estado.status === "ready" ? agruparPorSemestre(estado.perfil.disciplinas) : []),
@@ -79,9 +80,14 @@ export default function ProfessorDetalhe(): JSX.Element {
     return (
       <View className="flex-1">
         <AppBar title="Professor" />
-        <Typography.Paragraph type="body-sm" color="muted" align="center" className="mt-10 px-4">
-          Não foi possível carregar este perfil agora.
-        </Typography.Paragraph>
+        <View className="mt-10 gap-3 px-4">
+          <Typography.Paragraph type="body-sm" color="muted" align="center">
+            Não foi possível carregar este perfil agora.
+          </Typography.Paragraph>
+          <Button variant="outline" size="sm" onPress={() => void carregar()}>
+            Tentar novamente
+          </Button>
+        </View>
       </View>
     );
   }
