@@ -1,25 +1,14 @@
-import { Button, Menu, Tabs, Typography, useThemeColor } from "heroui-native";
-import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
-import { Pressable, RefreshControl, ScrollView, View, type LayoutChangeEvent } from "react-native";
-import { Gesture, GestureDetector, type NativeGesture } from "react-native-gesture-handler";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  type SharedValue,
-} from "react-native-reanimated";
-import { scheduleOnRN } from "react-native-worklets";
+import { Button, Menu, Typography, useThemeColor } from "heroui-native";
+import { useCallback, useEffect, useState, type JSX } from "react";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
-import { BarChart } from "@/components/charts/BarChart";
-import { LineChart } from "@/components/charts/LineChart";
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
 import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { HISTORICO_STAGES } from "@/lib/download-progress";
-import { cargaHorariaColor, gradeColor } from "@/lib/mock-data";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
@@ -27,33 +16,35 @@ import { identidadeAppBar } from "@/lib/user-name";
 import {
   agruparPorAno,
   agruparPorSemestre,
-  calcularCrAcumulado,
-  componentesComCargaHorariaContada,
-  contarFaltantes,
-  formatarCoeficiente,
-  formatarImpacto,
+  densidadeCarga,
   formatarNota,
   historicoDesatualizado,
-  impactoNoCr,
-  percentualConcluido,
-  direcaoDoSwipe,
   poolPlanejavel,
-  proximoInsight,
   rotuloSituacao,
-  rotulosPorAno,
-  somarCargaHoraria,
-  variacaoUltimoPeriodo,
+  statusComponente,
   zonasDePlanejamento,
   type AnoTrajetoria,
-  type Insight,
 } from "@/lib/trajetoria";
-import type { ComponenteCursado, Historico, ItemPlano, TrajetoriaResponse } from "@/lib/types";
+import type {
+  ComponenteCursado,
+  Historico,
+  ItemPlano,
+  MarcosSemestralizacao,
+  TrajetoriaResponse,
+} from "@/lib/types";
+import { gradeColor } from "@/lib/mock-data";
 
 type LoadState =
   | { status: "loading" }
   | { status: "unsynced" }
   | { status: "error"; message: string }
-  | { status: "ready"; historico: Historico; fetchedAt: Date; plano: ItemPlano[] };
+  | {
+      status: "ready";
+      historico: Historico;
+      fetchedAt: Date;
+      plano: ItemPlano[];
+      marcos: MarcosSemestralizacao | null;
+    };
 
 /** The planner's catch-all: everything not assigned to a term sits here. */
 const ZONA_SEM_PERIODO = "pool";
@@ -88,7 +79,7 @@ function rotuloPeriodo(emCurso: boolean, desatualizado: boolean): string {
  * "Tente novamente" would send the student round a loop that fails identically
  * every time. So anything other than the two statuses the shared helper names
  * gets copy that promises no retry and points at the one thing that still
- * works, the PDF download on the Documentos tab.
+ * works, the PDF download reachable from Perfil.
  *
  * Bad credentials, rate limits and a dead connection keep the shared wording —
  * those really are retryable, and they are the same failures everywhere else.
@@ -98,7 +89,7 @@ function descreverErroSync(error: unknown): string {
   // the document itself can be what failed.
   const status = error instanceof ApiError ? error.status : undefined;
   if (status !== undefined && status !== 401 && status !== 429) {
-    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Documentos.";
+    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Perfil.";
   }
   return describeApiError(error);
 }
@@ -127,92 +118,6 @@ export default function TrajetoriaTab(): JSX.Element {
   const [sincronizando, setSincronizando] = useState(false);
   const [erroSync, setErroSync] = useState<string | null>(null);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
-  const [insight, setInsight] = useState<Insight>("cr");
-
-  // `proximoInsight` is a plain JS function, not a worklet — it has to run
-  // back on the JS thread. The functional `setInsight` update means this
-  // closure never needs `insight` itself, so it's stable across renders.
-  const aplicarSwipe = useCallback((translationX: number, translationY: number) => {
-    setInsight((atual) => proximoInsight(atual, translationX, translationY));
-  }, []);
-
-  // The UI-thread half of `insight`: which panel is settled at (0 = cr, 1 =
-  // cargaHoraria) and how far the live drag has pulled it from there. Neither
-  // is React state on purpose — a re-render mid-gesture (tearing down and
-  // rebuilding whichever chart's ScrollView is on screen, gesture and all)
-  // is what crashed the app when the tab switch used to be decided this
-  // early. These two values instead let the content track the finger, and
-  // `setInsight` below only ever fires once, from `onEnd`, exactly like the
-  // laggy-but-safe version this replaces — the only difference is the
-  // content now visibly follows the drag the whole way there.
-  const abaAtual = useSharedValue(insight === "cr" ? 0 : 1);
-  const arrasto = useSharedValue(0);
-
-  // A tab tapped directly (not swiped) still has to move `abaAtual` — this is
-  // the only place besides the gesture below that touches it.
-  useEffect(() => {
-    abaAtual.value = withTiming(insight === "cr" ? 0 : 1, { duration: 220 });
-  }, [insight, abaAtual]);
-
-  // One native gesture per chart, not one shared between them: both
-  // LineChart and BarChart stay mounted at all times now (see ReadyTrajetoria
-  // — a mid-gesture unmount is what crashed), so each needs its own stable
-  // handle to its own ScrollView for `requireExternalGestureToFail` below to
-  // point at. Memoized so the reference stays the same object across
-  // renders — a fresh one each render would only ever describe *that*
-  // render's chart to the relation, breaking it the moment either side
-  // re-rendered independently.
-  const lineChartScrollGesture = useMemo(() => Gesture.Native(), []);
-  const barChartScrollGesture = useMemo(() => Gesture.Native(), []);
-
-  // Lives here, wrapping the whole scrollable page, rather than just the
-  // insight card: a swipe anywhere on the trajectory — over the timeline, the
-  // planner, wherever the thumb happens to land — switches CR/Carga Horária,
-  // not just one over the card itself. `failOffsetY` hands anything more
-  // vertical than horizontal straight to the ScrollView underneath (and its
-  // pull-to-refresh), so this never fights the page's own scroll.
-  // `requireExternalGestureToFail` is the other half: a plain ScrollView
-  // doesn't automatically arbitrate against a custom Pan like this one, so
-  // without it the two raced for the same horizontal drag over the chart.
-  // Now this one waits — a touch that starts on the chart's own horizontal
-  // scroll is claimed by that scroll, full stop, never the tab switch.
-  const swipeInsight = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-10, 10])
-        .failOffsetY([-10, 10])
-        .requireExternalGestureToFail(lineChartScrollGesture, barChartScrollGesture)
-        .onChange((evento) => {
-          // Clamped, not rubber-banded: there's nothing past the first or
-          // last tab to peek at, so a drag that direction simply doesn't
-          // move the content at all.
-          let x = evento.translationX;
-          if (abaAtual.value === 0 && x > 0) {
-            x = 0;
-          }
-          if (abaAtual.value === 1 && x < 0) {
-            x = 0;
-          }
-          arrasto.value = x;
-        })
-        .onEnd((evento) => {
-          const direcao = direcaoDoSwipe(evento.translationX, evento.translationY);
-          if (direcao === "esquerda" && abaAtual.value < 1) {
-            abaAtual.value = withTiming(1, { duration: 220 });
-          } else if (direcao === "direita" && abaAtual.value > 0) {
-            abaAtual.value = withTiming(0, { duration: 220 });
-          }
-          // Settles the drag back to zero regardless of whether it landed on
-          // a new tab — `abaAtual` above already carries the new resting
-          // position, so this is relative to that, not a snap back to where
-          // the drag started.
-          arrasto.value = withTiming(0, { duration: 220 });
-          if (direcao) {
-            scheduleOnRN(aplicarSwipe, evento.translationX, evento.translationY);
-          }
-        }),
-    [lineChartScrollGesture, barChartScrollGesture, abaAtual, arrasto, aplicarSwipe],
-  );
 
   // No request of its own: the home screen writes this cache after every
   // schedule fetch, and reading it is what lets this screen tell whether the
@@ -231,6 +136,7 @@ export default function TrajetoriaTab(): JSX.Element {
       historico: resposta.historico,
       fetchedAt: new Date(resposta.fetchedAt),
       plano: resposta.plano,
+      marcos: resposta.marcos,
     });
     // Fresh data on screen must not keep a stale failure under it contradicting
     // what the student is now reading.
@@ -318,98 +224,91 @@ export default function TrajetoriaTab(): JSX.Element {
   return (
     <View className="flex-1 bg-background">
       <AppBar title="Minha trajetória" {...identidade} />
-      <GestureDetector gesture={swipeInsight}>
-        <ScrollView
-          testID="trajetoria-scroll"
-          className="flex-1 px-6"
-          contentContainerClassName="gap-5 pb-8"
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {state.status === "loading" ? (
-            <View className="rounded-3xl bg-surface-secondary p-8 items-center">
-              <Typography.Paragraph type="body-sm" color="muted">
-                Carregando sua trajetória…
-              </Typography.Paragraph>
-            </View>
-          ) : null}
+      <ScrollView
+        testID="trajetoria-scroll"
+        className="flex-1 px-6"
+        contentContainerClassName="gap-5 pb-8"
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {state.status === "loading" ? (
+          <View className="rounded-3xl bg-surface-secondary p-8 items-center">
+            <Typography.Paragraph type="body-sm" color="muted">
+              Carregando sua trajetória…
+            </Typography.Paragraph>
+          </View>
+        ) : null}
 
-          {state.status === "error" ? (
-            <View className="rounded-3xl bg-surface-secondary p-6 items-center gap-3">
-              <AppIcon name="IconWarningCircle" size={28} color={mutedColor} />
-              <Typography.Paragraph type="body-sm" color="muted" align="center">
-                {state.message}
-              </Typography.Paragraph>
-              {sigaaLink.status === "linked" ? (
-                <Button variant="outline" size="sm" onPress={() => carregar()}>
-                  Tentar de novo
-                </Button>
-              ) : null}
-            </View>
-          ) : null}
-
-          {state.status === "unsynced" ? (
-            <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
-              <Typography.Heading type="h6">Sua trajetória ainda não foi montada</Typography.Heading>
-              <Typography.Paragraph type="body-sm" color="muted">
-                Vamos buscar seu histórico escolar no SIGAA e montar sua trajetória. Leva alguns
-                segundos.
-              </Typography.Paragraph>
-
-              {/* Above the button, never below it: pressing sync is the moment the
-                  student hands us a document carrying their CPF, RG and date of
-                  birth, so both halves — what we keep and what we throw away —
-                  have to be readable before the press. */}
-              <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
-                <Typography.Paragraph type="body-xs" color="muted">
-                  <Typography.Paragraph type="body-xs" weight="medium">
-                    O que fica guardado:{" "}
-                  </Typography.Paragraph>
-                  suas matérias, notas e carga horária — é o que monta esta tela.
-                </Typography.Paragraph>
-                <Typography.Paragraph type="body-xs" color="muted">
-                  <Typography.Paragraph type="body-xs" weight="medium">
-                    O que não fica:{" "}
-                  </Typography.Paragraph>
-                  CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
-                  leitura.
-                </Typography.Paragraph>
-              </View>
-
-              <Button onPress={sincronizar} isDisabled={sincronizando}>
-                {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
+        {state.status === "error" ? (
+          <View className="rounded-3xl bg-surface-secondary p-6 items-center gap-3">
+            <AppIcon name="IconWarningCircle" size={28} color={mutedColor} />
+            <Typography.Paragraph type="body-sm" color="muted" align="center">
+              {state.message}
+            </Typography.Paragraph>
+            {sigaaLink.status === "linked" ? (
+              <Button variant="outline" size="sm" onPress={() => carregar()}>
+                Tentar de novo
               </Button>
+            ) : null}
+          </View>
+        ) : null}
 
-              {/* The wait is ~40s of server-side scraping. A disabled button with a
-                  changed label is not enough feedback for that long, and the
-                  calibrated stage model for exactly this request already exists. */}
-              {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
-              {erro}
+        {state.status === "unsynced" ? (
+          <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
+            <Typography.Heading type="h6">Sua trajetória ainda não foi montada</Typography.Heading>
+            <Typography.Paragraph type="body-sm" color="muted">
+              Vamos buscar seu histórico escolar no SIGAA e montar sua trajetória. Leva alguns
+              segundos.
+            </Typography.Paragraph>
+
+            {/* Above the button, never below it: pressing sync is the moment the
+                student hands us a document carrying their CPF, RG and date of
+                birth, so both halves — what we keep and what we throw away —
+                have to be readable before the press. */}
+            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que fica guardado:{" "}
+                </Typography.Paragraph>
+                suas matérias, notas e carga horária — é o que monta esta tela.
+              </Typography.Paragraph>
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que não fica:{" "}
+                </Typography.Paragraph>
+                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
+                leitura.
+              </Typography.Paragraph>
             </View>
-          ) : null}
 
-          {state.status === "ready" ? (
-            <ReadyTrajetoria
-              historico={state.historico}
-              fetchedAt={state.fetchedAt}
-              fimDoPeriodo={fimDoPeriodo}
-              plano={state.plano}
-              movimentos={movimentos}
-              onMover={moverComponente}
-              onSincronizar={sincronizar}
-              sincronizando={sincronizando}
-              erro={erro}
-              mutedColor={mutedColor}
-              insight={insight}
-              onInsightChange={setInsight}
-              lineChartScrollGesture={lineChartScrollGesture}
-              barChartScrollGesture={barChartScrollGesture}
-              abaAtual={abaAtual}
-              arrasto={arrasto}
-            />
-          ) : null}
-        </ScrollView>
-      </GestureDetector>
+            <Button onPress={sincronizar} isDisabled={sincronizando}>
+              {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
+            </Button>
+
+            {/* The wait is ~40s of server-side scraping. A disabled button with a
+                changed label is not enough feedback for that long, and the
+                calibrated stage model for exactly this request already exists. */}
+            {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
+            {erro}
+          </View>
+        ) : null}
+
+        {state.status === "ready" ? (
+          <ReadyTrajetoria
+            historico={state.historico}
+            fetchedAt={state.fetchedAt}
+            fimDoPeriodo={fimDoPeriodo}
+            plano={state.plano}
+            marcos={state.marcos}
+            movimentos={movimentos}
+            onMover={moverComponente}
+            onSincronizar={sincronizar}
+            sincronizando={sincronizando}
+            erro={erro}
+            mutedColor={mutedColor}
+          />
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
@@ -419,66 +318,30 @@ function ReadyTrajetoria({
   fetchedAt,
   fimDoPeriodo,
   plano,
+  marcos,
   movimentos,
   onMover,
   onSincronizar,
   sincronizando,
   erro,
   mutedColor,
-  insight,
-  onInsightChange,
-  lineChartScrollGesture,
-  barChartScrollGesture,
-  abaAtual,
-  arrasto,
 }: {
   historico: Historico;
   fetchedAt: Date;
   fimDoPeriodo: string | null;
   plano: ItemPlano[];
+  marcos: MarcosSemestralizacao | null;
   movimentos: Plano;
   onMover: (codigo: string, zona: string) => void;
   onSincronizar: () => void;
   sincronizando: boolean;
   erro: JSX.Element | null;
   mutedColor: string;
-  // Lifted to the tab's top level: the swipe gesture that also drives this
-  // lives up there now, wrapping the whole scrollable page rather than just
-  // this card.
-  insight: Insight;
-  onInsightChange: (insight: Insight) => void;
-  // Handed straight through to their respective, always-mounted chart — see
-  // each one's `scrollGesture` prop for why.
-  lineChartScrollGesture: NativeGesture;
-  barChartScrollGesture: NativeGesture;
-  // The sliding card's UI-thread position — see `swipeInsight` for how these
-  // move, and this component's own `estiloTrilha` for how they're read.
-  abaAtual: SharedValue<number>;
-  arrasto: SharedValue<number>;
 }): JSX.Element {
-  const { total } = historico.cargaHoraria;
-  const percentual = percentualConcluido(total);
   const periodos = agruparPorSemestre(historico.cursados);
   const anos = agruparPorAno(periodos);
   const pendentes = poolPlanejavel(historico.pendentesObrigatorios);
-  // Unlike `pendentes` above (what the planner may still place), this also
-  // counts a component the student is already taking: enrolled-but-ungraded
-  // is still not done.
-  const faltantes = contarFaltantes(historico.pendentesObrigatorios);
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
-
-  const semestresOrdenados = periodos.map((periodo) => periodo.semestre);
-  const rotulosAno = rotulosPorAno(semestresOrdenados);
-  const crPorPeriodo = calcularCrAcumulado(historico.cursados, semestresOrdenados);
-  const pontosCr = crPorPeriodo.map((ponto, indice) => ({
-    rotulo: rotulosAno[indice],
-    valor: ponto.cr,
-  }));
-  const variacaoCr = variacaoUltimoPeriodo(crPorPeriodo);
-  const barrasCargaHoraria = periodos.map((periodo, indice) => ({
-    rotulo: rotulosAno[indice],
-    valor: somarCargaHoraria(componentesComCargaHorariaContada(periodo.componentes)),
-  }));
 
   // The term in progress, or — on a transcript with nothing enrolled — the last
   // one on it, so the planner still has somewhere to count forward from.
@@ -490,151 +353,8 @@ function ReadyTrajetoria({
     : [];
   const salvo = planoSalvo(plano);
 
-  // Both the row's own width and the two panels' widths are set from this
-  // exact same pixel number the translateX below reads — a `"50%"`/`"200%"`
-  // version (Yoga resolving one percentage against another, itself against
-  // the measured width) let the two drift by a few pixels, which was the
-  // sliver of the next panel peeking in at rest. The plain `useState` mirror
-  // is what lets a plain (non-animated) `style` read it at all — a shared
-  // value's `.value` is only readable inside a worklet.
-  //
-  // Measured on the plain View just *inside* the card's own padding, not the
-  // padded card itself: `onLayout` reports a view's own border-box, padding
-  // included, which is wider than what's actually visible once that padding
-  // is accounted for — using it directly would have translated by more than
-  // one panel's real width.
-  const larguraCard = useSharedValue(0);
-  const [larguraCardPx, setLarguraCardPx] = useState(0);
-  const aoMedirCard = (evento: LayoutChangeEvent): void => {
-    const { width } = evento.nativeEvent.layout;
-    larguraCard.value = width;
-    setLarguraCardPx(width);
-  };
-
-  // Drives the sliding card: `abaAtual` (0 = cr, 1 = cargaHoraria) plus the
-  // live `arrasto` offset, both set by `swipeInsight` up in TrajetoriaTab —
-  // this is the only place either is read.
-  const estiloTrilha = useAnimatedStyle(() => ({
-    transform: [{ translateX: -abaAtual.value * larguraCard.value + arrasto.value }],
-  }));
-
   return (
     <>
-      <View className="gap-5">
-        <Tabs value={insight} onValueChange={(valor) => onInsightChange(valor as Insight)} variant="secondary">
-          <Tabs.List>
-            <Tabs.Indicator />
-            <Tabs.Trigger value="cr">
-              <Tabs.Label>CR</Tabs.Label>
-            </Tabs.Trigger>
-            <Tabs.Trigger value="cargaHoraria">
-              <Tabs.Label>Carga Horária</Tabs.Label>
-            </Tabs.Trigger>
-          </Tabs.List>
-        </Tabs>
-
-        {/* The insight (CR or carga horária) and the course-wide progress
-            render as one visually connected group: a hairline gap and
-            matching soft inner corners join the two cards — same treatment
-            ajustes.tsx gives the profile + academic info cards. */}
-        <View className="gap-0.5">
-          <View className="rounded-t-3xl rounded-b-md bg-surface-secondary p-4">
-            {/* `overflow-hidden` sits on this plain View, one level *inside*
-                the card's own padding — not on the padded card above. CSS/RN
-                clips to an element's own outer edge, padding included, so
-                putting it on the padded card let the sliding row bleed into
-                that padding's reserved space on the far side before getting
-                cut — exactly the sliver that was showing. This wrapper's own
-                edge has no padding of its own, so its clip boundary is
-                exactly the visible width, no gap to bleed into. Its width is
-                also what `onLayout` below measures, for the same reason. */}
-            <View className="overflow-hidden" onLayout={aoMedirCard}>
-              {/* Both panels stay mounted and laid out at all times, side by
-                  side in a row twice the card's width — only `translateX`
-                  moves which one shows, never a conditional mount/unmount or
-                  a `display` toggle. A version that hid the inactive one
-                  that way crashed the app: toggling `display` on a subtree
-                  holding a `Gesture.Native()` (the chart's own scroll — see
-                  `requireExternalGestureToFail`) recycles the underlying
-                  native view mid-gesture, and the gesture relation doesn't
-                  survive that. Sliding sidesteps the question entirely —
-                  nothing is ever hidden or rebuilt. */}
-              <Animated.View style={[{ flexDirection: "row", width: larguraCardPx * 2 }, estiloTrilha]}>
-                <View className="gap-2" style={{ width: larguraCardPx }}>
-                  <View className="gap-0.5">
-                    <Typography.Paragraph type="body-xs" color="muted">
-                      Coeficiente de Rendimento
-                    </Typography.Paragraph>
-                    <View className="flex-row items-center gap-2.5">
-                      <Typography.Heading type="h3" className="font-mono">
-                        {formatarCoeficiente(historico.indices.cr)}
-                      </Typography.Heading>
-                      {/* vs. o período anterior: sem cor de destaque quando é
-                          null ou zero — "sem mudança" não deve competir
-                          visualmente com uma alta ou queda real. */}
-                      <Typography.Paragraph
-                        testID="cr-variacao"
-                        type="body-sm"
-                        weight="medium"
-                        color={variacaoCr ? undefined : "muted"}
-                        className="font-mono"
-                      >
-                        {formatarImpacto(variacaoCr)}
-                      </Typography.Paragraph>
-                    </View>
-                  </View>
-                  <LineChart pontos={pontosCr} altura={70} scrollGesture={lineChartScrollGesture} />
-                </View>
-                <View className="gap-2" style={{ width: larguraCardPx }}>
-                  <View className="gap-0.5">
-                    <Typography.Paragraph type="body-xs" color="muted">
-                      Carga horária
-                    </Typography.Paragraph>
-                    {/* Just the hours done — the total is fixed at the end of
-                        the progress bar below, not repeated here. Same
-                        heading size as the CR tab's value: one card, one
-                        standard of emphasis. */}
-                    <Typography.Heading type="h3" className="font-mono">
-                      {total.integralizada.toLocaleString("pt-BR")} h
-                    </Typography.Heading>
-                  </View>
-                  <BarChart barras={barrasCargaHoraria} altura={70} scrollGesture={barChartScrollGesture} />
-                </View>
-              </Animated.View>
-            </View>
-          </View>
-
-          <View className="rounded-t-md rounded-b-3xl bg-surface-secondary p-4 gap-1.5">
-            <View className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
-              <View
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${percentual}%` }}
-              />
-            </View>
-            {/* The course's total requirement, fixed at the bar's own end —
-                it doesn't change tab to tab, so it isn't repeated in the
-                value above like it used to be. */}
-            <Typography.Paragraph type="body-xs" color="muted" align="end" className="font-mono">
-              {total.exigida.toLocaleString("pt-BR")} h
-            </Typography.Paragraph>
-            <View className="flex-row items-center justify-between">
-              <Typography.Paragraph type="body-xs" color="muted">
-                {/* Only the number itself is emphasised — the sentence
-                    around it stays body text, same as "faltam N matérias"
-                    beside it. */}
-                <Typography.Paragraph type="body-sm" weight="bold" className="font-mono">
-                  {percentual}%
-                </Typography.Paragraph>{" "}
-                do curso concluído
-              </Typography.Paragraph>
-              <Typography.Paragraph type="body-xs" color="muted">
-                {faltantes === 1 ? "falta 1 matéria" : `faltam ${faltantes} matérias`}
-              </Typography.Paragraph>
-            </View>
-          </View>
-        </View>
-      </View>
-
       <View className="gap-2">
         <View className="flex-row items-center justify-between gap-3">
           <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
@@ -661,12 +381,7 @@ function ReadyTrajetoria({
         {erro}
       </View>
 
-      <LinhaDoTempo
-        anos={anos}
-        desatualizado={desatualizado}
-        insight={insight}
-        cursados={historico.cursados}
-      />
+      <LinhaDoTempo anos={anos} desatualizado={desatualizado} marcos={marcos} />
 
       <View className="gap-5">
         {/* Everything around the planner now reads as the student's real
@@ -773,13 +488,11 @@ function ReadyTrajetoria({
 function LinhaDoTempo({
   anos,
   desatualizado,
-  insight,
-  cursados,
+  marcos,
 }: {
   anos: AnoTrajetoria[];
   desatualizado: boolean;
-  insight: Insight;
-  cursados: ComponenteCursado[];
+  marcos: MarcosSemestralizacao | null;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   return (
@@ -797,7 +510,11 @@ function LinhaDoTempo({
             <View className="flex-1 w-px bg-white/15" />
           </View>
           <View className="flex-1 gap-2.5 pb-5">
-            <Typography.Paragraph weight="medium" className="font-mono">
+            {/* Muted on purpose — it's here only to keep the grouping legible
+                (which periods belong to which ano), not to compete with the
+                período numbers below, which are the real headline of this
+                grid. */}
+            <Typography.Paragraph type="body-sm" color="muted" className="font-mono opacity-50">
               {anoBloco.ano}
             </Typography.Paragraph>
             <View className="gap-3">
@@ -829,8 +546,7 @@ function LinhaDoTempo({
                       <MateriaCard
                         key={`${componente.semestre}-${componente.codigo}`}
                         componente={componente}
-                        insight={insight}
-                        cursados={cursados}
+                        marcos={marcos}
                       />
                     ))}
                   </View>
@@ -856,26 +572,28 @@ function LinhaDoTempo({
 }
 
 /**
- * A matéria card in the grid. What sits on its right depends on the selected
- * tab: the CR tab pairs the grade with how much that grade pulls the overall
- * CR up or down; the carga horária tab shows only the hours, no grade at all.
+ * A matéria card in the grid: código + carga horária (in gray, unrelated to
+ * density — just the raw number) up top, nome below, and at the bottom a
+ * density meter for that carga horária beside the situação/status badges,
+ * ending with the nota in the bottom-right corner. The nota is always shown
+ * now — this card no longer alternates between grade and carga horária views,
+ * that split lives in Insights instead.
  */
 function MateriaCard({
   componente,
-  insight,
-  cursados,
+  marcos,
 }: {
   componente: ComponenteCursado;
-  insight: Insight;
-  cursados: ComponenteCursado[];
+  marcos: MarcosSemestralizacao | null;
 }): JSX.Element {
   const rotulo = rotuloSituacao(componente.situacao);
   const nota = formatarNota(componente.nota);
-  const impacto = insight === "cr" && componente.nota !== null ? impactoNoCr(cursados, componente.codigo) : null;
   const mutedColor = useThemeColor("muted");
-  // Trancada, cancelada, etc.: no grade at all, so nothing on this card
-  // moves the CR — the dashed border and faded fill are what say "it's here,
-  // but it doesn't count" without needing another line of text.
+  const status = statusComponente(componente.codigo, marcos);
+  const densidade = densidadeCarga(componente.cargaHoraria);
+  // Trancada, cancelada, etc.: no grade at all — the dashed border and faded
+  // fill are what say "it's here, but it doesn't count" without needing
+  // another line of text.
   const naoConta = componente.nota === null;
 
   return (
@@ -908,15 +626,17 @@ function MateriaCard({
           row to the bottom of that stretched height instead of leaving it
           floating right under a short nome with dead space beneath it. */}
       <View className="gap-0.5">
-        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-          {componente.codigo}
-        </Typography.Paragraph>
+        <View className="flex-row items-baseline gap-1.5">
+          <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+            {componente.codigo}
+          </Typography.Paragraph>
+          <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+            · {componente.cargaHoraria} h
+          </Typography.Paragraph>
+        </View>
         <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
       </View>
       <View className="flex-row items-end justify-between">
-        {/* Bottom-left: situação badge stacked above the CR impact — the two
-            rarely both show (a trancada/refatorada has no nota, so no
-            impacto either), but a reprovada can carry both. */}
         <View className="items-start gap-1">
           {rotulo ? (
             <View className="rounded-full bg-white/5 px-2 py-1 flex-row items-center gap-1">
@@ -928,34 +648,33 @@ function MateriaCard({
               </Typography.Paragraph>
             </View>
           ) : null}
-          {/* The 0,005 floor, not a plain truthy check: `impacto` is a raw
-              float, and one that rounds to "0,00" at the two decimals this
-              displays (e.g. 0.001) is still nonzero in JS — a bare `!== 0`
-              let exactly that case through with an arrow glued to a number
-              that reads as no change at all. */}
-          {impacto !== null && Math.abs(impacto) >= 0.005 ? (
-            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-              {formatarImpacto(impacto)}
-            </Typography.Paragraph>
+          {/* The active grade dropped this código: obsoleta with no known
+              replacement, or equivalente to the componente the grade names
+              instead — see statusComponente. */}
+          {status ? (
+            <View className="rounded-full bg-white/5 px-2 py-1">
+              <Typography.Paragraph type="body-xs" color="muted">
+                {status.tipo === "obsoleta" ? "Fora da grade atual" : `Equivale a ${status.equivalenteDe}`}
+              </Typography.Paragraph>
+            </View>
           ) : null}
+          {/* A classification, not a completion percentage — the whole bar
+              is solid in whichever tier's color the carga horária falls
+              into, it never partially fills. Small and bottom-left,
+              justify-between with the nota rather than a full-width bar —
+              this is a quiet cue, not another headline number. See
+              densidadeCarga for the cut points. */}
+          <View
+            testID={`densidade-${componente.codigo}`}
+            className="h-1 w-2 rounded-full"
+            style={{ backgroundColor: densidade.cor }}
+          />
         </View>
-        {/* Bottom-right, always: the card's one headline number — nota on
-            the CR tab, carga horária on the other. A trancada/cancelada has
-            no nota at all, and "—" in that slot reads as a real value gone
-            missing rather than a value that was never going to exist —
-            better to leave the corner blank. */}
-        {insight === "cargaHoraria" ? (
-          <View className="flex-row items-center gap-1">
-            <AppIcon name="IconClock" size={13} color={cargaHorariaColor(componente.cargaHoraria)} />
-            <Typography.Heading
-              type="h6"
-              className="font-mono"
-              style={{ color: cargaHorariaColor(componente.cargaHoraria) }}
-            >
-              {componente.cargaHoraria} h
-            </Typography.Heading>
-          </View>
-        ) : componente.nota !== null ? (
+        {/* Bottom-right, always: the nota. A trancada/cancelada has no nota
+              at all, and "—" in that slot reads as a real value gone missing
+              rather than a value that was never going to exist — better to
+              leave the corner blank. */}
+        {componente.nota !== null ? (
           <Typography.Heading type="h6" className="font-mono" style={{ color: gradeColor(nota) }}>
             {nota}
           </Typography.Heading>

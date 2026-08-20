@@ -23,6 +23,7 @@ const ICON_MAP = {
   IconErrorCircle: "close-circle",
   IconCaretRight: "chevron-forward",
   IconCaretLeft: "chevron-back",
+  IconCaretDown: "chevron-down",
   IconArrowSquareOut: "open-outline",
   IconDownloadSimple: "download-outline",
   IconIdentificationCard: "id-card-outline",
@@ -42,6 +43,10 @@ const ICON_MAP = {
   // Ionicons has no chalkboard glyph; `easel-outline` is the closest, and
   // `school-outline` is already taken by IconGraduationCap.
   IconChalkboardTeacher: "easel-outline",
+  IconSparkles: "sparkles-outline",
+  IconSun: "sunny-outline",
+  IconMoon: "moon-outline",
+  IconContrast: "contrast-outline",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;

@@ -114,6 +114,7 @@ export interface ResumoCargaHoraria {
 export interface Historico {
   emitidoEm: string;
   curriculo: string;
+  nomeCurso: string;
   periodoLetivoAtual: number;
   prazoConclusaoPadrao: string;
   prazoConclusaoMaximo: string;
@@ -137,9 +138,33 @@ export interface ItemPlano {
   semestre: string | null;
 }
 
+/** One milestone on the workload progress bar — mirrors backend MarcoSemestre. */
+export interface MarcoSemestre {
+  periodo: number;
+  cargaHorariaAcumulada: number;
+  percentual: number;
+}
+
+/** Whether the aluno is ahead, on pace, or behind the grade's expected semestralização — mirrors backend Ritmo. */
+export type Ritmo = "adiantado" | "no_ritmo" | "atrasado";
+
+/** Mirrors backend MarcosResponse — see backend/src/curriculo/marcos-semestralizacao.ts. */
+export interface MarcosSemestralizacao {
+  marcos: MarcoSemestre[];
+  ritmo: Ritmo | null;
+  obsoletas: string[];
+  equivalencias: { codigo: string; equivalenteDe: string }[];
+}
+
 export type TrajetoriaResponse =
   | { sincronizado: false }
-  | { historico: Historico; fetchedAt: string; plano: ItemPlano[] };
+  | {
+      historico: Historico;
+      fetchedAt: string;
+      plano: ItemPlano[];
+      /** Null when the aluno's curso couldn't be resolved yet — best-effort extra. */
+      marcos: MarcosSemestralizacao | null;
+    };
 
 /** Mirrors the backend's DocenteSelos — see backend/src/docentes/selos.ts. */
 export interface DocenteSelos {

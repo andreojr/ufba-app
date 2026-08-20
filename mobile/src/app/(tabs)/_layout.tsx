@@ -8,7 +8,6 @@ import { UfbaCrest } from "@/components/UfbaCrest";
 import { useOpenSigaa } from "@/lib/use-open-sigaa";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 
-const UFBA_BLUE = "#2B3A8F";
 const SIGAA_BUTTON_SIZE = 64;
 
 function TabIcon({ name, color }: { name: AppIconName; color: string }): JSX.Element {
@@ -21,7 +20,15 @@ function TabIcon({ name, color }: { name: AppIconName; color: string }): JSX.Ele
  * below so it isn't clipped), carrying the crest and the "SIGAA" wordmark
  * together so it reads as a shortcut rather than another section.
  */
-function SigaaTabIcon({ isOpening, borderColor }: { isOpening: boolean; borderColor: string }): JSX.Element {
+function SigaaTabIcon({
+  isOpening,
+  borderColor,
+  accentColor,
+}: {
+  isOpening: boolean;
+  borderColor: string;
+  accentColor: string;
+}): JSX.Element {
   return (
     <View
       className="items-center justify-center bg-white"
@@ -35,7 +42,7 @@ function SigaaTabIcon({ isOpening, borderColor }: { isOpening: boolean; borderCo
       }}
     >
       {isOpening ? (
-        <ActivityIndicator color={UFBA_BLUE} />
+        <ActivityIndicator color={accentColor} />
       ) : (
         <>
           <UfbaCrest size={24} />
@@ -45,7 +52,7 @@ function SigaaTabIcon({ isOpening, borderColor }: { isOpening: boolean; borderCo
               fontFamily: "Poppins",
               fontSize: 10,
               fontWeight: "700",
-              color: UFBA_BLUE,
+              color: accentColor,
             }}
           >
             SIGAA
@@ -120,7 +127,9 @@ export default function TabsLayout(): JSX.Element {
         options={{
           tabBarShowLabel: false,
           tabBarLabel: () => null,
-          tabBarIcon: () => <SigaaTabIcon isOpening={isOpeningSigaa} borderColor={borderColor} />,
+          tabBarIcon: () => (
+            <SigaaTabIcon isOpening={isOpeningSigaa} borderColor={borderColor} accentColor={activeColor} />
+          ),
         }}
         listeners={{
           tabPress: (e) => {
@@ -133,10 +142,10 @@ export default function TabsLayout(): JSX.Element {
         }}
       />
       <Tabs.Screen
-        name="documentos"
+        name="insights"
         options={{
-          title: "Documentos",
-          tabBarIcon: ({ color }) => <TabIcon name="IconFileText" color={color} />,
+          title: "Insights",
+          tabBarIcon: ({ color }) => <TabIcon name="IconSparkles" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -148,11 +157,14 @@ export default function TabsLayout(): JSX.Element {
       />
       {/* Reachable only from the AppBar's cog now, not the tab bar itself — the
           route stays registered here (Expo Router needs it to resolve
-          `/ajustes`) but `href: null` is what actually hides its tab. */}
+          `/ajustes`) but `href: null` is what actually hides its tab. The
+          screen itself now presents as "Perfil" (see ajustes.tsx); the route
+          name stays `ajustes` to avoid touching every `router.push` and test
+          that already points at it. */}
       <Tabs.Screen
         name="ajustes"
         options={{
-          title: "Ajustes",
+          title: "Perfil",
           href: null,
         }}
       />

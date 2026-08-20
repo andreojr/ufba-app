@@ -4,22 +4,28 @@ import {
   calcularCrAcumulado,
   componentesComCargaHorariaContada,
   contarFaltantes,
+  densidadeCarga,
   formatarCoeficiente,
   formatarImpacto,
   formatarNota,
+  formatarSemestre,
   historicoDesatualizado,
   impactoNoCr,
   percentualConcluido,
   direcaoDoSwipe,
   poolPlanejavel,
   proximoInsight,
+  posicaoSemestral,
+  rotuloRitmo,
   rotuloSituacao,
   rotulosPorAno,
+  segmentosSemestralizacao,
   somarCargaHoraria,
+  statusComponente,
   variacaoUltimoPeriodo,
   zonasDePlanejamento,
 } from "./trajetoria";
-import type { ComponenteCursado, ComponentePendente } from "./types";
+import type { ComponenteCursado, ComponentePendente, MarcoSemestre } from "./types";
 
 function componente(over: Partial<ComponenteCursado> = {}): ComponenteCursado {
   return {
@@ -467,5 +473,181 @@ describe("formatarImpacto", () => {
 
   it("renders an absent impact as an em dash", () => {
     expect(formatarImpacto(null)).toBe("—");
+  });
+});
+
+describe("rotuloRitmo", () => {
+  it("labels adiantado", () => {
+    expect(rotuloRitmo("adiantado")).toBe("Adiantado(a)");
+  });
+
+  it("labels atrasado", () => {
+    expect(rotuloRitmo("atrasado")).toBe("Atrasado(a)");
+  });
+
+  it("labels no_ritmo", () => {
+    expect(rotuloRitmo("no_ritmo")).toBe("No ritmo");
+  });
+
+  it("renders no label when ritmo could not be resolved", () => {
+    expect(rotuloRitmo(null)).toBeNull();
+  });
+});
+
+describe("statusComponente", () => {
+  const marcos = {
+    marcos: [],
+    ritmo: null,
+    obsoletas: ["VELHA1"],
+    equivalencias: [{ codigo: "VELHA2", equivalenteDe: "NOVA2" }],
+  };
+
+  it("flags a componente listed among the obsoletas", () => {
+    expect(statusComponente("VELHA1", marcos)).toEqual({ tipo: "obsoleta" });
+  });
+
+  it("flags a componente listed among the equivalências, naming its replacement", () => {
+    expect(statusComponente("VELHA2", marcos)).toEqual({
+      tipo: "equivalente",
+      equivalenteDe: "NOVA2",
+    });
+  });
+
+  it("returns null for a componente still on the active grade", () => {
+    expect(statusComponente("QUALQUERUM", marcos)).toBeNull();
+  });
+
+  it("returns null when marcos never resolved", () => {
+    expect(statusComponente("VELHA1", null)).toBeNull();
+  });
+});
+
+describe("segmentosSemestralizacao", () => {
+  const marcos: MarcoSemestre[] = [
+    { periodo: 1, cargaHorariaAcumulada: 100, percentual: 10 },
+    { periodo: 2, cargaHorariaAcumulada: 250, percentual: 25 },
+    { periodo: 3, cargaHorariaAcumulada: 400, percentual: 40 },
+  ];
+
+  it("sizes each segmento by its own share of the total, not the running total", () => {
+    const segmentos = segmentosSemestralizacao(marcos, 0);
+
+    expect(segmentos.map((s) => s.larguraPercentual)).toEqual([10, 15, 15]);
+  });
+
+  it("fills a segmento completely once integralizada reaches its marco", () => {
+    const segmentos = segmentosSemestralizacao(marcos, 250);
+
+    expect(segmentos.map((s) => s.preenchimento)).toEqual([1, 1, 0]);
+  });
+
+  it("fills the in-progress segmento proportionally to how far into it integralizada sits", () => {
+    const segmentos = segmentosSemestralizacao(marcos, 175);
+
+    // 175 is halfway between o marco do período 1 (100) e o do período 2 (250).
+    expect(segmentos[1].preenchimento).toBeCloseTo(0.5);
+  });
+
+  it("leaves every segmento empty when nothing has been integralizado yet", () => {
+    const segmentos = segmentosSemestralizacao(marcos, 0);
+
+    expect(segmentos.map((s) => s.preenchimento)).toEqual([0, 0, 0]);
+  });
+
+  it("returns an empty list when there are no marcos", () => {
+    expect(segmentosSemestralizacao([], 100)).toEqual([]);
+  });
+});
+
+describe("posicaoSemestral", () => {
+  it("counts every fully preenchido segmento toward concluidos, and sums every fraction into posicaoFracionaria", () => {
+    const segmentos = segmentosSemestralizacao(
+      [
+        { periodo: 1, cargaHorariaAcumulada: 100, percentual: 10 },
+        { periodo: 2, cargaHorariaAcumulada: 250, percentual: 25 },
+        { periodo: 3, cargaHorariaAcumulada: 400, percentual: 40 },
+      ],
+      175, // completo o período 1 (100) e estou na metade do 2 (100→250)
+    );
+
+    expect(posicaoSemestral(segmentos)).toEqual({
+      concluidos: 1,
+      total: 3,
+      posicaoFracionaria: 1.5,
+    });
+  });
+
+  it("reports zero concluidos and a zero posição when nothing has been integralizado", () => {
+    const segmentos = segmentosSemestralizacao(
+      [{ periodo: 1, cargaHorariaAcumulada: 100, percentual: 100 }],
+      0,
+    );
+
+    expect(posicaoSemestral(segmentos)).toEqual({
+      concluidos: 0,
+      total: 1,
+      posicaoFracionaria: 0,
+    });
+  });
+
+  it("reports every segmento concluído and a posição equal to the total when the course is done", () => {
+    const segmentos = segmentosSemestralizacao(
+      [
+        { periodo: 1, cargaHorariaAcumulada: 100, percentual: 50 },
+        { periodo: 2, cargaHorariaAcumulada: 200, percentual: 100 },
+      ],
+      200,
+    );
+
+    expect(posicaoSemestral(segmentos)).toEqual({
+      concluidos: 2,
+      total: 2,
+      posicaoFracionaria: 2,
+    });
+  });
+
+  it("reports zero total when there are no segmentos at all", () => {
+    expect(posicaoSemestral([])).toEqual({ concluidos: 0, total: 0, posicaoFracionaria: 0 });
+  });
+});
+
+describe("formatarSemestre", () => {
+  it("renders one decimal place with a comma", () => {
+    expect(formatarSemestre(5.3)).toBe("5,3");
+  });
+
+  it("renders a whole number with a trailing ,0", () => {
+    expect(formatarSemestre(5)).toBe("5,0");
+  });
+});
+
+describe("densidadeCarga", () => {
+  it("classifies up to 50h as nível 1 (leve)", () => {
+    expect(densidadeCarga(34)).toEqual({ nivel: 1, cor: expect.any(String) });
+    expect(densidadeCarga(50)).toMatchObject({ nivel: 1 });
+  });
+
+  it("classifies 51h–75h as nível 2 (média)", () => {
+    expect(densidadeCarga(51)).toMatchObject({ nivel: 2 });
+    expect(densidadeCarga(68)).toMatchObject({ nivel: 2 });
+    expect(densidadeCarga(75)).toMatchObject({ nivel: 2 });
+  });
+
+  it("classifies 76h–100h as nível 3 (pesada)", () => {
+    expect(densidadeCarga(76)).toMatchObject({ nivel: 3 });
+    expect(densidadeCarga(90)).toMatchObject({ nivel: 3 });
+    expect(densidadeCarga(100)).toMatchObject({ nivel: 3 });
+  });
+
+  it("classifies above 100h as nível 4 (muito densa)", () => {
+    expect(densidadeCarga(101)).toMatchObject({ nivel: 4 });
+    expect(densidadeCarga(120)).toMatchObject({ nivel: 4 });
+  });
+
+  it("gives each nível a distinct color", () => {
+    const cores = new Set(
+      [34, 68, 90, 120].map((horas) => densidadeCarga(horas).cor),
+    );
+    expect(cores.size).toBe(4);
   });
 });

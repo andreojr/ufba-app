@@ -10,6 +10,7 @@ import type {
   ComponenteCursado,
   ComponentePendente,
   Historico,
+  MarcosSemestralizacao,
   TrajetoriaResponse,
 } from "@/lib/types";
 
@@ -130,10 +131,14 @@ const BANCO_DE_DADOS: ComponentePendente = {
   matriculado: false,
 };
 
-function trajetoria(historico: Partial<Historico>): TrajetoriaResponse {
+function trajetoria(
+  historico: Partial<Historico>,
+  marcos: MarcosSemestralizacao | null = null,
+): TrajetoriaResponse {
   return {
     fetchedAt: "2026-08-19T03:35:00.000Z",
     plano: [],
+    marcos,
     historico: {
       indices: { cr: null, iap: null },
       cursados: [],
@@ -209,46 +214,6 @@ describe("Trajetória", () => {
     expect(screen.getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
   });
 
-  it("shows the coefficient and progress once synced", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({
-        indices: { cr: 8.1597, iap: 0.8434 },
-        cargaHoraria: {
-          obrigatorias: { exigida: 3150, integralizada: 2100, pendente: 1050 },
-          optativas: { exigida: 360, integralizada: 0, pendente: 360 },
-          complementares: { exigida: 100, integralizada: 0, pendente: 100 },
-          total: { exigida: 3610, integralizada: 2100, pendente: 1510 },
-        },
-      }),
-    );
-
-    await render(<TrajetoriaTab />);
-
-    // The CR tab is the default: two decimals, the CR, not a grade —
-    // formatarNota would print 8,2 here.
-    expect(await screen.findByText("8,16")).toBeTruthy();
-    expect(screen.getByText(/58% do curso/i)).toBeTruthy();
-    // The course's total requirement is fixed at the end of the progress bar
-    // regardless of tab — visible even before switching to Carga Horária.
-    expect(screen.getByText("3.610 h")).toBeTruthy();
-    // Both stats stay mounted at all times now — the card slides between
-    // them rather than swapping one out — so Carga Horária's is already in
-    // the tree even before switching to it.
-    expect(screen.getByText("2.100 h")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(screen.getByText("Carga Horária"));
-    });
-
-    // Just the hours done, pt-BR thousands separator — the total moved to
-    // the progress bar and isn't repeated here anymore. The CR side's own
-    // value stays mounted too, just slid off screen.
-    expect(screen.getByText("2.100 h")).toBeTruthy();
-    expect(screen.getByText("8,16")).toBeTruthy();
-    // The progress row is shared by both tabs, not tied to either stat.
-    expect(screen.getByText(/58% do curso/i)).toBeTruthy();
-  });
-
   it("distinguishes a failed grade from an identical passing one", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       trajetoria({
@@ -310,7 +275,7 @@ describe("Trajetória", () => {
     });
 
     expect(screen.getByText(/Pode ser um problema no documento/i)).toBeTruthy();
-    expect(screen.getByText(/baixar o PDF em Documentos/i)).toBeTruthy();
+    expect(screen.getByText(/baixar o PDF em Perfil/i)).toBeTruthy();
     expect(screen.queryByText(/Tente novamente/i)).toBeNull();
     // The raw backend message never reaches the student.
     expect(screen.queryByText(/Internal server error/i)).toBeNull();
@@ -483,10 +448,9 @@ describe("Trajetória", () => {
     expect(screen.getByText("Tudo planejado.")).toBeTruthy();
   });
 
-  it("groups the periods by year and shows each matéria's impact on the CR", async () => {
+  it("groups the periods by year", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       trajetoria({
-        indices: { cr: 7, iap: null },
         cursados: [
           {
             semestre: "2025.1",
@@ -495,16 +459,6 @@ describe("Trajetória", () => {
             nome: "INTRODUÇÃO À LÓGICA",
             cargaHoraria: 60,
             nota: 8,
-            situacao: "APR",
-            docente: null,
-          },
-          {
-            semestre: "2025.1",
-            natureza: "OB",
-            codigo: "MATA40",
-            nome: "CÁLCULO A",
-            cargaHoraria: 60,
-            nota: 6,
             situacao: "APR",
             docente: null,
           },
@@ -515,22 +469,13 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    // Year header groups 2025.1 with 2026.1's own year — one appears at least
-    // twice (the grid's own header, plus the CR chart's x-axis label), which
-    // is exactly the point: the chart only labels a year once too.
     expect(await screen.findAllByText("2025")).not.toHaveLength(0);
     expect(screen.getAllByText("2026")).not.toHaveLength(0);
-
-    // MATA37's 8 sits above the CR computed without it (6): a positive pull.
-    expect(screen.getByText("↑ 1,00")).toBeTruthy();
-    // MATA40's 6 sits below the CR computed without it (8): a negative pull.
-    expect(screen.getByText("↓ 1,00")).toBeTruthy();
   });
 
-  it("shows how much the CR moved since the term before, beside the current CR", async () => {
+  it("shows the código, carga horária and nota on a matéria card, with no CR impact anymore", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       trajetoria({
-        indices: { cr: 8.5, iap: null },
         cursados: [
           {
             semestre: "2025.1",
@@ -542,12 +487,40 @@ describe("Trajetória", () => {
             situacao: "APR",
             docente: null,
           },
+        ],
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText("MATA37")).toBeTruthy();
+    expect(screen.getByText("· 60 h")).toBeTruthy();
+    expect(screen.getByText("8,0")).toBeTruthy();
+    // The old "influência no CR" line (an arrow + magnitude) is gone from
+    // the timeline — that concept moved to Insights.
+    expect(screen.queryByText(/↑|↓/)).toBeNull();
+  });
+
+  it("colors the density bar differently for a light and a heavy matéria", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        cursados: [
           {
-            semestre: "2025.2",
+            semestre: "2025.1",
             natureza: "OB",
-            codigo: "MATA40",
-            nome: "CÁLCULO A",
-            cargaHoraria: 60,
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 34,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATB90",
+            nome: "TRABALHO DE CONCLUSÃO",
+            cargaHoraria: 120,
             nota: 9,
             situacao: "APR",
             docente: null,
@@ -558,85 +531,9 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    // Cumulative CR: 8 after 2025.1, (60·8+60·9)/120 = 8.5 after 2025.2 — up
-    // half a point from the term before. Queried by testID, not text: with
-    // only two graded components, one of them will always show this exact
-    // same impacto text too (removing the only component in the latest term
-    // is mathematically identical to reverting to the term before it).
-    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("↑ 0,50");
-  });
-
-  it("shows no change as a plain dash rather than an arrow on a flat CR", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({
-        cursados: [
-          {
-            semestre: "2025.1",
-            natureza: "OB",
-            codigo: "MATA37",
-            nome: "INTRODUÇÃO À LÓGICA",
-            cargaHoraria: 60,
-            nota: 8,
-            situacao: "APR",
-            docente: null,
-          },
-          {
-            semestre: "2025.2",
-            natureza: "OB",
-            codigo: "MATA40",
-            nome: "CÁLCULO A",
-            cargaHoraria: 60,
-            nota: 8,
-            situacao: "APR",
-            docente: null,
-          },
-        ],
-      }),
-    );
-
-    await render(<TrajetoriaTab />);
-
-    // Both terms average out to the same 8 — no real movement to show as an
-    // arrow.
-    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("—");
-  });
-
-  it("shows a carga horária bar chart with no grades once that tab is selected", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({
-        cursados: [
-          {
-            semestre: "2025.1",
-            natureza: "OB",
-            codigo: "MATA37",
-            nome: "INTRODUÇÃO À LÓGICA",
-            cargaHoraria: 60,
-            nota: 8,
-            situacao: "APR",
-            docente: null,
-          },
-        ],
-      }),
-    );
-
-    await render(<TrajetoriaTab />);
-    await screen.findByText("INTRODUÇÃO À LÓGICA");
-
-    // CR tab (the default) shows the grade.
-    expect(screen.getByText("8,0")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(screen.getByText("Carga Horária"));
-    });
-
-    // The grade shown per-matéria in the timeline below is still tied to
-    // `insight` directly (unrelated to the sliding summary card above) and
-    // really does swap out. The two chart components, though, both stay
-    // mounted at all times now — the card above slides between them rather
-    // than swapping one out.
-    expect(screen.queryByText("8,0")).toBeNull();
-    expect(screen.getByTestId("bar-chart")).toBeTruthy();
-    expect(screen.getByTestId("line-chart")).toBeTruthy();
+    const leve = await screen.findByTestId("densidade-MATA37");
+    const densa = await screen.findByTestId("densidade-MATB90");
+    expect(leve.props.style.backgroundColor).not.toBe(densa.props.style.backgroundColor);
   });
 
   it("ends the trajectory with a linha de chegada card", async () => {

@@ -1,5 +1,12 @@
 import { parseIsoDate, startOfDay } from "./periodo-letivo";
-import type { ComponenteCursado, ComponentePendente, ResumoCargaHoraria } from "./types";
+import type {
+  ComponenteCursado,
+  ComponentePendente,
+  MarcoSemestre,
+  MarcosSemestralizacao,
+  ResumoCargaHoraria,
+  Ritmo,
+} from "./types";
 
 export interface PeriodoTrajetoria {
   semestre: string;
@@ -321,6 +328,127 @@ export function formatarImpacto(impacto: number | null): string {
  * `fimDoPeriodo` comes from the device-local cache the home screen writes (see
  * periodo-cache.ts), not from a request of this screen's own.
  */
+const ROTULOS_RITMO: Record<Ritmo, string> = {
+  adiantado: "Adiantado(a)",
+  no_ritmo: "No ritmo",
+  atrasado: "Atrasado(a)",
+};
+
+/** The label beside the workload bar's semestralização marks. Null when ritmo never resolved. */
+export function rotuloRitmo(ritmo: Ritmo | null): string | null {
+  return ritmo === null ? null : ROTULOS_RITMO[ritmo];
+}
+
+export type StatusComponente =
+  | { tipo: "obsoleta" }
+  | { tipo: "equivalente"; equivalenteDe: string };
+
+/**
+ * The badge a trajectory card shows for a componente the active grade no
+ * longer carries — obsoleta with no known replacement, or equivalente to a
+ * componente the grade names instead. Null covers both "still on the grade"
+ * and "marcos never resolved" — the card has nothing to flag either way.
+ */
+export function statusComponente(
+  codigo: string,
+  marcos: MarcosSemestralizacao | null,
+): StatusComponente | null {
+  if (!marcos) {
+    return null;
+  }
+  if (marcos.obsoletas.includes(codigo)) {
+    return { tipo: "obsoleta" };
+  }
+  const equivalencia = marcos.equivalencias.find((e) => e.codigo === codigo);
+  return equivalencia ? { tipo: "equivalente", equivalenteDe: equivalencia.equivalenteDe } : null;
+}
+
+/** One bar in the workload progress bar's segmented rendering — one per período the grade has a marco for. */
+export interface SegmentoSemestralizacao {
+  periodo: number;
+  /** This segmento's own share of the whole bar's width — never the running total. */
+  larguraPercentual: number;
+  /** 0 (not reached), 1 (fully cursado), or the fraction in between for the período in progress. */
+  preenchimento: number;
+}
+
+/**
+ * Splits the single workload bar into one segmento per marco, each sized by
+ * its own share of the total (this marco's cargaHorariaAcumulada minus the
+ * previous one's — never the running total, which is what would make later
+ * segmentos balloon in width). `integralizadaTotal` fills each segmento in
+ * order: full for every período already surpassed, a proportional fraction
+ * for the one currently being cursado, empty for every período still ahead.
+ */
+export function segmentosSemestralizacao(
+  marcos: MarcoSemestre[],
+  integralizadaTotal: number,
+): SegmentoSemestralizacao[] {
+  let percentualAnterior = 0;
+  let acumuladaAnterior = 0;
+  return marcos.map((marco) => {
+    const larguraPercentual = marco.percentual - percentualAnterior;
+    const cargaDoSegmento = marco.cargaHorariaAcumulada - acumuladaAnterior;
+    const noSegmento = integralizadaTotal - acumuladaAnterior;
+    const preenchimento =
+      cargaDoSegmento === 0 ? (noSegmento >= 0 ? 1 : 0) : Math.min(1, Math.max(0, noSegmento / cargaDoSegmento));
+
+    percentualAnterior = marco.percentual;
+    acumuladaAnterior = marco.cargaHorariaAcumulada;
+    return { periodo: marco.periodo, larguraPercentual, preenchimento };
+  });
+}
+
+export interface PosicaoSemestral {
+  /** How many segmentos are fully preenchido — whole semesters' worth of workload done. */
+  concluidos: number;
+  total: number;
+  /** `concluidos` plus the in-progress segmento's own fraction — e.g. 5.3 of 10. */
+  posicaoFracionaria: number;
+}
+
+/**
+ * Reduces the bar's own segmentos into the two numbers the screen states
+ * outright: how many semesters' worth of workload are actually done, and the
+ * fractional position that — set beside `periodoLetivoAtual`, how many
+ * semesters the student has actually been enrolled — is what justifies
+ * calling them adiantado, atrasado, or on ritmo.
+ */
+/** One decimal, comma — same convention as formatarCoeficiente, one digit narrower. */
+export function formatarSemestre(valor: number): string {
+  return valor.toFixed(1).replace(".", ",");
+}
+
+export function posicaoSemestral(segmentos: SegmentoSemestralizacao[]): PosicaoSemestral {
+  return {
+    concluidos: segmentos.filter((s) => s.preenchimento >= 1).length,
+    total: segmentos.length,
+    posicaoFracionaria: segmentos.reduce((soma, s) => soma + s.preenchimento, 0),
+  };
+}
+
+/** How dense a matéria's workload is, purely by its carga horária — nothing
+ * here is a fraction of a total, so it never reads as progress toward one. */
+export type NivelDensidade = 1 | 2 | 3 | 4;
+
+const CORES_DENSIDADE: Record<NivelDensidade, string> = {
+  1: "#22C55E", // verde — leve
+  2: "#F59E0B", // amarelo — média
+  3: "#F97316", // laranja — pesada
+  4: "#EF4444", // vermelho — muito densa
+};
+
+/**
+ * Classifies a componente's carga horária into one of four density tiers.
+ * Cuts sit at 50/75/100h so a 90h componente (laranja) reads as heavier than
+ * a 60-68h one (amarelo) but lighter than a 120h one (vermelho) — the two
+ * ends of the range this app's transcripts actually carry.
+ */
+export function densidadeCarga(horas: number): { nivel: NivelDensidade; cor: string } {
+  const nivel: NivelDensidade = horas <= 50 ? 1 : horas <= 75 ? 2 : horas <= 100 ? 3 : 4;
+  return { nivel, cor: CORES_DENSIDADE[nivel] };
+}
+
 export function historicoDesatualizado(
   cursados: ComponenteCursado[],
   fimDoPeriodo: string | null,

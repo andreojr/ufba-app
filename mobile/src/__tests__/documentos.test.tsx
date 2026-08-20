@@ -12,7 +12,10 @@ import {
 } from "@/lib/sigaa-documents";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 
-import DocumentosTab from "@/app/(tabs)/documentos";
+import DocumentosScreen from "@/app/documentos";
+
+const mockBack = jest.fn();
+jest.mock("expo-router", () => ({ useRouter: () => ({ back: mockBack, push: jest.fn() }) }));
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-storage");
@@ -79,7 +82,7 @@ const mockedSaveSigaaDocument = jest.mocked(saveSigaaDocument);
 const mockedOpenSavedSigaaDocument = jest.mocked(openSavedSigaaDocument);
 const mockedDeleteSigaaDocument = jest.mocked(deleteSigaaDocument);
 
-describe("DocumentosTab", () => {
+describe("DocumentosScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseAuth.mockReturnValue({
@@ -99,7 +102,7 @@ describe("DocumentosTab", () => {
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedPostSigaaHistorico.mockReturnValue(new Promise(() => {})); // stays in flight
 
-    const { getAllByText, getByText } = await render(<DocumentosTab />);
+    const { getAllByText, getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getAllByText("Baixar")[1]); // histórico is the second card
@@ -127,8 +130,18 @@ describe("DocumentosTab", () => {
     jest.useRealTimers();
   });
 
+  it("goes back to Perfil when the close button is pressed", async () => {
+    const { getByTestId } = await render(<DocumentosScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("app-bar-close"));
+    });
+
+    expect(mockBack).toHaveBeenCalled();
+  });
+
   it("shows a 'Baixar' button for a document never downloaded", async () => {
-    const { getAllByText } = await render(<DocumentosTab />);
+    const { getAllByText } = await render(<DocumentosScreen />);
 
     expect(getAllByText("Baixar").length).toBeGreaterThan(0);
   });
@@ -143,7 +156,7 @@ describe("DocumentosTab", () => {
       savedAt: new Date("2026-08-18T12:00:00Z"),
     });
 
-    const { getAllByText, getByText } = await render(<DocumentosTab />);
+    const { getAllByText, getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getAllByText("Baixar")[1]); // histórico is the second card
@@ -165,7 +178,7 @@ describe("DocumentosTab", () => {
       savedAt: new Date("2026-08-18T12:00:00Z"),
     });
 
-    const { getAllByText, getByText } = await render(<DocumentosTab />);
+    const { getAllByText, getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getAllByText("Baixar")[0]); // atestado is the first card
@@ -181,7 +194,7 @@ describe("DocumentosTab", () => {
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
     mockedPostSigaaAtestado.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
-    const { getAllByText, getByText } = await render(<DocumentosTab />);
+    const { getAllByText, getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getAllByText("Baixar")[0]);
@@ -195,7 +208,7 @@ describe("DocumentosTab", () => {
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
     mockedPostSigaaHistorico.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
-    const { getAllByText, getByText } = await render(<DocumentosTab />);
+    const { getAllByText, getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getAllByText("Baixar")[1]);
@@ -212,7 +225,7 @@ describe("DocumentosTab", () => {
         : null,
     );
 
-    const { getByText, getAllByText } = await render(<DocumentosTab />);
+    const { getByText, getAllByText } = await render(<DocumentosScreen />);
 
     expect(getByText("Gerar de novo")).toBeTruthy();
     expect(getByText("No aparelho")).toBeTruthy();
@@ -229,7 +242,7 @@ describe("DocumentosTab", () => {
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedPostSigaaHistorico.mockReturnValue(new Promise(() => {})); // stays in flight
 
-    const { getByText, getAllByText, queryByText } = await render(<DocumentosTab />);
+    const { getByText, getAllByText, queryByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getByText("Gerar de novo"));
@@ -256,7 +269,7 @@ describe("DocumentosTab", () => {
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedPostSigaaHistorico.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
-    const { getByText, getAllByText } = await render(<DocumentosTab />);
+    const { getByText, getAllByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getByText("Gerar de novo"));
@@ -287,7 +300,7 @@ describe("DocumentosTab", () => {
       savedAt: new Date("2026-08-19T12:00:00Z"),
     });
 
-    const { getByText, getAllByText, queryAllByText } = await render(<DocumentosTab />);
+    const { getByText, getAllByText, queryAllByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getByText("Gerar de novo"));
@@ -310,7 +323,7 @@ describe("DocumentosTab", () => {
     };
     mockedGetSavedSigaaDocument.mockImplementation((key) => (key === "historico" ? savedHistorico : null));
 
-    const { getAllByText } = await render(<DocumentosTab />);
+    const { getAllByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       // The card header repeats the same title; the row inside "No aparelho" is the last match.
@@ -329,7 +342,7 @@ describe("DocumentosTab", () => {
     );
     const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
 
-    const { getByText } = await render(<DocumentosTab />);
+    const { getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getByText("Excluir"));
@@ -351,7 +364,7 @@ describe("DocumentosTab", () => {
       confirm?.onPress?.();
     });
 
-    const { getByText, queryByText } = await render(<DocumentosTab />);
+    const { getByText, queryByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
       fireEvent.press(getByText("Excluir"));
