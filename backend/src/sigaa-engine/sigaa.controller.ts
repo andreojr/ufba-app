@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Header,
-  Inject,
   Logger,
   NotImplementedException,
   Post,
@@ -13,23 +12,9 @@ import {
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { RequestUser } from '../auth/jwt.strategy';
-import type { UserRepository } from '../users/user.repository';
-import { USER_REPOSITORY } from '../db/tokens';
 import { SigaaLinkService } from './sigaa-link.service';
 import { SigaaEngineService, SigaaWebSession } from './sigaa-engine.service';
 import { SigaaCredentialsDto, SigaaLinkDto } from './sigaa-credentials.dto';
-import { Turma } from './parsers/turma';
-import { PeriodoLetivo } from './parsers/atestado-turmas';
-
-/**
- * What GET-equivalent /schedule answers with. `periodoLetivo` is null when the
- * schedule had to be read off the portal home instead of the atestado de
- * matrícula — see SigaaEngineService.fetchSchedule.
- */
-export interface ScheduleResponse {
-  turmas: Turma[];
-  periodoLetivo: PeriodoLetivo | null;
-}
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -39,8 +24,6 @@ export class SigaaController {
   constructor(
     private readonly linkService: SigaaLinkService,
     private readonly engineService: SigaaEngineService,
-    @Inject(USER_REPOSITORY)
-    private readonly userRepository: UserRepository,
   ) {}
 
   @Post('sigaa/link')
@@ -63,34 +46,6 @@ export class SigaaController {
     { linked: false } | { linked: true; login: string; senha: string }
   > {
     return this.linkService.getLinkedCredentials(user.userId);
-  }
-
-  // Credentials travel per-request in the body (never persisted by default —
-  // see architecture notes). POST (not GET) because a spec-compliant fetch
-  // client cannot send a body on a GET request.
-  @Post('schedule')
-  async schedule(
-    @CurrentUser() user: RequestUser,
-    @Body() dto: SigaaCredentialsDto,
-  ): Promise<ScheduleResponse> {
-    const { turmas, perfil, periodoLetivo } =
-      await this.engineService.fetchSchedule({
-        login: dto.login,
-        senha: dto.senha,
-      });
-
-    // The perfil is an opportunistic capture off the same page — saving it
-    // must never turn a perfectly good schedule fetch into an error.
-    try {
-      await this.userRepository.updateSigaaProfile(user.userId, perfil);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to save the SIGAA profile for user ${user.userId}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
-
-    return { turmas, periodoLetivo };
   }
 
   // Logs in and hands back the raw SIGAA session cookie (not our own parsed data)

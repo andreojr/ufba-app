@@ -4,9 +4,11 @@ import { PrismaSigaaLinkRepository } from './prisma-sigaa-link.repository';
 import { PrismaAuditLogger } from './prisma-audit-logger';
 import { PrismaUserRepository } from './prisma-user.repository';
 import { PrismaHistoricoRepository } from './prisma-historico.repository';
+import { PrismaScheduleRepository } from './prisma-schedule.repository';
 import {
   AUDIT_LOGGER,
   HISTORICO_REPOSITORY,
+  SCHEDULE_REPOSITORY,
   SIGAA_LINK_REPOSITORY,
   USER_REPOSITORY,
 } from './tokens';
@@ -35,6 +37,11 @@ import {
       inject: [PrismaService],
       useFactory: (prisma: PrismaService) => new PrismaHistoricoRepository(prisma),
     },
+    {
+      provide: SCHEDULE_REPOSITORY,
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => new PrismaScheduleRepository(prisma),
+    },
   ],
   exports: [
     PrismaService,
@@ -42,6 +49,7 @@ import {
     AUDIT_LOGGER,
     USER_REPOSITORY,
     HISTORICO_REPOSITORY,
+    SCHEDULE_REPOSITORY,
   ],
 })
 export class DatabaseModule {}

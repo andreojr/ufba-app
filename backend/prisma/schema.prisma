@@ -26,7 +26,7 @@ model User {
   sigaaLink       SigaaLink?
   auditLogEntries AuditLog[]
   cachedGrades    CachedGrade[]
-  cachedSchedules CachedSchedule[]
+  cachedSchedule  CachedSchedule?
   historico       Historico?
   planoItens      PlanoItem[]
 
@@ -80,17 +80,42 @@ model CachedGrade {
   @@map("cached_grades")
 }
 
+// Cached SIGAA schedule. Replaced wholesale on every sync, same rationale as
+// Historico: the fetch is the complete state for the term, so upserting row
+// by row would leave behind a turma the student dropped.
 model CachedSchedule {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  semestre  String
-  data      Json
-  fetchedAt DateTime @default(now()) @map("fetched_at")
+  userId                 String   @id @map("user_id")
+  periodoLetivoSemestre  String?  @map("periodo_letivo_semestre")
+  periodoLetivoInicio    String?  @map("periodo_letivo_inicio")
+  periodoLetivoFim       String?  @map("periodo_letivo_fim")
+  fetchedAt              DateTime @default(now()) @map("fetched_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turmas CachedTurma[]
 
-  @@index([userId])
   @@map("cached_schedule")
+}
+
+model CachedTurma {
+  id             String  @id @default(uuid())
+  scheduleUserId String  @map("schedule_user_id")
+  // SIGAA's own order isn't guaranteed by any other column here, and the
+  // screen wants a stable list — not one reshuffled by a uuid sort order.
+  ordem          Int
+  codigo         String?
+  nome           String
+  docente        String?
+  semestre       String
+  vigenciaInicio String  @map("vigencia_inicio")
+  vigenciaFim    String  @map("vigencia_fim")
+  // TurmaSlot[]: dia/horário/local per weekday. Kept as JSON rather than its
+  // own table — nothing queries a schedule by slot, only by turma.
+  slots          Json
+
+  schedule CachedSchedule @relation(fields: [scheduleUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([scheduleUserId, ordem])
+  @@map("cached_turma")
 }
 
 // Parsed snapshot of the student's Histórico Escolar PDF. Replaced wholesale on

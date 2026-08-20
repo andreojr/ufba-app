@@ -5,8 +5,11 @@ import { DatabaseModule } from '../db/database.module';
 import {
   AUDIT_LOGGER,
   HISTORICO_REPOSITORY,
+  SCHEDULE_REPOSITORY,
   SIGAA_LINK_REPOSITORY,
+  USER_REPOSITORY,
 } from '../db/tokens';
+import type { UserRepository } from '../users/user.repository';
 import { AuditLogger } from './credential-vault';
 import { CredentialVault, parseEncryptionKey } from './credential-vault';
 import { HistoricoRepository } from './historico.repository';
@@ -14,6 +17,9 @@ import { HistoricoService } from './historico.service';
 import { createSigaaHttpClient } from './http-client';
 import { extrairItensHistorico } from './parsers/historico-texto';
 import { parseHistorico } from './parsers/historico';
+import { ScheduleController } from './schedule.controller';
+import { ScheduleRepository } from './schedule.repository';
+import { ScheduleService } from './schedule.service';
 import { SigaaSession } from './session';
 import {
   SigaaEngineService,
@@ -26,7 +32,7 @@ import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
 
 @Module({
   imports: [ConfigModule, AuthModule, DatabaseModule],
-  controllers: [SigaaController, TrajetoriaController],
+  controllers: [SigaaController, TrajetoriaController, ScheduleController],
   providers: [
     {
       provide: SIGAA_SESSION_FACTORY,
@@ -72,6 +78,15 @@ import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
           parseHistorico,
           repository,
         ),
+    },
+    {
+      provide: ScheduleService,
+      inject: [SigaaEngineService, USER_REPOSITORY, SCHEDULE_REPOSITORY],
+      useFactory: (
+        engine: SigaaEngineService,
+        userRepository: UserRepository,
+        repository: ScheduleRepository,
+      ) => new ScheduleService(engine, userRepository, repository),
     },
   ],
 })

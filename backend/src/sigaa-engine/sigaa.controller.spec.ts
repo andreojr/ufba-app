@@ -16,25 +16,8 @@ function fakeLinkService() {
   };
 }
 
-const perfil = {
-  matricula: '223116037',
-  curso: 'ENGENHARIA DE COMPUTAÇÃO',
-  periodoIngresso: '2022.1',
-};
-
-const periodoLetivo = {
-  semestre: '2026.2',
-  inicio: '2026-08-19',
-  fim: '2026-12-19',
-};
-
 function fakeEngineService() {
   return {
-    fetchSchedule: jest.fn().mockResolvedValue({
-      turmas: [{ componente: 'X' }],
-      perfil,
-      periodoLetivo,
-    }),
     createWebSession: jest.fn().mockResolvedValue({
       sessionCookie: 'JSESSIONID=abc123.sigaapl06',
       targetUrl: 'https://sigaa.ufba.br/sigaa/portais/discente/discente.jsf',
@@ -46,12 +29,6 @@ function fakeEngineService() {
   };
 }
 
-function fakeUserRepository() {
-  return {
-    updateSigaaProfile: jest.fn().mockResolvedValue(undefined),
-  };
-}
-
 const user = { userId: 'user-1', email: 'aluno@ufba.br', name: 'Aluno' };
 
 describe('SigaaController', () => {
@@ -60,7 +37,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       linkService as any,
       fakeEngineService() as any,
-      fakeUserRepository() as any,
     );
 
     const result = await controller.link(user, {
@@ -82,7 +58,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       linkService as any,
       fakeEngineService() as any,
-      fakeUserRepository() as any,
     );
 
     await controller.link(user, { login: 'joao', senha: 'segredo' });
@@ -94,96 +69,11 @@ describe('SigaaController', () => {
     );
   });
 
-  it('POST schedule delegates to SigaaEngineService and returns the turmas', async () => {
-    const engineService = fakeEngineService();
-    const controller = new SigaaController(
-      fakeLinkService() as any,
-      engineService as any,
-      fakeUserRepository() as any,
-    );
-
-    const result = await controller.schedule(user, {
-      login: 'joao',
-      senha: 'segredo',
-    });
-
-    expect(engineService.fetchSchedule).toHaveBeenCalledWith({
-      login: 'joao',
-      senha: 'segredo',
-    });
-    expect(result.turmas).toEqual([{ componente: 'X' }]);
-  });
-
-  it('POST schedule returns the periodo letivo alongside the turmas', async () => {
-    const controller = new SigaaController(
-      fakeLinkService() as any,
-      fakeEngineService() as any,
-      fakeUserRepository() as any,
-    );
-
-    const result = await controller.schedule(user, {
-      login: 'joao',
-      senha: 'segredo',
-    });
-
-    expect(result.periodoLetivo).toEqual(periodoLetivo);
-  });
-
-  it('POST schedule does not leak the perfil into the response', async () => {
-    // The perfil is persisted server-side and read back through /me — the
-    // schedule response is not its delivery channel.
-    const controller = new SigaaController(
-      fakeLinkService() as any,
-      fakeEngineService() as any,
-      fakeUserRepository() as any,
-    );
-
-    const result = await controller.schedule(user, {
-      login: 'joao',
-      senha: 'segredo',
-    });
-
-    expect(Object.keys(result).sort()).toEqual(['periodoLetivo', 'turmas']);
-  });
-
-  it('POST schedule saves the scraped perfil for the authenticated user', async () => {
-    const userRepository = fakeUserRepository();
-    const controller = new SigaaController(
-      fakeLinkService() as any,
-      fakeEngineService() as any,
-      userRepository as any,
-    );
-
-    await controller.schedule(user, { login: 'joao', senha: 'segredo' });
-
-    expect(userRepository.updateSigaaProfile).toHaveBeenCalledWith(
-      'user-1',
-      perfil,
-    );
-  });
-
-  it('POST schedule still returns the turmas when saving the perfil fails', async () => {
-    const userRepository = fakeUserRepository();
-    userRepository.updateSigaaProfile.mockRejectedValue(
-      new Error('db is down'),
-    );
-    const controller = new SigaaController(
-      fakeLinkService() as any,
-      fakeEngineService() as any,
-      userRepository as any,
-    );
-
-    await expect(
-      controller.schedule(user, { login: 'joao', senha: 'segredo' }),
-    ).resolves.toEqual({ turmas: [{ componente: 'X' }], periodoLetivo });
-  });
-
   it('POST sigaa/session delegates to SigaaEngineService and returns its result', async () => {
     const engineService = fakeEngineService();
     const controller = new SigaaController(
       fakeLinkService() as any,
       engineService as any,
-      fakeUserRepository() as any,
     );
 
     const result = await controller.session({
@@ -206,7 +96,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       fakeLinkService() as any,
       engineService as any,
-      fakeUserRepository() as any,
     );
 
     const result = await controller.historico({
@@ -227,7 +116,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       fakeLinkService() as any,
       engineService as any,
-      fakeUserRepository() as any,
     );
 
     const result = await controller.atestado({
@@ -246,7 +134,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       fakeLinkService() as any,
       fakeEngineService() as any,
-      fakeUserRepository() as any,
     );
 
     expect(() => controller.grades()).toThrow(NotImplementedException);
@@ -257,7 +144,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       linkService as any,
       fakeEngineService() as any,
-      fakeUserRepository() as any,
     );
 
     await expect(controller.getLink(user)).resolves.toEqual({
@@ -276,7 +162,6 @@ describe('SigaaController', () => {
     const controller = new SigaaController(
       linkService as any,
       fakeEngineService() as any,
-      fakeUserRepository() as any,
     );
 
     await expect(controller.getLink(user)).resolves.toEqual({
