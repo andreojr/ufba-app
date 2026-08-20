@@ -50,3 +50,18 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 ## 10. Vincular Moodle e Google Classroom — feature incremental
 - Nem todo professor posta material só na turma virtual do SIGAA — muitos usam Moodle ou Google Classroom em paralelo, e isso fica fora do radar do app.
 - Investigar vínculo com essas plataformas (login/integração) para trazer avisos, materiais e atividades de lá também, unificando com o que já vem do SIGAA.
+
+## 11. Sistema de notificações (integração com o SIGAA) — decisão de arquitetura tomada
+- Objetivo: avisar o usuário quando sair novidade no SIGAA (notas, formatura, etc.), sem precisar abrir o app pra descobrir.
+- Restrição inegociável: **não guardar senha do aluno no servidor** — senha fica só no SecureStore do device. SIGAA não permite consulta em lote, só por aluno autenticado.
+- Descartado (a) cron client-side puro (`expo-background-task`/background-fetch) — pouco confiável, principalmente no iOS, já que o SO reduz wake-ups de apps com uso esporádico.
+- Descartado (b) servidor centralizado fazendo a consulta em lote — exigiria guardar senha de todos os alunos no servidor.
+- **Decisão: push silencioso (data-only) como gatilho.**
+  1. Servidor guarda só o push token de cada device (EAS Push Service / Expo Notifications) — nenhuma credencial.
+  2. Cron simples no backend (ex: a cada 1h) dispara push silencioso (content-available / data message) pra todos os tokens — broadcast puro, sem lógica de negócio nem acesso ao SIGAA.
+  3. App recebe o push em background, pega a senha do SecureStore, loga no SIGAA e verifica novidade.
+  4. Se houver novidade, dispara notificação local (visível) pro usuário.
+- Vantagens: servidor nunca vê senha; timing mais confiável que background fetch passivo (quem decide quando rodar é o servidor); custo de servidor baixo; consumo de bateria desprezível.
+- Limitações: push silencioso no iOS não é 100% garantido (pode atrasar/ser descartado em Low Power Mode ou se o app foi force-quit) — vale complementar com sync manual (pull to refresh) e ser transparente na UX sobre possíveis atrasos.
+- Precisa configurar handler de notificação em background no Android (AndroidManifest) e no iOS (capabilities de background push).
+- Ferramentas: `expo-notifications` (client), EAS Push Service (sem push server próprio), cron simples no backend (Vercel Cron, Supabase Edge Function, etc.) só pro broadcast.
