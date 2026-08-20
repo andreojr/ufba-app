@@ -7,13 +7,27 @@ describe('PrismaCurriculoRepository', () => {
   const prisma = new PrismaService();
   const repo = new PrismaCurriculoRepository(prisma);
 
-  beforeEach(async () => {
+  const limpar = async () => {
     await prisma.componenteCurricular.deleteMany();
     await prisma.estruturaCurricular.deleteMany();
     await prisma.curso.deleteMany();
-  });
+  };
 
+  beforeEach(limpar);
+
+  /**
+   * Also clears on the way out, not just on the way in. This spec runs against
+   * the same Postgres as local dev (`DATABASE_URL`), and the fixture directory
+   * it leaves behind is not a harmless leftover: `CurriculoService.listarCursos`
+   * only re-fetches lista.jsf when the `Curso` table is empty OR its
+   * `atualizadoEm` is older than the 30-day TTL, so a freshly written 1-row
+   * "CURSO A/B" directory reads as a populated, fresh catalogue for the next 30
+   * days. Every real course then fails to resolve with `CursoDesconhecidoError`
+   * (`/curriculo/meu-curso/...` → 404), and nothing self-heals. An empty table,
+   * by contrast, is just a cache miss the next request repopulates from SIGAA.
+   */
   afterAll(async () => {
+    await limpar();
     await prisma.$disconnect();
   });
 
