@@ -297,11 +297,21 @@ describe('parseDocenteBusca', () => {
     expect(new Set(siapes).size).toBe(siapes.length);
   });
 
+  // SIGAA puts BOTH messages in the same `ul.erros` block, so the DOM cannot
+  // separate them — only the text can. Misreading zero-results as an error
+  // means no miss is ever recorded and the docente is re-searched forever.
   it('reads a genuine zero-result page as an empty result list, not an error', () => {
     expect(parseDocenteBusca(fixture('docente-busca-vazia.html'))).toEqual({
       tipo: 'resultados',
       docentes: [],
     });
+  });
+
+  it('tells the two ul.erros messages apart, since their markup is identical', () => {
+    const vazia = parseDocenteBusca(fixture('docente-busca-vazia.html'));
+    const curto = parseDocenteBusca(fixture('docente-busca-erro-curto.html'));
+    expect(vazia.tipo).toBe('resultados');
+    expect(curto.tipo).toBe('erro');
   });
 
   it('reads the minimum-length complaint as an error, not as zero results', () => {
@@ -342,12 +352,23 @@ export type DocenteBuscaResposta =
 
 const SIAPE_PATTERN = /siape=(\d+)/;
 
+/**
+ * SIGAA renders "no docentes matched" inside the SAME `#painel-erros` /
+ * `ul.erros` block it uses for a rejected query — the DOM cannot tell the two
+ * apart, only the message can (verified against both captured fixtures).
+ *
+ * Getting this backwards is not cosmetic. A zero-result misread as an error is
+ * never recorded as a lookup miss, so a docente with no public record gets
+ * re-searched on every single screen open, forever.
+ */
+const SEM_RESULTADOS_PATTERN = /nenhum docente foi encontrado/i;
+
 export function parseDocenteBusca(html: string): DocenteBuscaResposta {
   const $ = cheerio.load(html);
 
-  const erro = $('.erros, .error, ul.erros li').first().text().trim();
-  if (erro) {
-    return { tipo: 'erro', mensagem: erro };
+  const aviso = $('#painel-erros .erros li, ul.erros li, .erros li').first().text().trim();
+  if (aviso && !SEM_RESULTADOS_PATTERN.test(aviso)) {
+    return { tipo: 'erro', mensagem: aviso };
   }
 
   // Each docente is listed once per lotação, so the same siape recurs. Keyed by
@@ -376,9 +397,12 @@ export function parseDocenteBusca(html: string): DocenteBuscaResposta {
 - [ ] **Step 4: Run it and watch it pass**
 
 Run: `npm test -- src/sigaa-engine/parsers/docente-busca.spec.ts`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
-If the error test fails because the real markup uses a different class, open `docente-busca-erro-curto.html`, find the element actually holding "pelo menos 4 caracteres", and widen the selector in the `erro` line. Do not change the test's assertion.
+Both messages live in `<div id="painel-erros"><ul class="erros"><li>` — confirmed
+against the captured fixtures. If a selector needs widening, widen it; never
+"fix" a failure by weakening the zero-result-vs-error distinction, which is the
+whole point of the union this parser returns.
 
 - [ ] **Step 5: Commit**
 
