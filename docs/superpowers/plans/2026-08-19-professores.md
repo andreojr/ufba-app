@@ -223,7 +223,7 @@ Create `backend/src/sigaa-engine/docente-nome.ts`:
 export function normalizarNomeDocente(nome: string): string {
   return nome
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/\s+/g, ' ')
     .trim();
@@ -507,7 +507,7 @@ export interface DocentePortal {
 function normalizeLabel(label: string): string {
   return label
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/:\s*$/, '')
     .trim()
     .toLowerCase();
@@ -861,7 +861,7 @@ const ANO_PATTERN = /(\d{2})\/(\d{4})\s*$/;
 function semAcento(texto: string): string {
   return texto
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 }
 
