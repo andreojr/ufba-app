@@ -6,6 +6,8 @@ import {
   Param,
   Post,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { DocenteSalvo } from './docente.repository';
@@ -14,6 +16,7 @@ import { SemestreDto } from './semestre.dto';
 
 @Controller('docentes')
 @UseGuards(JwtAuthGuard)
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class DocentesController {
   constructor(private readonly service: DocentesService) {}
 
