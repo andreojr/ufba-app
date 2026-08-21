@@ -206,6 +206,60 @@ describe("ArvoreDependenciasScreen", () => {
     expect(textos).toContain("Cálculo B");
   });
 
+  it("nunca dimensiona o <Svg> com o tamanho lógico do grafo — fica limitado ao viewport (regressão do crash 'Canvas: trying to draw too large bitmap')", async () => {
+    // Regressão de crash real em dispositivo (Samsung, densidade ~2.75x):
+    // o SvgView nativo do Android rasteriza a área INTEIRA da view num
+    // Bitmap ARGB_8888 (SvgView.onDraw), e o Canvas acelerado por hardware
+    // rejeita bitmaps acima de RecordingCanvas.MAX_BITMAP_SIZE (~100–150MB).
+    // Um grafo de matéria-base real (MATA02: 3978×1784dp pelo dagre) virava
+    // um bitmap de ~215MB. O <Svg> deve SEMPRE ter o tamanho do viewport;
+    // pan/zoom acontece dentro dele (matriz animada no <G> raiz).
+    const filhos = Array.from({ length: 11 }, (_, i) => ({
+      codigo: `DEP${String(i).padStart(2, "0")}`,
+      nome: `Dependente ${i}`,
+      periodo: 2,
+    }));
+    mockedGet.mockResolvedValue({
+      nos: [{ codigo: "MATA02", nome: "Cálculo A", periodo: 1 }, ...filhos],
+      arestas: filhos.map((f) => ({ de: "MATA02", para: f.codigo })),
+    });
+
+    await render(<ArvoreDependenciasScreen />);
+    await waitFor(() => expect(screen.getByTestId("arvore-dependencias-svg")).toBeTruthy());
+
+    // 11 filhos lado a lado no dagre: 11×140 + 10×24 + margens = 1820dp de
+    // largura lógica — bem maior que a janela do jest (750×1334). O Svg não
+    // pode herdar isso.
+    const svg = screen.getByTestId("arvore-dependencias-svg");
+    const { width: janelaLargura, height: janelaAltura } =
+      jest.requireActual("react-native").Dimensions.get("window");
+    expect(svg.props.bbWidth).toBeLessThanOrEqual(janelaLargura);
+    expect(svg.props.bbHeight).toBeLessThanOrEqual(janelaAltura);
+  });
+
+  it("refina o tamanho do <Svg> para o tamanho real do container medido via onLayout", async () => {
+    mockedGet.mockResolvedValue({
+      nos: [
+        { codigo: "MATA02", nome: "Cálculo A", periodo: 1 },
+        { codigo: "MATA03", nome: "Cálculo B", periodo: 2 },
+      ],
+      arestas: [{ de: "MATA02", para: "MATA03" }],
+    });
+
+    await render(<ArvoreDependenciasScreen />);
+    await waitFor(() => expect(screen.getByTestId("arvore-dependencias-svg")).toBeTruthy());
+
+    fireEvent(screen.getByTestId("arvore-dependencias-viewport"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 700 } },
+    });
+
+    await waitFor(() => {
+      const svg = screen.getByTestId("arvore-dependencias-svg");
+      expect(svg.props.bbWidth).toBe(390);
+      expect(svg.props.bbHeight).toBe(700);
+    });
+  });
+
   it("usa um orient de Marker que o Android suporta ('auto' ou número, nunca 'auto-start-reverse')", async () => {
     // Regressão de crash real em dispositivo: o código nativo Android do
     // react-native-svg (MarkerView.java:125, até 15.12.1 e ainda no main

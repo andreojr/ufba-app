@@ -1,18 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { useAnimatedProps, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, {
-  Defs,
-  Marker,
-  Polygon,
-  Polyline,
-  Rect,
-  Text as SvgText,
-} from "react-native-svg";
+import Svg, { Defs, G, Marker, Polygon, Polyline, Rect, Text as SvgText } from "react-native-svg";
 
 import { AppIcon } from "@/components/AppIcon";
 import { ApiError, getArvoreDependencias } from "@/lib/api";
@@ -33,6 +26,19 @@ type Estado =
 
 const ESCALA_MIN = 0.4;
 const ESCALA_MAX = 2.5;
+
+// Pan/zoom acontece DENTRO do SVG (uma matriz animada num <G> raiz), nunca
+// crescendo o width/height nativos do <Svg> até o tamanho lógico do grafo.
+// Motivo: no Android, o SvgView do react-native-svg rasteriza a área INTEIRA
+// da view num Bitmap ARGB_8888 (SvgView.onDraw → drawOutput →
+// Bitmap.createBitmap(getWidth(), getHeight())) e o Canvas acelerado por
+// hardware tem um limite rígido de bytes por bitmap
+// (RecordingCanvas.MAX_BITMAP_SIZE, ~100–150MB dependendo da versão/OEM).
+// Um grafo de matéria-base real (ex. MATA02: 3978×1784dp pelo dagre) numa
+// densidade Samsung típica (~2.75x) vira um bitmap de ~215MB → crash
+// "Canvas: trying to draw too large bitmap". Mantendo o <Svg> no tamanho do
+// viewport, o bitmap fica limitado ao tamanho físico da tela (~10MB).
+const AnimatedG = Animated.createAnimatedComponent(G);
 
 // Tamanho aproximado de caractere em px para fontSize 12 — usado só para
 // decidir onde truncar o nome dentro da largura fixa do nó, não para medir
@@ -140,13 +146,48 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
     });
   const gesto = Gesture.Simultaneous(pinch, pan);
 
-  const estiloAnimado = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: escala.value },
-    ],
-  }));
+  // Viewport = a área visível onde o grafo é desenhado. Começa no tamanho da
+  // janela (bound superior seguro, disponível síncrono) e é refinado pelo
+  // onLayout do container real. O <Svg> NUNCA excede esse tamanho — essa é a
+  // garantia estrutural contra o crash de bitmap (ver AnimatedG acima).
+  const janela = useWindowDimensions();
+  const [viewport, setViewport] = useState<{ largura: number; altura: number } | null>(null);
+  const larguraViewport = viewport?.largura ?? janela.width;
+  const alturaViewport = viewport?.altura ?? janela.height;
+  const aoMedirViewport = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setViewport({ largura: width, altura: height });
+  }, []);
+
+  const larguraGrafo = estado.status === "ready" ? estado.layout.largura : 0;
+  const alturaGrafo = estado.status === "ready" ? estado.layout.altura : 0;
+
+  // Reproduz exatamente a transformação que antes era um estilo
+  // [translateX, translateY, scale] numa Animated.View centrada: escala em
+  // torno do centro do viewport (cx, cy), grafo inicialmente centralizado
+  // (ox, oy) e translação do pan por cima — agora como matriz SVG [a b c d
+  // e f] aplicada no <G> raiz, para que a rasterização nativa continue do
+  // tamanho do viewport. viewBox não serve aqui: reanimated não consegue
+  // animá-lo por setNativeProps (só atualiza em re-render — ver
+  // software-mansion/react-native-reanimated#2181, onde o maintainer
+  // recomenda animar o transform de um Group).
+  const propsAnimadas = useAnimatedProps(() => {
+    const s = escala.value;
+    const cx = larguraViewport / 2;
+    const cy = alturaViewport / 2;
+    const ox = (larguraViewport - larguraGrafo) / 2;
+    const oy = (alturaViewport - alturaGrafo) / 2;
+    return {
+      matrix: [
+        s,
+        0,
+        0,
+        s,
+        translateX.value + cx * (1 - s) + s * ox,
+        translateY.value + cy * (1 - s) + s * oy,
+      ],
+    };
+  });
 
   return (
     <View className="flex-1 bg-background">
@@ -165,16 +206,16 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
         </Pressable>
       </View>
 
-      <View className="flex-1 items-center justify-center">
+      <View
+        testID="arvore-dependencias-viewport"
+        className="flex-1 items-center justify-center"
+        onLayout={aoMedirViewport}
+      >
         {estado.status === "loading" ? (
           <Spinner testID="arvore-dependencias-loading" />
         ) : estado.status === "erro" ? (
           <View className="gap-3 px-6 items-center">
-            <Typography.Paragraph
-              testID="arvore-dependencias-erro"
-              color="muted"
-              align="center"
-            >
+            <Typography.Paragraph testID="arvore-dependencias-erro" color="muted" align="center">
               Não foi possível carregar a árvore de dependências.
             </Typography.Paragraph>
             <Button variant="outline" size="sm" onPress={() => void carregar()}>
@@ -201,12 +242,8 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
           </Typography.Paragraph>
         ) : (
           <GestureDetector gesture={gesto}>
-            <Animated.View style={estiloAnimado}>
-              <Svg
-                testID="arvore-dependencias-svg"
-                width={estado.layout.largura}
-                height={estado.layout.altura}
-              >
+            <View className="flex-1 self-stretch" collapsable={false}>
+              <Svg testID="arvore-dependencias-svg" width={larguraViewport} height={alturaViewport}>
                 <Defs>
                   <Marker
                     id="seta-dependencia"
@@ -229,59 +266,66 @@ export default function ArvoreDependenciasScreen(): JSX.Element {
                     <Polygon points="0,0 10,5 0,10" fill={mutedColor} />
                   </Marker>
                 </Defs>
-                {estado.layout.arestas.map((aresta, i) => {
-                  if (aresta.pontos.length === 0) return null;
-                  const pontos = aresta.pontos.map((p) => `${p.x},${p.y}`).join(" ");
-                  return (
-                    <Polyline
-                      key={`${aresta.de}-${aresta.para}-${i}`}
-                      points={pontos}
-                      fill="none"
+                {/* O cast: `matrix` é um prop nativo real do RNSVGGroup (6
+                    valores, VirtualView.setMatrix no Android), mas o tipo
+                    público de G só expõe transform/translate/scale —
+                    useAnimatedProps precisa do nome nativo para o
+                    setNativeProps por frame funcionar sem re-render. */}
+                <AnimatedG animatedProps={propsAnimadas as any}>
+                  {estado.layout.arestas.map((aresta, i) => {
+                    if (aresta.pontos.length === 0) return null;
+                    const pontos = aresta.pontos.map((p) => `${p.x},${p.y}`).join(" ");
+                    return (
+                      <Polyline
+                        key={`${aresta.de}-${aresta.para}-${i}`}
+                        points={pontos}
+                        fill="none"
+                        stroke={mutedColor}
+                        strokeWidth={1.5}
+                        markerEnd="url(#seta-dependencia)"
+                      />
+                    );
+                  })}
+                  {estado.layout.nos.map((no) => (
+                    <Rect
+                      key={no.codigo}
+                      x={no.x - no.largura / 2}
+                      y={no.y - no.altura / 2}
+                      width={no.largura}
+                      height={no.altura}
+                      rx={12}
+                      fill={no.codigo === codigo ? mutedColor : "transparent"}
                       stroke={mutedColor}
                       strokeWidth={1.5}
-                      markerEnd="url(#seta-dependencia)"
                     />
-                  );
-                })}
-                {estado.layout.nos.map((no) => (
-                  <Rect
-                    key={no.codigo}
-                    x={no.x - no.largura / 2}
-                    y={no.y - no.altura / 2}
-                    width={no.largura}
-                    height={no.altura}
-                    rx={12}
-                    fill={no.codigo === codigo ? mutedColor : "transparent"}
-                    stroke={mutedColor}
-                    strokeWidth={1.5}
-                  />
-                ))}
-                {estado.layout.nos.map((no) => (
-                  <SvgText
-                    key={`codigo-${no.codigo}`}
-                    x={no.x}
-                    y={no.y - 6}
-                    fill={mutedColor}
-                    fontSize={9}
-                    textAnchor="middle"
-                  >
-                    {no.codigo}
-                  </SvgText>
-                ))}
-                {estado.layout.nos.map((no) => (
-                  <SvgText
-                    key={`nome-${no.codigo}`}
-                    x={no.x}
-                    y={no.y + 12}
-                    fill={foregroundColor}
-                    fontSize={11}
-                    textAnchor="middle"
-                  >
-                    {truncar(no.nome, CARACTERES_MAX_NOME)}
-                  </SvgText>
-                ))}
+                  ))}
+                  {estado.layout.nos.map((no) => (
+                    <SvgText
+                      key={`codigo-${no.codigo}`}
+                      x={no.x}
+                      y={no.y - 6}
+                      fill={mutedColor}
+                      fontSize={9}
+                      textAnchor="middle"
+                    >
+                      {no.codigo}
+                    </SvgText>
+                  ))}
+                  {estado.layout.nos.map((no) => (
+                    <SvgText
+                      key={`nome-${no.codigo}`}
+                      x={no.x}
+                      y={no.y + 12}
+                      fill={foregroundColor}
+                      fontSize={11}
+                      textAnchor="middle"
+                    >
+                      {truncar(no.nome, CARACTERES_MAX_NOME)}
+                    </SvgText>
+                  ))}
+                </AnimatedG>
               </Svg>
-            </Animated.View>
+            </View>
           </GestureDetector>
         )}
       </View>
