@@ -406,7 +406,7 @@ describe("Trajetória", () => {
     consoleWarn.mockRestore();
   });
 
-  it("toque num card de matéria cursada abre a árvore de dependências", async () => {
+  it("toque num card de matéria cursada abre a trilha curricular", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
 
     await render(<TrajetoriaTab />);
