@@ -7,20 +7,22 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { RequestUser } from '../auth/jwt.strategy';
 import type { CursoListaItem } from '../sigaa-engine/parsers/curso-lista';
-import type { ArvoreDependencias } from './arvore-dependencias';
 import type { EstruturaCurricularSalva } from './curriculo.repository';
+import type { VizinhosCurriculares } from './vizinhos-curriculares';
 import { CurriculoService } from './curriculo.service';
 import { CURRICULO_SERVICE } from './tokens';
 
 /**
  * `/curriculo/meu-curso` takes the course name as a query param for now — it
  * does not yet read `User.curso` off the authenticated user. This endpoint
- * family now has a real consumer (mobile's árvore de dependências screen,
- * via `getArvoreDependencias` in `mobile/src/lib/api.ts`, hitting
- * `/curriculo/meu-curso/componentes/:codigo/arvore-dependencias` below), but
- * that consumer still passes `curso` as a query param itself rather than
+ * family has a real consumer (mobile's vizinhos curriculares screen, via
+ * `getVizinhosCurriculares` in `mobile/src/lib/api.ts`, hitting
+ * `/curriculo/meu-curso/componentes/:codigo/vizinhos` below), but that
+ * consumer still passes `curso` as a query param itself rather than
  * resolving `User.curso` server-side — that wiring is still not done.
  */
 @Controller('curriculo')
@@ -52,22 +54,24 @@ export class CurriculoController {
     return this.service.resolverPorNomeUsuario(curso);
   }
 
-  @Get('cursos/:cursoId/componentes/:codigo/arvore-dependencias')
-  async arvoreDependencias(
+  @Get('cursos/:cursoId/componentes/:codigo/vizinhos')
+  async vizinhosCurriculares(
     @Param('cursoId') cursoId: string,
     @Param('codigo') codigo: string,
-  ): Promise<ArvoreDependencias> {
-    return this.service.arvoreDependencias(cursoId, codigo);
+    @CurrentUser() user: RequestUser,
+  ): Promise<VizinhosCurriculares> {
+    return this.service.vizinhosCurriculares(cursoId, codigo, user.userId);
   }
 
-  @Get('meu-curso/componentes/:codigo/arvore-dependencias')
-  async arvoreDependenciasMeuCurso(
+  @Get('meu-curso/componentes/:codigo/vizinhos')
+  async vizinhosCurricularesMeuCurso(
     @Param('codigo') codigo: string,
     @Query('curso') curso: string | undefined,
-  ): Promise<ArvoreDependencias> {
+    @CurrentUser() user: RequestUser,
+  ): Promise<VizinhosCurriculares> {
     if (!curso) {
       throw new BadRequestException('Missing required query param "curso"');
     }
-    return this.service.arvoreDependenciasPorNomeUsuario(curso, codigo);
+    return this.service.vizinhosCurricularesPorNomeUsuario(curso, codigo, user.userId);
   }
 }

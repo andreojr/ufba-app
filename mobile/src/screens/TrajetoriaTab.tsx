@@ -294,7 +294,7 @@ export default function TrajetoriaTab(): JSX.Element {
             sincronizando={sincronizando}
             erro={erro}
             mutedColor={mutedColor}
-            onAbrirArvore={(codigo, nome) =>
+            onAbrirVizinhos={(codigo, nome) =>
               router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
             }
           />
@@ -316,7 +316,7 @@ function ReadyTrajetoria({
   sincronizando,
   erro,
   mutedColor,
-  onAbrirArvore,
+  onAbrirVizinhos,
 }: {
   historico: Historico;
   fetchedAt: Date;
@@ -329,7 +329,7 @@ function ReadyTrajetoria({
   sincronizando: boolean;
   erro: JSX.Element | null;
   mutedColor: string;
-  onAbrirArvore: (codigo: string, nome: string) => void;
+  onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const periodos = agruparPorSemestre(historico.cursados);
   const anos = agruparPorAno(periodos);
@@ -378,7 +378,7 @@ function ReadyTrajetoria({
         anos={anos}
         desatualizado={desatualizado}
         marcos={marcos}
-        onAbrirArvore={onAbrirArvore}
+        onAbrirVizinhos={onAbrirVizinhos}
       />
 
       <View className="gap-5">
@@ -487,12 +487,12 @@ function LinhaDoTempo({
   anos,
   desatualizado,
   marcos,
-  onAbrirArvore,
+  onAbrirVizinhos,
 }: {
   anos: AnoTrajetoria[];
   desatualizado: boolean;
   marcos: MarcosSemestralizacao | null;
-  onAbrirArvore: (codigo: string, nome: string) => void;
+  onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   return (
@@ -547,7 +547,7 @@ function LinhaDoTempo({
                         key={`${componente.semestre}-${componente.codigo}`}
                         componente={componente}
                         marcos={marcos}
-                        onAbrirArvore={onAbrirArvore}
+                        onAbrirVizinhos={onAbrirVizinhos}
                       />
                     ))}
                   </View>
@@ -583,11 +583,11 @@ function LinhaDoTempo({
 function MateriaCard({
   componente,
   marcos,
-  onAbrirArvore,
+  onAbrirVizinhos,
 }: {
   componente: ComponenteCursado;
   marcos: MarcosSemestralizacao | null;
-  onAbrirArvore: (codigo: string, nome: string) => void;
+  onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const rotulo = rotuloSituacao(componente.situacao);
   const nota = formatarNota(componente.nota);
@@ -605,7 +605,7 @@ function MateriaCard({
     // past that floor when there's room, but never shrink below it.
     <Pressable
       testID={`materia-card-${componente.codigo}`}
-      onPress={() => onAbrirArvore(componente.codigo, componente.nome)}
+      onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
       className={`rounded-2xl p-3 justify-between gap-1.5 ${
         naoConta
           ? "bg-surface-secondary/40 border border-dashed border-white/20 opacity-60"

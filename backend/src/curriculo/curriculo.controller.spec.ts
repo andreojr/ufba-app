@@ -14,15 +14,15 @@ describe('CurriculoController', () => {
       | 'listarCursos'
       | 'resolverCurso'
       | 'resolverPorNomeUsuario'
-      | 'arvoreDependencias'
-      | 'arvoreDependenciasPorNomeUsuario'
+      | 'vizinhosCurriculares'
+      | 'vizinhosCurricularesPorNomeUsuario'
     >
   > = {
     listarCursos: jest.fn(),
     resolverCurso: jest.fn(),
     resolverPorNomeUsuario: jest.fn(),
-    arvoreDependencias: jest.fn(),
-    arvoreDependenciasPorNomeUsuario: jest.fn(),
+    vizinhosCurriculares: jest.fn(),
+    vizinhosCurricularesPorNomeUsuario: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -79,39 +79,46 @@ describe('CurriculoController', () => {
     expect(service.resolverPorNomeUsuario).not.toHaveBeenCalled();
   });
 
-  it('GET /curriculo/cursos/:cursoId/componentes/:codigo/arvore-dependencias devolve o grafo', async () => {
-    service.arvoreDependencias.mockResolvedValue({
-      nos: [{ codigo: 'MATA02', nome: 'Cálculo A', periodo: 1 }],
-      arestas: [],
+  it('GET /curriculo/cursos/:cursoId/componentes/:codigo/vizinhos devolve os vizinhos', async () => {
+    service.vizinhosCurriculares.mockResolvedValue({
+      atual: { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' },
+      preRequisitos: [],
+      desbloqueia: [],
     });
     const res = await request(app.getHttpServer()).get(
-      '/curriculo/cursos/1/componentes/MATA02/arvore-dependencias',
+      '/curriculo/cursos/1/componentes/MATA02/vizinhos',
     );
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      nos: [{ codigo: 'MATA02', nome: 'Cálculo A', periodo: 1 }],
-      arestas: [],
+      atual: { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' },
+      preRequisitos: [],
+      desbloqueia: [],
     });
-    expect(service.arvoreDependencias).toHaveBeenCalledWith('1', 'MATA02');
+    expect(service.vizinhosCurriculares).toHaveBeenCalledWith('1', 'MATA02', 'u1');
   });
 
-  it('GET /curriculo/meu-curso/componentes/:codigo/arvore-dependencias devolve o grafo pelo nome do curso', async () => {
-    service.arvoreDependenciasPorNomeUsuario.mockResolvedValue({ nos: [], arestas: [] });
+  it('GET /curriculo/meu-curso/componentes/:codigo/vizinhos devolve os vizinhos pelo nome do curso', async () => {
+    service.vizinhosCurricularesPorNomeUsuario.mockResolvedValue({
+      atual: { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' },
+      preRequisitos: [],
+      desbloqueia: [],
+    });
     const res = await request(app.getHttpServer())
-      .get('/curriculo/meu-curso/componentes/MATA02/arvore-dependencias')
+      .get('/curriculo/meu-curso/componentes/MATA02/vizinhos')
       .query({ curso: 'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador' });
     expect(res.status).toBe(200);
-    expect(service.arvoreDependenciasPorNomeUsuario).toHaveBeenCalledWith(
+    expect(service.vizinhosCurricularesPorNomeUsuario).toHaveBeenCalledWith(
       'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
       'MATA02',
+      'u1',
     );
   });
 
-  it('GET /curriculo/meu-curso/componentes/:codigo/arvore-dependencias sem "curso" devolve 400', async () => {
+  it('GET /curriculo/meu-curso/componentes/:codigo/vizinhos sem "curso" devolve 400', async () => {
     const res = await request(app.getHttpServer()).get(
-      '/curriculo/meu-curso/componentes/MATA02/arvore-dependencias',
+      '/curriculo/meu-curso/componentes/MATA02/vizinhos',
     );
     expect(res.status).toBe(400);
-    expect(service.arvoreDependenciasPorNomeUsuario).not.toHaveBeenCalled();
+    expect(service.vizinhosCurricularesPorNomeUsuario).not.toHaveBeenCalled();
   });
 });

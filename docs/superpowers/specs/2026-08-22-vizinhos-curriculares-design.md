@@ -101,9 +101,12 @@ Pra cada componente mostrado (matéria atual, cada pré-requisito, cada
    contra o conjunto de códigos `APR` do histórico → `liberada` se `true`
    (ou sem pré-requisito), `bloqueada` se `false`.
 
-Sem histórico persistido pro usuário (nunca sincronizou): todo componente
-vira `bloqueada` por padrão — nunca inventa `cursada`/`liberada` sem dado
-real, mas a resposta ainda é montada normalmente, não é erro.
+Sem histórico persistido pro usuário (nunca sincronizou): os conjuntos de
+`APR`/`MATR` ficam vazios, nunca inventando `cursada`/`emCurso` sem dado
+real, mas a resposta ainda é montada normalmente, não é erro. Uma matéria
+sem pré-requisito vira `liberada` mesmo assim (nada bloqueia); só vira
+`bloqueada` uma matéria cujo pré-requisito não dá pra satisfazer sem
+histórico nenhum.
 
 ## Backend architecture
 
@@ -192,7 +195,8 @@ TDD, na ordem em que as peças são construídas.
 - `vizinhos-curriculares.ts` — componentes fake cobrindo os 4 estados de
   situação (cursada/emCurso/liberada/bloqueada), matéria sem
   pré-requisito (período 1), matéria sem quem desbloqueia (última do
-  curso), aluno sem histórico persistido (tudo bloqueada por padrão).
+  curso), aluno sem histórico persistido (matéria sem pré-requisito ainda
+  `liberada`; só a com pré-requisito não satisfeito vira `bloqueada`).
 - `curriculo.service.ts`/`curriculo.controller.ts` — mesma convenção já
   estabelecida no módulo (repositório fake, supertest, guard de
   autenticação).
@@ -215,7 +219,9 @@ currículo + histórico).
    de fixtures generoso, cobrindo combinações reais do catálogo (não só
    casos sintéticos), antes de confiar no resultado.
 2. **Situação sem histórico sincronizado.** Um aluno que nunca sincronizou
-   vê tudo como `bloqueada` — tecnicamente correto (não temos dado pra
-   dizer o contrário), mas pode ler como "nada liberado" de forma confusa
-   se ele não entender por que. Vale considerar, fora desta entrega, uma
-   mensagem explicando a ausência de histórico nesse caso específico.
+   só vê `liberada` nas matérias sem pré-requisito — as demais viram
+   `bloqueada` — tecnicamente correto (não temos dado pra dizer que um
+   pré-requisito está satisfeito), mas pode ler como "quase nada liberado"
+   de forma confusa se ele não entender por que. Vale considerar, fora
+   desta entrega, uma mensagem explicando a ausência de histórico nesse
+   caso específico.

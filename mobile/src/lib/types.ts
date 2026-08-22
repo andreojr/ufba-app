@@ -222,19 +222,16 @@ export interface DocentePerfil {
   };
 }
 
-/** Mirrors GET /curriculo/meu-curso/componentes/:codigo/arvore-dependencias's response. */
-export interface NoArvoreDependencias {
+export type SituacaoVizinho = "cursada" | "emCurso" | "liberada" | "bloqueada";
+
+export interface VizinhoCurricular {
   codigo: string;
   nome: string;
-  periodo: number | null;
+  situacao: SituacaoVizinho;
 }
 
-export interface ArestaArvoreDependencias {
-  de: string;
-  para: string;
-}
-
-export interface ArvoreDependenciasResponse {
-  nos: NoArvoreDependencias[];
-  arestas: ArestaArvoreDependencias[];
+export interface VizinhosCurricularesResponse {
+  atual: VizinhoCurricular;
+  preRequisitos: VizinhoCurricular[];
+  desbloqueia: VizinhoCurricular[];
 }
