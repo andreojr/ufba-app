@@ -31,6 +31,7 @@ const ICON_MAP = {
   IconCalendarBlank: "calendar-outline",
   IconHourglass: "hourglass-outline",
   IconLockKey: "lock-closed-outline",
+  IconLockKeyOpen: "lock-open-outline",
   IconChartLineUp: "trending-up-outline",
   IconCheck: "checkmark",
   IconHouse: "home-outline",

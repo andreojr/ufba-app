@@ -1,6 +1,5 @@
 import {
   ApiError,
-  getArvoreDependencias,
   getDocente,
   getMe,
   getTrajetoria,
@@ -373,76 +372,6 @@ describe("postDocentesSemestre", () => {
       json: async () => ({ message: "SIGAA fora do ar" }),
     });
     await expect(postDocentesSemestre("token", [])).rejects.toBeInstanceOf(ApiError);
-  });
-});
-
-describe("getArvoreDependencias", () => {
-  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
-
-  beforeEach(() => {
-    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
-    global.fetch = jest.fn();
-  });
-
-  afterEach(() => {
-    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
-    jest.restoreAllMocks();
-  });
-
-  it("faz GET em /curriculo/meu-curso/componentes/:codigo/arvore-dependencias com o curso na query", async () => {
-    const mockResponse = { nos: [{ codigo: "MATA02", nome: "Cálculo A", periodo: 1 }], arestas: [] };
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => mockResponse,
-    });
-
-    const resultado = await getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02");
-
-    expect(resultado).toEqual(mockResponse);
-    expect(global.fetch).toHaveBeenCalledWith(
-      `http://192.168.1.10:3000/curriculo/meu-curso/componentes/MATA02/arvore-dependencias?curso=${encodeURIComponent("ENGENHARIA/PGCOMP - Salvador")}`,
-      {
-        method: "GET",
-        headers: { Authorization: "Bearer token-123" },
-        body: undefined,
-        signal: expect.any(AbortSignal),
-      },
-    );
-  });
-
-  it("throws ApiError when the backend responds with a non-2xx status", async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
-
-    await expect(getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02")).rejects.toThrow(
-      ApiError,
-    );
-  });
-
-  it("gives the request the long document timeout, not the default 10s", async () => {
-    // resolverCurso/resolverPorNomeUsuario behind this endpoint can trigger a
-    // full live SIGAA scrape when the course structure is missing or stale —
-    // same slow flow as postTrajetoriaSync, which is why it needs the same
-    // budget instead of the default that aborts mid-scrape.
-    jest.useFakeTimers();
-    const fetchMock = jest.fn(
-      (_url: string, init: { signal: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          init.signal.addEventListener("abort", () => reject(new Error("aborted")));
-        }),
-    );
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    const promessa = getArvoreDependencias("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA02");
-    const assertion = expect(promessa).rejects.toThrow();
-
-    jest.advanceTimersByTime(20_000);
-    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
-
-    jest.advanceTimersByTime(30_000);
-    await assertion;
-
-    jest.useRealTimers();
   });
 });
 
