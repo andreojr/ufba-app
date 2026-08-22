@@ -8,6 +8,7 @@ import type {
   SigaaWebSession,
   Session,
   TrajetoriaResponse,
+  VizinhosCurricularesResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -339,5 +340,30 @@ export async function getArvoreDependencias(
   return request<ArvoreDependenciasResponse>(
     `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/arvore-dependencias?curso=${encodeURIComponent(curso)}`,
     { method: "GET", accessToken, timeoutMs: ARVORE_DEPENDENCIAS_TIMEOUT_MS },
+  );
+}
+
+// getVizinhosCurriculares delegates to CurriculoService.resolverCurso/
+// resolverPorNomeUsuario (mesmo caminho de getArvoreDependencias) — pode
+// disparar um scraping ao vivo completo do SIGAA na primeira resolução de
+// um curso. Reaproveita o mesmo orçamento de timeout das outras chamadas
+// baseadas em scraping.
+const VIZINHOS_CURRICULARES_TIMEOUT_MS = SIGAA_DOCUMENT_TIMEOUT_MS;
+
+/**
+ * Vizinhos diretos (pré-requisitos + o que desbloqueia) de `codigo` dentro
+ * da grade ativa do curso do usuário logado, com a situação (cursada/em
+ * curso/liberada/bloqueada) de cada um. Mesma conveniência de
+ * `/curriculo/meu-curso`: recebe o nome bruto de `User.curso` em vez de
+ * resolver `cursoId` num passo à parte.
+ */
+export async function getVizinhosCurriculares(
+  accessToken: string,
+  curso: string,
+  codigo: string,
+): Promise<VizinhosCurricularesResponse> {
+  return request<VizinhosCurricularesResponse>(
+    `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/vizinhos?curso=${encodeURIComponent(curso)}`,
+    { method: "GET", accessToken, timeoutMs: VIZINHOS_CURRICULARES_TIMEOUT_MS },
   );
 }

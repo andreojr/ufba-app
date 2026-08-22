@@ -238,3 +238,17 @@ export interface ArvoreDependenciasResponse {
   nos: NoArvoreDependencias[];
   arestas: ArestaArvoreDependencias[];
 }
+
+export type SituacaoVizinho = "cursada" | "emCurso" | "liberada" | "bloqueada";
+
+export interface VizinhoCurricular {
+  codigo: string;
+  nome: string;
+  situacao: SituacaoVizinho;
+}
+
+export interface VizinhosCurricularesResponse {
+  atual: VizinhoCurricular;
+  preRequisitos: VizinhoCurricular[];
+  desbloqueia: VizinhoCurricular[];
+}

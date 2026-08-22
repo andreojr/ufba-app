@@ -4,6 +4,7 @@ import {
   getDocente,
   getMe,
   getTrajetoria,
+  getVizinhosCurriculares,
   postAvatar,
   postDocentesSemestre,
   postGoogleLogin,
@@ -472,5 +473,39 @@ describe("getDocente", () => {
       "http://192.168.1.10:3000/docentes/1815041",
       expect.objectContaining({ method: "GET" }),
     );
+  });
+});
+
+describe("getVizinhosCurriculares", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("faz GET em /curriculo/meu-curso/componentes/:codigo/vizinhos com o curso na query", async () => {
+    const mockResponse = {
+      atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
+      preRequisitos: [{ codigo: "MATA02", nome: "Cálculo A", situacao: "cursada" }],
+      desbloqueia: [],
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    });
+
+    const resultado = await getVizinhosCurriculares("token-123", "ENGENHARIA/PGCOMP - Salvador", "MATA03");
+
+    expect(resultado).toEqual(mockResponse);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain("/curriculo/meu-curso/componentes/MATA03/vizinhos");
+    expect(url).toContain(`curso=${encodeURIComponent("ENGENHARIA/PGCOMP - Salvador")}`);
+    expect(options.headers.Authorization).toBe("Bearer token-123");
   });
 });
