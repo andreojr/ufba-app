@@ -124,7 +124,10 @@ export function avaliarPreRequisito(
   }
   const tokens = tokenizar(texto);
   if (tokens.length === 0) {
-    return true;
+    // Texto presente mas sem nenhum código reconhecível (ex.: um
+    // pré-requisito de carga horária mínima) — não há como verificar isso,
+    // então falha fechado, igual ao caso de parênteses malformados abaixo.
+    return false;
   }
   try {
     const expr = new ParserPreRequisito(tokens).parsear();

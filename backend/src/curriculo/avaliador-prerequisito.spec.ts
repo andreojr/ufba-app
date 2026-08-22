@@ -6,6 +6,13 @@ describe('avaliarPreRequisito', () => {
     expect(avaliarPreRequisito('', new Set())).toBe(true);
   });
 
+  it('texto presente mas sem nenhum código reconhecível (ex: carga horária mínima) falha fechado', () => {
+    // Distinto de null/'' acima: aqui HÁ um texto de pré-requisito, só que
+    // não é do formato código-de-componente — não dá pra verificar, então
+    // não pode virar "liberada" por default.
+    expect(avaliarPreRequisito('CARGA HORÁRIA MÍNIMA DE 1700 HORAS', new Set())).toBe(false);
+  });
+
   it('um único código: true se aprovado, false se não', () => {
     expect(avaliarPreRequisito('MATA02', new Set(['MATA02']))).toBe(true);
     expect(avaliarPreRequisito('MATA02', new Set())).toBe(false);
