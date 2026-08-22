@@ -188,4 +188,34 @@ describe("VizinhosCurricularesScreen", () => {
     await render(<VizinhosCurricularesScreen />);
     await waitFor(() => expect(screen.getByTestId("vizinhos-curriculares-erro")).toBeTruthy());
   });
+
+  it("toque num card de desbloqueia também navega pro mesmo pathname — a mesma tela recebe o próximo nível em cascata", async () => {
+    mockedGet.mockResolvedValue({
+      atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
+      preRequisitos: [{ codigo: "MATA02", nome: "Cálculo A", situacao: "cursada" }],
+      desbloqueia: [{ codigo: "MATA04", nome: "Cálculo C", situacao: "bloqueada" }],
+    });
+
+    await render(<VizinhosCurricularesScreen />);
+    await waitFor(() => expect(screen.getByText("Cálculo A")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Cálculo C")).toBeTruthy());
+
+    // Primeiro nível: toca no pré-requisito.
+    fireEvent.press(screen.getByTestId("vizinho-card-MATA02"));
+    expect(mockRouterPush).toHaveBeenNthCalledWith(1, {
+      pathname: "/arvore-dependencias",
+      params: { codigo: "MATA02", nome: "Cálculo A" },
+    });
+
+    // Segundo nível: toca num card de desbloqueia. Mesma pathname que o
+    // primeiro toque — é essa repetição que permite empilhar quantos níveis
+    // o aluno quiser (cascata), cada um um push da mesma rota recentrada no
+    // vizinho tocado, e não um modal one-shot que só fecha um de cada vez.
+    fireEvent.press(screen.getByTestId("vizinho-card-MATA04"));
+    expect(mockRouterPush).toHaveBeenNthCalledWith(2, {
+      pathname: "/arvore-dependencias",
+      params: { codigo: "MATA04", nome: "Cálculo C" },
+    });
+    expect(mockRouterPush).toHaveBeenCalledTimes(2);
+  });
 });
