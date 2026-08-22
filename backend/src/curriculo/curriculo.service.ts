@@ -11,10 +11,12 @@ import type {
   EstruturaCurricularSalva,
 } from './curriculo.repository';
 import { calcularStaleAfter, diretorioDesatualizado } from './stale';
+import type { HistoricoRepository } from '../sigaa-engine/historico.repository';
 import {
-  construirArvoreDependencias,
-  type ArvoreDependencias,
-} from './arvore-dependencias';
+  montarVizinhos,
+  type HistoricoParaVizinhos,
+  type VizinhosCurriculares,
+} from './vizinhos-curriculares';
 
 const LISTA_PATH = '/sigaa/public/curso/lista.jsf';
 const CURRICULO_PATH = '/sigaa/public/curso/curriculo.jsf';
@@ -44,9 +46,9 @@ export class ComponenteDesconhecidoError extends Error {
     );
     // Same convention as CursoDesconhecidoError: SigaaExceptionFilter maps
     // status codes off `exception.name`. This distinguishes "root código not
-    // found in the active grade" (nos.length === 0) from the genuinely
-    // empty-dependents case, where `construirArvoreDependencias` still
-    // includes the root itself (nos.length === 1, arestas.length === 0).
+    // found in the active grade" (montarVizinhos devolve null) do caso
+    // genuinamente vazio de dependentes/pré-requisitos, que ainda devolve um
+    // VizinhosCurriculares válido (com listas vazias).
     this.name = 'ComponenteDesconhecidoError';
   }
 }
@@ -68,6 +70,18 @@ async function withLimitedConcurrency<T, R>(
   return results;
 }
 
+// Default seguro pro 4º parâmetro do construtor — "sem histórico
+// persistido" é uma resposta válida (vira tudo bloqueada por padrão em
+// vizinhosCurriculares), então os testes de listarCursos/resolverCurso/
+// resolverPorNomeUsuario que não passam um 4º argumento continuam
+// funcionando sem tocar. Produção nunca usa este default: curriculo.module.ts
+// sempre injeta o HistoricoRepository real.
+const HISTORICO_REPOSITORY_AUSENTE: HistoricoRepository = {
+  buscar: async () => null,
+  salvar: async () => undefined,
+  reconciliarPlano: async () => undefined,
+};
+
 export class CurriculoService {
   private readonly logger = new Logger(CurriculoService.name);
 
@@ -75,6 +89,7 @@ export class CurriculoService {
     private readonly http: SigaaHttpClient,
     private readonly repository: CurriculoRepository,
     private readonly agora: () => Date = () => new Date(),
+    private readonly historicoRepository: HistoricoRepository = HISTORICO_REPOSITORY_AUSENTE,
   ) {}
 
   /** Refreshes the directory when it has never been populated, or has gone stale. */
@@ -223,44 +238,62 @@ export class CurriculoService {
   }
 
   /**
-   * Grafo de descendentes de `codigo` dentro da estrutura curricular já
-   * resolvida/persistida de `cursoId` — não dispara scraping ao vivo (só lê
-   * o que `resolverCurso` já teria trazido). `resolverCurso` já sabe servir
-   * a linha em cache ou re-resolver se vencida, então essa mesma regra vale
-   * aqui de graça.
+   * Vizinhos diretos (pré-requisitos + quem desbloqueia) de `codigo` dentro
+   * da estrutura curricular já resolvida/persistida de `cursoId`, com a
+   * situação do usuário `userId` pra cada um — não dispara scraping ao vivo
+   * (mesma regra de cache de `resolverCurso`).
    */
-  async arvoreDependencias(cursoId: string, codigo: string): Promise<ArvoreDependencias> {
+  async vizinhosCurriculares(
+    cursoId: string,
+    codigo: string,
+    userId: string,
+  ): Promise<VizinhosCurriculares> {
     const estrutura = await this.resolverCurso(cursoId);
-    return this.montarArvoreOuFalhar(estrutura.componentes, codigo, cursoId);
+    const historico = await this.historicoParaUsuario(userId);
+    return this.montarVizinhosOuFalhar(estrutura.componentes, codigo, cursoId, historico);
   }
 
-  /** Mesma conveniência de `resolverPorNomeUsuario`, aplicada ao grafo. */
-  async arvoreDependenciasPorNomeUsuario(
+  /** Mesma conveniência de resolverPorNomeUsuario, aplicada aos vizinhos. */
+  async vizinhosCurricularesPorNomeUsuario(
     nomeCurso: string,
     codigo: string,
-  ): Promise<ArvoreDependencias> {
+    userId: string,
+  ): Promise<VizinhosCurriculares> {
     const estrutura = await this.resolverPorNomeUsuario(nomeCurso);
-    return this.montarArvoreOuFalhar(estrutura.componentes, codigo, nomeCurso);
+    const historico = await this.historicoParaUsuario(userId);
+    return this.montarVizinhosOuFalhar(estrutura.componentes, codigo, nomeCurso, historico);
   }
 
   /**
-   * `construirArvoreDependencias` returns `nos: []` both when `codigo`
-   * genuinely has zero dependents AND when `codigo` doesn't exist in the
-   * active grade at all (e.g. an optativa or a matéria from an older
-   * curriculum, reached by tapping a card from the student's histórico) —
-   * `nos.length === 1` (root only, no arestas) is the real "zero dependents"
-   * case, while `nos.length === 0` means the root itself wasn't found. The
-   * two must not be presented identically to the client.
+   * Sem histórico persistido pro usuário (nunca sincronizou a Trajetória):
+   * devolve os dois conjuntos vazios — vizinhos-curriculares.ts trata isso
+   * como "tudo bloqueada por padrão", nunca inventa cursada/liberada sem
+   * dado real.
    */
-  private montarArvoreOuFalhar(
-    componentes: Parameters<typeof construirArvoreDependencias>[0],
+  private async historicoParaUsuario(userId: string): Promise<HistoricoParaVizinhos> {
+    const salva = await this.historicoRepository.buscar(userId);
+    if (!salva) {
+      return { aprovados: new Set(), matriculados: new Set() };
+    }
+    const aprovados = new Set(
+      salva.historico.cursados.filter((c) => c.situacao === 'APR').map((c) => c.codigo),
+    );
+    const matriculados = new Set(
+      salva.historico.cursados.filter((c) => c.situacao === 'MATR').map((c) => c.codigo),
+    );
+    return { aprovados, matriculados };
+  }
+
+  private montarVizinhosOuFalhar(
+    componentes: Parameters<typeof montarVizinhos>[0],
     codigo: string,
     identificadorCurso: string,
-  ): ArvoreDependencias {
-    const arvore = construirArvoreDependencias(componentes, codigo);
-    if (arvore.nos.length === 0) {
+    historico: HistoricoParaVizinhos,
+  ): VizinhosCurriculares {
+    const vizinhos = montarVizinhos(componentes, codigo, historico);
+    if (!vizinhos) {
       throw new ComponenteDesconhecidoError(codigo, identificadorCurso);
     }
-    return arvore;
+    return vizinhos;
   }
 }

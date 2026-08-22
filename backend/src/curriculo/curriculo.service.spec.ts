@@ -8,6 +8,8 @@ import {
 } from './curriculo.service';
 import type { CurriculoRepository } from './curriculo.repository';
 import type { SigaaHttpClient, SigaaHttpRequest } from '../sigaa-engine/session';
+import type { HistoricoRepository, TrajetoriaSalva } from '../sigaa-engine/historico.repository';
+import type { Historico } from '../sigaa-engine/parsers/historico';
 
 function parserFixture(name: string): string {
   return readFileSync(
@@ -454,7 +456,7 @@ describe('CurriculoService', () => {
     expect(repository.buscarEstrutura).not.toHaveBeenCalled();
   });
 
-  describe('arvoreDependencias / arvoreDependenciasPorNomeUsuario', () => {
+  describe('vizinhosCurriculares / vizinhosCurricularesPorNomeUsuario', () => {
     const estruturaSalva = {
       idSigaa: 'e1',
       codigo: 'G20251',
@@ -496,17 +498,63 @@ describe('CurriculoService', () => {
       ],
     };
 
-    it('arvoreDependencias busca a estrutura já resolvida e monta o grafo', async () => {
+    function historicoFalso(cursados: Historico['cursados']): Historico {
+      return {
+        emitidoEm: '2026-01-01',
+        curriculo: 'G20251 - 2025.1',
+        nomeCurso: 'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR',
+        periodoLetivoAtual: 2,
+        prazoConclusaoPadrao: '2029.1',
+        prazoConclusaoMaximo: '2032.1',
+        indices: { cr: null, iap: null },
+        cursados,
+        pendentesObrigatorios: [],
+        cargaHoraria: {
+          obrigatorias: { exigida: 3150, integralizada: 0, pendente: 3150 },
+          optativas: { exigida: 360, integralizada: 0, pendente: 360 },
+          complementares: { exigida: 100, integralizada: 0, pendente: 100 },
+          total: { exigida: 3610, integralizada: 0, pendente: 3610 },
+        },
+        equivalencias: [],
+        observacoes: [],
+      };
+    }
+
+    function fakeHistoricoRepository(
+      overrides: Partial<HistoricoRepository> = {},
+    ): jest.Mocked<HistoricoRepository> {
+      return {
+        buscar: jest.fn().mockResolvedValue(null),
+        salvar: jest.fn().mockResolvedValue(undefined),
+        reconciliarPlano: jest.fn().mockResolvedValue(undefined),
+        ...overrides,
+      };
+    }
+
+    it('vizinhosCurriculares busca a estrutura já resolvida e o histórico do usuário, e monta os vizinhos', async () => {
       const repository = fakeRepository({
         buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
       });
-      const service = new CurriculoService(fakeHttp({}), repository);
-      const arvore = await service.arvoreDependencias('curso-1', 'MATA02');
-      expect(arvore.nos.map((n) => n.codigo).sort()).toEqual(['MATA02', 'MATA03']);
-      expect(arvore.arestas).toEqual([{ de: 'MATA02', para: 'MATA03' }]);
+      const salva: TrajetoriaSalva = {
+        historico: historicoFalso([
+          { semestre: '2025.1', natureza: 'OB', codigo: 'MATA02', nome: 'Cálculo A', cargaHoraria: 68, nota: 8, situacao: 'APR', docente: null },
+        ]),
+        fetchedAt: new Date('2026-01-01T00:00:00Z'),
+        plano: [],
+      };
+      const historicoRepository = fakeHistoricoRepository({
+        buscar: jest.fn().mockResolvedValue(salva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository, agora, historicoRepository);
+      const vizinhos = await service.vizinhosCurriculares('curso-1', 'MATA03', 'user-1');
+      expect(vizinhos.atual).toEqual({ codigo: 'MATA03', nome: 'Cálculo B', situacao: 'liberada' });
+      expect(vizinhos.preRequisitos).toEqual([
+        { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' },
+      ]);
+      expect(historicoRepository.buscar).toHaveBeenCalledWith('user-1');
     });
 
-    it('arvoreDependenciasPorNomeUsuario resolve o curso pelo nome e monta o grafo', async () => {
+    it('vizinhosCurricularesPorNomeUsuario resolve o curso pelo nome e monta os vizinhos', async () => {
       const repository = fakeRepository({
         buscarCursos: jest.fn().mockResolvedValue([
           { idSigaa: 'curso-1', nome: 'ENGENHARIA DA COMPUTAÇÃO', sede: 'SALVADOR', nivel: 'G' },
@@ -514,56 +562,37 @@ describe('CurriculoService', () => {
         buscarDiretorioAtualizadoEm: jest.fn().mockResolvedValue(new Date('2026-01-01T00:00:00Z')),
         buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
       });
-      // agora fixo: sem isso, listarCursos vê buscarDiretorioAtualizadoEm
-      // (2026-01-01) como vencido contra o relógio real da máquina e tenta
-      // um GET real a lista.jsf, que este fakeHttp não serve.
-      const service = new CurriculoService(fakeHttp({}), repository, agora);
-      const arvore = await service.arvoreDependenciasPorNomeUsuario(
+      const historicoRepository = fakeHistoricoRepository();
+      const service = new CurriculoService(fakeHttp({}), repository, agora, historicoRepository);
+      const vizinhos = await service.vizinhosCurricularesPorNomeUsuario(
         'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
         'MATA02',
+        'user-1',
       );
-      expect(arvore.nos.map((n) => n.codigo).sort()).toEqual(['MATA02', 'MATA03']);
+      expect(vizinhos.atual.codigo).toBe('MATA02');
     });
 
-    // A código absent from the currently-active grade (optativa, older
-    // curriculum) must be distinguishable from "found, zero dependents" —
-    // `construirArvoreDependencias` returns `nos: []` for both, so the
-    // service has to tell them apart before handing the response back.
-    it('arvoreDependencias lança ComponenteDesconhecidoError quando o código não está na estrutura ativa', async () => {
+    it('sem histórico persistido (usuário nunca sincronizou), tudo vira bloqueada por padrão — exceto quem não tem pré-requisito, que vira liberada', async () => {
       const repository = fakeRepository({
         buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
       });
-      const service = new CurriculoService(fakeHttp({}), repository);
+      // fakeHistoricoRepository() sem overrides já devolve buscar() -> null.
+      const service = new CurriculoService(fakeHttp({}), repository, agora, fakeHistoricoRepository());
+      const vizinhos = await service.vizinhosCurriculares('curso-1', 'MATA03', 'user-1');
+      expect(vizinhos.atual.situacao).toBe('bloqueada');
+      expect(vizinhos.preRequisitos).toEqual([
+        { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'liberada' },
+      ]);
+    });
+
+    it('vizinhosCurriculares lança ComponenteDesconhecidoError quando o código não está na estrutura ativa', async () => {
+      const repository = fakeRepository({
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository, agora, fakeHistoricoRepository());
       await expect(
-        service.arvoreDependencias('curso-1', 'NAOEXISTE01'),
+        service.vizinhosCurriculares('curso-1', 'NAOEXISTE01', 'user-1'),
       ).rejects.toThrow(ComponenteDesconhecidoError);
-    });
-
-    it('arvoreDependenciasPorNomeUsuario lança ComponenteDesconhecidoError quando o código não está na estrutura ativa', async () => {
-      const repository = fakeRepository({
-        buscarCursos: jest.fn().mockResolvedValue([
-          { idSigaa: 'curso-1', nome: 'ENGENHARIA DA COMPUTAÇÃO', sede: 'SALVADOR', nivel: 'G' },
-        ]),
-        buscarDiretorioAtualizadoEm: jest.fn().mockResolvedValue(new Date('2026-01-01T00:00:00Z')),
-        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
-      });
-      const service = new CurriculoService(fakeHttp({}), repository, agora);
-      await expect(
-        service.arvoreDependenciasPorNomeUsuario(
-          'ENGENHARIA DE COMPUTAÇÃO/PGCOMP - Salvador',
-          'NAOEXISTE01',
-        ),
-      ).rejects.toThrow(ComponenteDesconhecidoError);
-    });
-
-    it('arvoreDependencias não lança quando o código existe mas não tem dependentes (raiz sozinha)', async () => {
-      const repository = fakeRepository({
-        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
-      });
-      const service = new CurriculoService(fakeHttp({}), repository);
-      const arvore = await service.arvoreDependencias('curso-1', 'MATA03');
-      expect(arvore.nos.map((n) => n.codigo)).toEqual(['MATA03']);
-      expect(arvore.arestas).toEqual([]);
     });
   });
 });
