@@ -13,6 +13,7 @@ import {
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
+import { SigaaScheduleUnavailableError } from './schedule.service';
 import {
   ComponenteDesconhecidoError,
   CursoDesconhecidoError,
@@ -23,6 +24,10 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   [SigaaCredentialsRequiredError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaSessionExpiredError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaRateLimitedError.name]: HttpStatus.TOO_MANY_REQUESTS,
+  // SIGAA answered (login worked) but gave back a degraded/empty schedule —
+  // distinct from a 500: the client needs to say "your data is safe, try
+  // again later" instead of the generic "something broke" message.
+  [SigaaScheduleUnavailableError.name]: HttpStatus.SERVICE_UNAVAILABLE,
   // An unknown cursoId — either /curriculo/cursos/:cursoId with an id not in
   // the directory, or resolverPorNomeUsuario finding no match — is a client
   // error about *what* was asked for, not a server failure.

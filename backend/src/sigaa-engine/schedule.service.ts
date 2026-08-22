@@ -23,6 +23,21 @@ interface PerfilRepository {
   updateSigaaProfile(userId: string, perfil: DiscentePerfil): Promise<void>;
 }
 
+/**
+ * Thrown instead of a plain Error so the exception filter can map it to a
+ * status the client actually branches on (503, not a generic 500) — the
+ * client needs to tell "SIGAA gave us nothing, your data is untouched" apart
+ * from "the server broke".
+ */
+export class SigaaScheduleUnavailableError extends Error {
+  constructor(cachedCount: number) {
+    super(
+      `SIGAA não retornou nenhuma turma nesta sincronização; o horário salvo anteriormente (${cachedCount} turmas) foi mantido.`,
+    );
+    this.name = 'SigaaScheduleUnavailableError';
+  }
+}
+
 export class ScheduleService {
   private readonly logger = new Logger(ScheduleService.name);
 
@@ -54,9 +69,7 @@ export class ScheduleService {
         this.logger.warn(
           `SIGAA sync for ${userId} returned 0 turmas but ${anterior.turmas.length} were cached — refusing to overwrite, keeping the previous snapshot.`,
         );
-        throw new Error(
-          'O SIGAA não retornou nenhuma turma nesta sincronização; o horário salvo anteriormente foi mantido.',
-        );
+        throw new SigaaScheduleUnavailableError(anterior.turmas.length);
       }
     }
 

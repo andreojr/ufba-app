@@ -215,4 +215,17 @@ describe('parseTurmasHorario', () => {
 
     expect(parseTurmasHorario(emptyHtml)).toEqual([]);
   });
+
+  // Real UFBA behavior during matrícula processing: login and the portal home
+  // both work fine, but "Turmas do Semestre" is replaced with this notice
+  // instead of a table — no td.descricao/td.info to match, same as any other
+  // row-less table. Named explicitly so this exact degradation mode (login
+  // succeeds, data temporarily missing) stays covered, not just structurally
+  // empty tables in general.
+  it('returns an empty list when SIGAA replaces the table with the "temporariamente indisponível" notice', () => {
+    const matriculaProcessingHtml =
+      '<div id="turmas-portal"><p>Listagem de turmas no portal temporariamente indisponível.</p></div>';
+
+    expect(parseTurmasHorario(matriculaProcessingHtml)).toEqual([]);
+  });
 });

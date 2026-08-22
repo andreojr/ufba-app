@@ -7,6 +7,7 @@ import {
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
+import { SigaaScheduleUnavailableError } from './schedule.service';
 import {
   ComponenteDesconhecidoError,
   CursoDesconhecidoError,
@@ -61,6 +62,19 @@ describe('SigaaExceptionFilter', () => {
     filter.catch(new SigaaRateLimitedError(), host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.TOO_MANY_REQUESTS);
+  });
+
+  it('maps SigaaScheduleUnavailableError to 503, keeping the reassurance message', () => {
+    const { host, status, json } = fakeHost();
+    const error = new SigaaScheduleUnavailableError(6);
+
+    filter.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      message: error.message,
+    });
   });
 
   it('maps CursoDesconhecidoError to 404', () => {

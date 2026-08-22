@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { ScheduleService } from './schedule.service';
+import { ScheduleService, SigaaScheduleUnavailableError } from './schedule.service';
 import type { HorarioSalvo, ScheduleRepository } from './schedule.repository';
 import type { Turma } from './parsers/turma';
 import type { PeriodoLetivo } from './parsers/atestado-turmas';
@@ -144,6 +144,32 @@ describe('ScheduleService', () => {
     await expect(service.getCached('user-1')).resolves.toBeNull();
   });
 
+  it('never touches the cache when SIGAA cannot be reached at all', async () => {
+    const repositorio = repositorioFalso();
+    repositorio.buscar.mockResolvedValue({
+      turmas: turmasFalsas(),
+      periodoLetivo,
+      fetchedAt: new Date(),
+    });
+    const downloader = {
+      fetchSchedule: jest.fn(async () => {
+        throw new Error('SIGAA está fora do ar (manutenção/matrícula).');
+      }),
+    };
+
+    const service = new ScheduleService(
+      downloader,
+      userRepositorioFalso(),
+      repositorio,
+    );
+
+    await expect(service.sync('user-1', CREDENCIAIS)).rejects.toThrow(
+      'SIGAA está fora do ar',
+    );
+    expect(repositorio.salvar).not.toHaveBeenCalled();
+    expect(repositorio.buscar).not.toHaveBeenCalled();
+  });
+
   it('refuses to overwrite a good cached schedule with an empty scrape', async () => {
     const repositorio = repositorioFalso();
     repositorio.buscar.mockResolvedValue({
@@ -165,7 +191,9 @@ describe('ScheduleService', () => {
       repositorio,
     );
 
-    await expect(service.sync('user-1', CREDENCIAIS)).rejects.toThrow();
+    await expect(service.sync('user-1', CREDENCIAIS)).rejects.toBeInstanceOf(
+      SigaaScheduleUnavailableError,
+    );
     expect(repositorio.salvar).not.toHaveBeenCalled();
   });
 
