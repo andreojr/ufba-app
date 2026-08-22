@@ -32,10 +32,15 @@ export interface WeekDay {
   date: Date;
 }
 
-/** Returns Monday–Friday of the week containing `now` (Saturday/Sunday are out of scope for the grid). */
+/**
+ * Returns Monday–Friday of the week containing `now` (Saturday/Sunday are out
+ * of scope for the grid). Once Friday's classes are done — i.e. from Saturday
+ * on — this rolls forward to next week's Monday instead of showing the week
+ * that just ended.
+ */
 export function getCurrentWeekDays(now: Date = new Date()): WeekDay[] {
   const jsDay = now.getDay(); // 0 = Sunday .. 6 = Saturday
-  const daysSinceMonday = jsDay === 0 ? 6 : jsDay - 1;
+  const daysSinceMonday = jsDay === 0 ? -1 : jsDay === 6 ? -2 : jsDay - 1;
 
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
 

@@ -76,13 +76,23 @@ describe("getCurrentWeekDays", () => {
     expect(days.map((d) => d.isToday)).toEqual([false, false, true, false, false]);
   });
 
-  it("rolls back to the same week's Monday when today is Sunday", () => {
-    // 2026-08-23 is a Sunday; the week's Monday is 2026-08-17
+  it("rolls forward to next week's Monday when today is Saturday", () => {
+    // 2026-08-22 is a Saturday; the week ahead starts 2026-08-24
+    const saturday = new Date(2026, 7, 22, 10, 0, 0);
+
+    const days = getCurrentWeekDays(saturday);
+
+    expect(days.map((d) => d.num)).toEqual(["24", "25", "26", "27", "28"]);
+    expect(days.every((d) => !d.isToday)).toBe(true);
+  });
+
+  it("rolls forward to next week's Monday when today is Sunday", () => {
+    // 2026-08-23 is a Sunday; the week ahead starts 2026-08-24
     const sunday = new Date(2026, 7, 23, 10, 0, 0);
 
     const days = getCurrentWeekDays(sunday);
 
-    expect(days.map((d) => d.num)).toEqual(["17", "18", "19", "20", "21"]);
+    expect(days.map((d) => d.num)).toEqual(["24", "25", "26", "27", "28"]);
     expect(days.every((d) => !d.isToday)).toBe(true);
   });
 
