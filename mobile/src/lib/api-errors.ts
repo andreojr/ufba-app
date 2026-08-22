@@ -17,6 +17,11 @@ export function describeApiError(error: unknown): string {
       return "Credenciais inválidas";
     case 429:
       return "Muitas tentativas. Aguarde um momento e tente de novo.";
+    case 503:
+      // The backend refused to overwrite a good cached schedule with an empty
+      // SIGAA response (maintenance, matrícula processing, etc.) — say so
+      // explicitly instead of the generic "something broke" message.
+      return "O SIGAA está temporariamente indisponível.";
     default:
       return "Algo deu errado no servidor. Tente novamente.";
   }
