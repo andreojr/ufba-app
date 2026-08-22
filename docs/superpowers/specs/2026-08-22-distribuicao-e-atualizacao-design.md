@@ -206,8 +206,15 @@ Se o usuário não tiver concedido "instalar apps desconhecidos", encaminha pra
 fallback de abrir a landing no navegador — o caminho manual nunca deixa de
 existir.
 
-O progresso do download reusa `DownloadProgressBar` e `src/lib/download-progress.ts`,
-que já existem e já são usados no fluxo de histórico.
+O progresso adota a mesma linguagem visual do `DownloadProgressBar` do fluxo de
+histórico, mas **não reusa o componente**: aquele encena progresso calibrado
+porque o download do SIGAA é um POST opaco, enquanto o download do APK reporta
+bytes escritos de verdade. Reusar seria fingir estimativa onde há medição.
+
+Detalhe verificado em `node_modules` (v19.0.24): a API nova
+(`File.downloadFileAsync`) não tem callback de progresso e não expõe
+`getContentUriAsync`. Ambos existem só no subpath `expo-file-system/legacy`, que
+é o que esta entrega usa.
 
 ### Mudanças nativas (exigem `expo prebuild` + rebuild)
 
@@ -308,10 +315,10 @@ railway variables --set APP_LATEST_VERSION=1.1.0 --set APP_LATEST_VERSION_CODE=3
 
 - **Keystore.** É o risco irreversível da entrega. Errar aqui trava a
   atualização de toda a base instalada, sem conserto remoto.
-- **API do `expo-file-system` v19.** A obtenção do `content://` URI
-  (`getContentUriAsync`) mudou de lugar entre as versões da lib — confirmar a
-  superfície disponível na v19 antes de implementar, e não presumir a assinatura
-  antiga.
+- **Dependência do subpath legacy do `expo-file-system`.** Resolvido para esta
+  entrega (ver "Download e instalação"), mas é superfície marcada como
+  deprecated: uma futura major da lib pode removê-la, e aí o download com
+  progresso e o `content://` URI precisam de outra fonte.
 - **Detecção de permissão.** Não há API Expo direta equivalente a
   `PackageManager.canRequestPackageInstalls()`. Provável necessidade de tentar a
   intent e tratar a falha, em vez de checar antes.
