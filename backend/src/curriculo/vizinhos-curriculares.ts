@@ -78,10 +78,7 @@ export function montarVizinhos(
   );
 
   const desbloqueia = componentes
-    .filter((c) => {
-      const codigosCitados = extrairCodigosCitados(c.preRequisito);
-      return codigosCitados.length === 1 && codigosCitados[0] === codigoRaiz;
-    })
+    .filter((c) => extrairCodigosCitados(c.preRequisito).includes(codigoRaiz))
     .map((c) => paraVizinho(c, historico));
 
   return {

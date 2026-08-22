@@ -22,7 +22,10 @@ describe('montarVizinhos', () => {
     expect(vizinhos).toEqual({
       atual: { codigo: 'MATA03', nome: 'Cálculo B', situacao: 'liberada' },
       preRequisitos: [{ codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' }],
-      desbloqueia: [{ codigo: 'MATA04', nome: 'Cálculo C', situacao: 'bloqueada' }],
+      desbloqueia: [
+        { codigo: 'MATA04', nome: 'Cálculo C', situacao: 'bloqueada' },
+        { codigo: 'ENGC30', nome: 'Mecânica dos Sólidos', situacao: 'bloqueada' },
+      ],
     });
   });
 
@@ -53,5 +56,13 @@ describe('montarVizinhos', () => {
 
   it('código raiz que não existe na grade devolve null', () => {
     expect(montarVizinhos(componentes, 'XXXX00', historico())).toBeNull();
+  });
+
+  it('componente com pré-requisito composto (E/OU) citando codigoRaiz ainda aparece em desbloqueia', () => {
+    // ENGC30 tem preRequisito '(MATA03 E FISB08) OU (ENGJ18)'
+    // Mesmo que cite MATA03 junto com outros códigos, deve aparecer no desbloqueia de MATA03
+    const vizinhos = montarVizinhos(componentes, 'MATA03', historico(['MATA02']));
+    const codigosDesbloqueia = vizinhos?.desbloqueia.map((v) => v.codigo);
+    expect(codigosDesbloqueia).toContain('ENGC30');
   });
 });
