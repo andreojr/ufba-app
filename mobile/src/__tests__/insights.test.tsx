@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
-import InsightsTab from "@/app/(tabs)/insights";
+import InsightsTab from "@/screens/InsightsTab";
 import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
@@ -148,7 +148,8 @@ describe("Insights", () => {
 
     await render(<InsightsTab />);
 
-    // The CR tab is the default: two decimals, the CR, not a grade.
+    // Carga Horária is the default tab — the progress bars show up front,
+    // the CR breakdown only once the person swipes to it.
     expect(await screen.findByText("8,16")).toBeTruthy();
     expect(screen.getByText(/58% do curso/i)).toBeTruthy();
     expect(screen.getByText("3.610 h")).toBeTruthy();
@@ -161,6 +162,49 @@ describe("Insights", () => {
 
     expect(screen.getByText("2.100 h")).toBeTruthy();
     expect(screen.getByText("8,16")).toBeTruthy();
+  });
+
+  it("swaps the bottom card for the CR breakdown once the CR tab is selected", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        indices: { cr: 8.5, iap: null },
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+          {
+            semestre: "2025.2",
+            natureza: "OB",
+            codigo: "MATA40",
+            nome: "CÁLCULO A",
+            cargaHoraria: 60,
+            nota: 2,
+            situacao: "APR",
+            docente: null,
+          },
+        ],
+      }),
+    );
+
+    await render(<InsightsTab />);
+    await screen.findByText("Obrigatórias");
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("CR"));
+    });
+
+    expect(screen.getByText("Impacto no CR por semestre")).toBeTruthy();
+    expect(screen.getByText("Peso das notas no semestre")).toBeTruthy();
+    expect(screen.getByText(/maiores impactos/i)).toBeTruthy();
+    expect(screen.getByText("CÁLCULO A")).toBeTruthy();
+    expect(screen.queryByText("Obrigatórias")).toBeNull();
   });
 
   it("shows a separate progress bar and percentage for each natureza, plus one for the course overall", async () => {

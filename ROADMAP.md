@@ -65,3 +65,9 @@ Lista de próximos passos para deixar o app pronto pro dia-a-dia. Anotado em 202
 - Limitações: push silencioso no iOS não é 100% garantido (pode atrasar/ser descartado em Low Power Mode ou se o app foi force-quit) — vale complementar com sync manual (pull to refresh) e ser transparente na UX sobre possíveis atrasos.
 - Precisa configurar handler de notificação em background no Android (AndroidManifest) e no iOS (capabilities de background push).
 - Ferramentas: `expo-notifications` (client), EAS Push Service (sem push server próprio), cron simples no backend (Vercel Cron, Supabase Edge Function, etc.) só pro broadcast.
+
+## 12. Insights de CR: impacto por semestre/matéria
+- Depende do item 4 (Página de Trajetória ✅) e da divisão dos gráficos entre as tabs CR e Carga Horária em Insights.
+- O gráfico de linha do CR por período continua existindo, só que hoje mora na página Insights (não mudou de lugar por conta disso).
+- O que foi removido foi a métrica que cada card de matéria mostrava em Trajetória: CR com todas as matérias − CR sem a matéria X = impacto daquela matéria no CR (seta ↑/↓ + número), do item 4 original.
+- Trazer essa percepção de volta, mas na tab CR de Insights — precisa de um recurso visual próprio pra "o quanto cada semestre/matéria pesou no CR" (não é mais um selo por card, já que os cards de matéria não vivem mais nessa página). Formato ainda em aberto — discutir opções antes de implementar.

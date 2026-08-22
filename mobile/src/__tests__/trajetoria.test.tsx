@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
-import TrajetoriaTab from "@/app/(tabs)/trajetoria";
+import TrajetoriaTab from "@/screens/TrajetoriaTab";
 import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
@@ -158,20 +158,6 @@ function trajetoria(
   };
 }
 
-/**
- * Pull-to-refresh, which has no fireEvent path in RTL v14: the UNSAFE_*ByType
- * queries are gone from both `screen` and the render result, and a
- * RefreshControl never enters the queryable tree — it stays a prop on the
- * ScrollView host node. Calling the handler is not a vacuous assertion: unwire
- * the RefreshControl and `onRefresh` is undefined, so this throws.
- */
-async function puxarParaAtualizar(): Promise<void> {
-  const scroll = screen.getByTestId("trajetoria-scroll");
-  await act(async () => {
-    await scroll.props.refreshControl.props.onRefresh();
-  });
-}
-
 beforeEach(() => {
   // `status` is load-bearing, not decoration: useAuth returns a discriminated
   // union and the screen reads accessToken only on the "signedIn" variant, so
@@ -303,9 +289,9 @@ describe("Trajetória", () => {
     consoleWarn.mockRestore();
   });
 
-  it("clears a past sync failure once a load succeeds", async () => {
+  it("clears a past sync failure once a sync succeeds", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest.mocked(postTrajetoriaSync).mockRejectedValue(new ApiError("Boom", 500));
+    jest.mocked(postTrajetoriaSync).mockRejectedValueOnce(new ApiError("Boom", 500));
     const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     await render(<TrajetoriaTab />);
@@ -314,12 +300,14 @@ describe("Trajetória", () => {
     });
     expect(screen.getByText(/não deu para sincronizar/i)).toBeTruthy();
 
-    // The refresh repaints real data; a stale failure sitting under it would
+    // A later sync repaints real data; a stale failure sitting under it would
     // contradict what the student is now reading.
-    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
-    await puxarParaAtualizar();
+    jest.mocked(postTrajetoriaSync).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+    await act(async () => {
+      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
+    });
 
-    expect(screen.getByText("Em curso")).toBeTruthy();
+    expect(await screen.findByText("Em curso")).toBeTruthy();
     expect(screen.queryByText(/não deu para sincronizar/i)).toBeNull();
     consoleWarn.mockRestore();
   });
@@ -337,28 +325,6 @@ describe("Trajetória", () => {
 
     expect(await screen.findByText(/Ainda não salva/i)).toBeTruthy();
     expect(screen.getByText(/volta para onde estava/i)).toBeTruthy();
-  });
-
-  it("keeps the moves the student made across a pull-to-refresh", async () => {
-    // A plain GET is not a re-sync: nothing about the plan changed, so watching
-    // a move revert with no feedback would read as a bug.
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
-    );
-
-    await render(<TrajetoriaTab />);
-    expect(await screen.findByText("a cursar · 1")).toBeTruthy();
-
-    const opcoes = screen.getAllByText("2026.2");
-    await act(async () => {
-      fireEvent.press(opcoes[opcoes.length - 1]);
-    });
-    expect(screen.getByText("1 matéria")).toBeTruthy();
-
-    await puxarParaAtualizar();
-
-    expect(screen.getByText("1 matéria")).toBeTruthy();
-    expect(screen.getByText("Tudo planejado.")).toBeTruthy();
   });
 
   it("drops the moves after a re-sync, where the server's plan is the authority", async () => {

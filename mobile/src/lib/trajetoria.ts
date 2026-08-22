@@ -301,6 +301,123 @@ export function impactoNoCr(cursados: ComponenteCursado[], codigo: string): numb
 }
 
 /**
+ * Only the terms with at least one graded component — a term that's only
+ * `MATR` so far has nothing to show in the CR-impact card (no delta, no
+ * weight breakdown), so it's dropped rather than rendered empty.
+ */
+export function periodosComNota(periodos: PeriodoTrajetoria[]): PeriodoTrajetoria[] {
+  return periodos.filter((periodo) => periodo.componentes.some((c) => c.nota !== null));
+}
+
+/** "2023.2" → "23.2" — compact enough for the impact card's narrow rows. */
+export function rotuloSemestreCurto(semestre: string): string {
+  return semestre.slice(2);
+}
+
+/**
+ * How much a term's own CR moved from the term right before it — same
+ * subtraction as `variacaoUltimoPeriodo`, but for every term in the series
+ * instead of just the latest one. The first term has nothing before it to
+ * compare against, so its own delta is always null (not zero — there's no
+ * "held steady" here, there's nothing to measure).
+ */
+export function deltasCrPorPeriodo(
+  serie: { semestre: string; cr: number | null }[],
+): (number | null)[] {
+  return serie.map((ponto, indice) => {
+    if (indice === 0) {
+      return null;
+    }
+    const anterior = serie[indice - 1].cr;
+    if (ponto.cr === null || anterior === null) {
+      return null;
+    }
+    return ponto.cr - anterior;
+  });
+}
+
+/** Which color band a grade falls into, for the peso-das-notas segments. */
+export type FaixaNota = "alta" | "media" | "baixa";
+
+export function faixaNota(nota: number): FaixaNota {
+  if (nota >= 7) {
+    return "alta";
+  }
+  if (nota >= 5) {
+    return "media";
+  }
+  return "baixa";
+}
+
+export interface PesoNota {
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  nota: number;
+  /** Share of the term's total graded carga horária, rounded to a whole percent. */
+  pesoPercentual: number;
+  faixa: FaixaNota;
+}
+
+/**
+ * How much each graded component in a term weighs toward that term's own CR
+ * contribution — the carga-horária share the weighted average
+ * (`crPonderado`) actually gives it. Ungraded components (trancada,
+ * matriculada) don't enter the weighted average, so they carry no weight
+ * here either. Sorted heaviest first: the segment that would move the CR
+ * most sits first in both the bar and its legend.
+ */
+export function pesoDasNotas(componentes: ComponenteCursado[]): PesoNota[] {
+  const comNota = componentes.filter(
+    (c): c is ComponenteCursado & { nota: number } => c.nota !== null,
+  );
+  const pesoTotal = somarCargaHoraria(comNota);
+  if (pesoTotal === 0) {
+    return [];
+  }
+  return comNota
+    .map((c) => ({
+      codigo: c.codigo,
+      nome: c.nome,
+      cargaHoraria: c.cargaHoraria,
+      nota: c.nota,
+      pesoPercentual: Math.round((c.cargaHoraria / pesoTotal) * 100),
+      faixa: faixaNota(c.nota),
+    }))
+    .sort((a, b) => b.cargaHoraria - a.cargaHoraria);
+}
+
+export interface ImpactoComponente {
+  codigo: string;
+  nome: string;
+  nota: number;
+  impacto: number;
+}
+
+/**
+ * The components from one term with the biggest pull on the overall CR
+ * (`impactoNoCr`, reused as-is), biggest magnitude first — the drill-down a
+ * tap on that term's bar in the impact-per-semester chart opens.
+ */
+export function maioresImpactos(
+  cursados: ComponenteCursado[],
+  semestre: string,
+  limite = 3,
+): ImpactoComponente[] {
+  return cursados
+    .filter((c) => c.semestre === semestre && c.nota !== null)
+    .map((c) => ({
+      codigo: c.codigo,
+      nome: c.nome,
+      nota: c.nota as number,
+      impacto: impactoNoCr(cursados, c.codigo),
+    }))
+    .filter((c): c is ImpactoComponente => c.impacto !== null)
+    .sort((a, b) => Math.abs(b.impacto) - Math.abs(a.impacto))
+    .slice(0, limite);
+}
+
+/**
  * The arrow + number shown beside a graded component. No arrow for zero
  * impact or nothing to show — an up or down arrow on a value that rounds to
  * nothing would read as a change that isn't there.

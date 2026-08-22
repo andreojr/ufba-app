@@ -20,20 +20,28 @@
     --accent: #2b3a8f;
     --accent-foreground: #fafafa;
     --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
+    /* Selected bottom-tab icon/label: blue in light mode (the accent itself). */
+    --tab-active-foreground: var(--accent);
   }
 
   @variant dark {
     --accent: #6478d1;
     --accent-foreground: #10152e;
     --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
+    /* ...and plain white in dark mode — `accent` there is a paler tint meant
+       for *backgrounds* (see the note above), too washed out as a lone
+       icon/label color against the dark background. */
+    --tab-active-foreground: var(--snow);
   }
 }
 
-/* Expose --accent-shade to Tailwind (bg-accent-shade/text-accent-shade classes,
-   and useCSSVariable('--color-accent-shade') for native color props) following
+/* Expose --accent-shade/--tab-active-foreground to Tailwind
+   (bg-accent-shade/text-accent-shade classes, and
+   useCSSVariable('--color-accent-shade') for native color props) following
    https://heroui.com/docs/native/getting-started/theming#adding-custom-colors */
 @theme inline {
   --color-accent-shade: var(--accent-shade);
+  --color-tab-active-foreground: var(--tab-active-foreground);
 }
 
 /* Poppins, loaded via @expo-google-fonts/poppins in the root layout — matches

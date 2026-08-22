@@ -7,7 +7,7 @@ import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
-import HomeTab from "@/app/(tabs)/index";
+import HomeTab from "@/screens/HomeTab";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
@@ -26,11 +26,6 @@ jest.mock("@/lib/periodo-cache", () => ({
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-}));
-
-const mockPush = jest.fn();
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock("heroui-native", () => {
@@ -151,84 +146,13 @@ describe("HomeTab", () => {
       accessToken: "token",
       user: { id: "1", email: "a@ufba.br", name: "Ana", avatarUrl: null },
     } as any);
-    mockPush.mockClear();
     mockedPostScheduleSync.mockClear();
     mockedSavePeriodoCache.mockClear();
   });
 
-  it("greets the student by name in the header instead of a generic title", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByText, queryByText } = await render(<HomeTab />);
-
-    expect(queryByText("Início")).toBeNull();
-    expect(getByText(/^(Bom dia|Boa tarde|Boa noite), Ana!$/)).toBeTruthy();
-  });
-
-  it("renders the student's name as its own element so it can carry the accent tint", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByTestId } = await render(<HomeTab />);
-
-    const name = getByTestId("app-bar-greeting-name");
-    expect(name).toHaveTextContent("Ana");
-    expect(name.props.className).toContain("text-accent");
-  });
-
-  it("shows the student's own avatar in the header when they have one", async () => {
-    mockedUseAuth.mockReturnValue({
-      status: "signedIn",
-      accessToken: "token",
-      user: {
-        id: "1",
-        email: "a@ufba.br",
-        name: "Ana Carvalho",
-        avatarUrl: "https://api.dicebear.com/9.x/open-peeps/svg?seed=abc",
-      },
-    } as any);
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByTestId } = await render(<HomeTab />);
-
-    expect(getByTestId("app-bar-avatar-image").props.uri).toBe(
-      "https://api.dicebear.com/9.x/open-peeps/svg?seed=abc",
-    );
-  });
-
-  it("falls back to the student's initials in the header when there is no avatar", async () => {
-    mockedUseAuth.mockReturnValue({
-      status: "signedIn",
-      accessToken: "token",
-      user: { id: "1", email: "b@ufba.br", name: "Bruno Silva", avatarUrl: null },
-    } as any);
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByText, queryByTestId } = await render(<HomeTab />);
-
-    expect(queryByTestId("app-bar-avatar-image")).toBeNull();
-    expect(getByText("BS")).toBeTruthy();
-  });
-
-  it("opens Ajustes — not the avatar picker — when the header profile group is pressed", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByTestId } = await render(<HomeTab />);
-
-    await act(async () => {
-      fireEvent.press(getByTestId("app-bar-profile"));
-    });
-
-    expect(mockPush).toHaveBeenCalledWith("/ajustes");
-    expect(mockPush).not.toHaveBeenCalledWith("/avatar-picker");
-  });
-
-  it("shows a settings cog next to the header avatar", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
-
-    const { getByTestId } = await render(<HomeTab />);
-
-    expect(getByTestId("app-bar-settings-icon")).toBeTruthy();
-  });
+  // The greeting/avatar/cog header moved out of HomeTab into the shared
+  // TabsHeader (rendered once above the swipeable pager) — see
+  // tabs-header.test.tsx for its coverage now.
 
   it("shows a message asking to link the SIGAA account when unlinked", async () => {
     mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });

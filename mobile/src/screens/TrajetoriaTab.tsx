@@ -1,9 +1,8 @@
 import { useRouter } from "expo-router";
 import { Button, Menu, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
-import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 
-import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
@@ -13,7 +12,6 @@ import { HISTORICO_STAGES } from "@/lib/download-progress";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
-import { identidadeAppBar } from "@/lib/user-name";
 import {
   agruparPorAno,
   agruparPorSemestre,
@@ -107,7 +105,6 @@ export default function TrajetoriaTab(): JSX.Element {
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
-  const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
   const mutedColor = useThemeColor("muted");
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -116,7 +113,6 @@ export default function TrajetoriaTab(): JSX.Element {
   // refresh must not, since nothing about the plan changed. Only a re-sync
   // clears them, and there the server's plan is the authority.
   const [movimentos, setMovimentos] = useState<Plano>({});
-  const [refreshing, setRefreshing] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [erroSync, setErroSync] = useState<string | null>(null);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
@@ -148,13 +144,11 @@ export default function TrajetoriaTab(): JSX.Element {
   // Reading the stored trajectory needs no SIGAA credential — the JWT already
   // scopes it to this student. Only the re-scrape below does.
   const carregar = useCallback(
-    async (silent = false) => {
+    async () => {
       if (!accessToken) {
         return;
       }
-      if (!silent) {
-        setState({ status: "loading" });
-      }
+      setState({ status: "loading" });
       try {
         aplicar(await getTrajetoria(accessToken));
       } catch (error) {
@@ -172,12 +166,6 @@ export default function TrajetoriaTab(): JSX.Element {
       setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua trajetória." });
     }
   }, [sigaaLink.status, accessToken, carregar]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await carregar(true);
-    setRefreshing(false);
-  }, [carregar]);
 
   const sincronizar = useCallback(async () => {
     if (!accessToken) {
@@ -225,13 +213,11 @@ export default function TrajetoriaTab(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Minha trajetória" {...identidade} />
       <ScrollView
         testID="trajetoria-scroll"
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {state.status === "loading" ? (
           <View className="rounded-3xl bg-surface-secondary p-8 items-center">

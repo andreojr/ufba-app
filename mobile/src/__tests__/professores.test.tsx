@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 
-import ProfessoresScreen from "@/app/(tabs)/professores";
+import ProfessoresScreen from "@/screens/ProfessoresScreen";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DocenteResumo, Turma } from "@/lib/types";
@@ -13,10 +13,6 @@ jest.mock("@/lib/api", () => ({
 }));
 
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
-
-// The global header pulls in Avatar, auth and routing of its own; this screen's
-// tests are about the list, not the chrome.
-jest.mock("@/components/AppBar", () => ({ AppBar: () => null }));
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),

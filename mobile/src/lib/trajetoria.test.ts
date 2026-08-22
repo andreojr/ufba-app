@@ -4,19 +4,25 @@ import {
   calcularCrAcumulado,
   componentesComCargaHorariaContada,
   contarFaltantes,
+  deltasCrPorPeriodo,
   densidadeCarga,
+  faixaNota,
   formatarCoeficiente,
   formatarImpacto,
   formatarNota,
   formatarSemestre,
   historicoDesatualizado,
   impactoNoCr,
+  maioresImpactos,
   percentualConcluido,
+  periodosComNota,
+  pesoDasNotas,
   direcaoDoSwipe,
   poolPlanejavel,
   proximoInsight,
   posicaoSemestral,
   rotuloRitmo,
+  rotuloSemestreCurto,
   rotuloSituacao,
   rotulosPorAno,
   segmentosSemestralizacao,
@@ -402,6 +408,138 @@ describe("impactoNoCr", () => {
   it("returns null when removing the component would leave nothing graded", () => {
     const cursados = [componente({ codigo: "MATA37", nota: 8 })];
     expect(impactoNoCr(cursados, "MATA37")).toBeNull();
+  });
+});
+
+describe("periodosComNota", () => {
+  it("keeps a term with at least one graded component", () => {
+    const periodos = [
+      { semestre: "2025.1", emCurso: false, componentes: [componente({ nota: 8 })] },
+    ];
+    expect(periodosComNota(periodos)).toEqual(periodos);
+  });
+
+  it("drops a term where everything is still MATR", () => {
+    const periodos = [
+      {
+        semestre: "2025.2",
+        emCurso: true,
+        componentes: [componente({ nota: null, situacao: "MATR" })],
+      },
+    ];
+    expect(periodosComNota(periodos)).toEqual([]);
+  });
+});
+
+describe("rotuloSemestreCurto", () => {
+  it("drops the century, keeping year and term", () => {
+    expect(rotuloSemestreCurto("2023.2")).toBe("23.2");
+  });
+});
+
+describe("deltasCrPorPeriodo", () => {
+  it("is null for the first term — nothing before it to compare against", () => {
+    expect(deltasCrPorPeriodo([{ semestre: "2025.1", cr: 8 }])).toEqual([null]);
+  });
+
+  it("is each later term's move from the one right before it", () => {
+    const serie = [
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: 8.5 },
+      { semestre: "2026.1", cr: 8.1 },
+    ];
+    const deltas = deltasCrPorPeriodo(serie);
+    expect(deltas[0]).toBeNull();
+    expect(deltas[1]).toBeCloseTo(0.5);
+    expect(deltas[2]).toBeCloseTo(-0.4);
+  });
+
+  it("is null across a term with nothing graded yet", () => {
+    const serie = [
+      { semestre: "2025.1", cr: 8 },
+      { semestre: "2025.2", cr: null },
+    ];
+    expect(deltasCrPorPeriodo(serie)).toEqual([null, null]);
+  });
+});
+
+describe("faixaNota", () => {
+  it("is alta from 7 up", () => {
+    expect(faixaNota(7)).toBe("alta");
+    expect(faixaNota(9.4)).toBe("alta");
+  });
+
+  it("is media from 5 up to just under 7", () => {
+    expect(faixaNota(5)).toBe("media");
+    expect(faixaNota(6.9)).toBe("media");
+  });
+
+  it("is baixa under 5", () => {
+    expect(faixaNota(4.9)).toBe("baixa");
+    expect(faixaNota(0)).toBe("baixa");
+  });
+});
+
+describe("pesoDasNotas", () => {
+  it("weighs each graded component by its share of the term's carga horária", () => {
+    const componentes = [
+      componente({ codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ codigo: "MATA40", cargaHoraria: 60, nota: 4 }),
+    ];
+    expect(pesoDasNotas(componentes)).toEqual([
+      { codigo: "MATA37", nome: "INTRODUÇÃO À LÓGICA", cargaHoraria: 60, nota: 8, pesoPercentual: 50, faixa: "alta" },
+      { codigo: "MATA40", nome: "INTRODUÇÃO À LÓGICA", cargaHoraria: 60, nota: 4, pesoPercentual: 50, faixa: "baixa" },
+    ]);
+  });
+
+  it("sorts heaviest carga horária first", () => {
+    const componentes = [
+      componente({ codigo: "LEVE", cargaHoraria: 30, nota: 8 }),
+      componente({ codigo: "PESADO", cargaHoraria: 90, nota: 6 }),
+    ];
+    expect(pesoDasNotas(componentes).map((p) => p.codigo)).toEqual(["PESADO", "LEVE"]);
+  });
+
+  it("leaves out components with no grade yet", () => {
+    const componentes = [
+      componente({ codigo: "APROVADO", nota: 8 }),
+      componente({ codigo: "EM_CURSO", nota: null, situacao: "MATR" }),
+    ];
+    expect(pesoDasNotas(componentes).map((p) => p.codigo)).toEqual(["APROVADO"]);
+  });
+
+  it("returns nothing when no component in the term has a grade", () => {
+    const componentes = [componente({ nota: null, situacao: "MATR" })];
+    expect(pesoDasNotas(componentes)).toEqual([]);
+  });
+});
+
+describe("maioresImpactos", () => {
+  it("ranks the term's own components by their pull on the overall CR", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "MATA37", cargaHoraria: 60, nota: 8 }),
+      componente({ semestre: "2025.1", codigo: "MATA40", cargaHoraria: 60, nota: 2 }),
+      componente({ semestre: "2025.2", codigo: "MATA55", cargaHoraria: 60, nota: 9 }),
+    ];
+    const impactos = maioresImpactos(cursados, "2025.1");
+    expect(impactos.map((i) => i.codigo)).toEqual(["MATA40", "MATA37"]);
+  });
+
+  it("leaves out other terms' components", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "MATA37", nota: 8 }),
+      componente({ semestre: "2025.2", codigo: "MATA55", nota: 9 }),
+    ];
+    expect(maioresImpactos(cursados, "2025.1").map((i) => i.codigo)).toEqual(["MATA37"]);
+  });
+
+  it("caps the result at limite", () => {
+    const cursados = [
+      componente({ semestre: "2025.1", codigo: "A", nota: 5 }),
+      componente({ semestre: "2025.1", codigo: "B", nota: 6 }),
+      componente({ semestre: "2025.1", codigo: "C", nota: 7 }),
+    ];
+    expect(maioresImpactos(cursados, "2025.1", 2)).toHaveLength(2);
   });
 });
 

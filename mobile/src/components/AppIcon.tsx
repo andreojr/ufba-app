@@ -51,14 +51,31 @@ const ICON_MAP = {
 
 export type AppIconName = keyof typeof ICON_MAP;
 
+/**
+ * Filled counterparts for the handful of icons that need a "selected" look
+ * (currently just the bottom tab bar). Only covers names actually used that
+ * way — everything else keeps rendering its one mapped glyph regardless of
+ * `variant`, same as before this existed.
+ */
+const FILLED_ICON_MAP: Partial<Record<AppIconName, IoniconName>> = {
+  IconHouse: "home",
+  IconPath: "footsteps",
+  IconSparkles: "sparkles",
+  IconChalkboardTeacher: "easel",
+};
+
 export function AppIcon({
   name,
   size = 20,
   color,
+  variant = "outline",
 }: {
   name: AppIconName;
   size?: number;
   color?: ColorValue;
+  /** "fill" falls back to the outline glyph for names with no filled entry above. */
+  variant?: "outline" | "fill";
 }): JSX.Element {
-  return <Ionicons name={ICON_MAP[name]} size={size} color={color} />;
+  const iconName = variant === "fill" ? (FILLED_ICON_MAP[name] ?? ICON_MAP[name]) : ICON_MAP[name];
+  return <Ionicons name={iconName} size={size} color={color} />;
 }

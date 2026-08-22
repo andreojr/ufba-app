@@ -3,13 +3,11 @@ import { Button, Spinner, Typography, useToast } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { ScrollView, Text, View } from "react-native";
 
-import { AppBar } from "@/components/AppBar";
 import { DocenteCard } from "@/components/DocenteCard";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import type { DocenteResumo, PeriodoLetivo } from "@/lib/types";
-import { identidadeAppBar } from "@/lib/user-name";
 
 type Estado =
   | { status: "loading" }
@@ -36,7 +34,6 @@ export default function ProfessoresScreen(): JSX.Element {
   // useAuth() returns a discriminated union — accessToken only exists once
   // signed in — matching how trajetoria.tsx reads it.
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
-  const identidade = identidadeAppBar(auth.status === "signedIn" ? auth.user : null);
   const { toast } = useToast();
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
   const [avisoLento, setAvisoLento] = useState(false);
@@ -116,7 +113,6 @@ export default function ProfessoresScreen(): JSX.Element {
 
   return (
     <View className="flex-1">
-      <AppBar title="Professores" {...identidade} />
       <ScrollView contentContainerClassName="px-4 pb-8 pt-2">
         {estado.status === "loading" ? (
           <View className="mt-6 items-center gap-3">
