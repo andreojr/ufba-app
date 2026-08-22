@@ -12,6 +12,7 @@ import type {
 } from './curriculo.repository';
 import { calcularStaleAfter, diretorioDesatualizado } from './stale';
 import type { HistoricoRepository } from '../sigaa-engine/historico.repository';
+import { SITUACOES_INTEGRALIZADAS } from '../sigaa-engine/parsers/historico';
 import {
   montarVizinhos,
   type HistoricoParaVizinhos,
@@ -266,9 +267,10 @@ export class CurriculoService {
 
   /**
    * Sem histórico persistido pro usuário (nunca sincronizou a Trajetória):
-   * devolve os dois conjuntos vazios — vizinhos-curriculares.ts trata isso
-   * como "tudo bloqueada por padrão", nunca inventa cursada/liberada sem
-   * dado real.
+   * devolve os dois conjuntos vazios — vizinhos-curriculares.ts nunca inventa
+   * cursada/emCurso sem dado real. Uma matéria sem pré-requisito ainda vira
+   * liberada mesmo assim; só uma com pré-requisito não satisfeito vira
+   * bloqueada nesse cenário.
    */
   private async historicoParaUsuario(userId: string): Promise<HistoricoParaVizinhos> {
     const salva = await this.historicoRepository.buscar(userId);
@@ -276,7 +278,9 @@ export class CurriculoService {
       return { aprovados: new Set(), matriculados: new Set() };
     }
     const aprovados = new Set(
-      salva.historico.cursados.filter((c) => c.situacao === 'APR').map((c) => c.codigo),
+      salva.historico.cursados
+        .filter((c) => SITUACOES_INTEGRALIZADAS.includes(c.situacao))
+        .map((c) => c.codigo),
     );
     const matriculados = new Set(
       salva.historico.cursados.filter((c) => c.situacao === 'MATR').map((c) => c.codigo),

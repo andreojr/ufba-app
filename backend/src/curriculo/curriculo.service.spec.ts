@@ -554,6 +554,31 @@ describe('CurriculoService', () => {
       expect(historicoRepository.buscar).toHaveBeenCalledWith('user-1');
     });
 
+    it('vizinhosCurriculares conta situação TRANS (e não só APR) como aprovada pro cálculo de liberada/bloqueada', async () => {
+      const repository = fakeRepository({
+        buscarEstrutura: jest.fn().mockResolvedValue(estruturaSalva),
+      });
+      const salva: TrajetoriaSalva = {
+        historico: historicoFalso([
+          { semestre: '2025.1', natureza: 'OB', codigo: 'MATA02', nome: 'Cálculo A', cargaHoraria: 68, nota: null, situacao: 'TRANS', docente: null },
+        ]),
+        fetchedAt: new Date('2026-01-01T00:00:00Z'),
+        plano: [],
+      };
+      const historicoRepository = fakeHistoricoRepository({
+        buscar: jest.fn().mockResolvedValue(salva),
+      });
+      const service = new CurriculoService(fakeHttp({}), repository, agora, historicoRepository);
+      const vizinhos = await service.vizinhosCurriculares('curso-1', 'MATA03', 'user-1');
+      // MATA03 depende de MATA02, que veio TRANS (transferência) no histórico
+      // — não um APR literal, mas ainda uma situação integralizada. Deve
+      // liberar MATA03, não bloquear.
+      expect(vizinhos.atual).toEqual({ codigo: 'MATA03', nome: 'Cálculo B', situacao: 'liberada' });
+      expect(vizinhos.preRequisitos).toEqual([
+        { codigo: 'MATA02', nome: 'Cálculo A', situacao: 'cursada' },
+      ]);
+    });
+
     it('vizinhosCurricularesPorNomeUsuario resolve o curso pelo nome e monta os vizinhos', async () => {
       const repository = fakeRepository({
         buscarCursos: jest.fn().mockResolvedValue([
