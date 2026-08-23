@@ -55,6 +55,10 @@ export interface TurmaSlot {
 
 /** A course the student is currently enrolled in, as scraped from the atestado de matrícula. */
 export interface Turma {
+  /** Identidade compartilhada da turma — é o que liga um ponto de atenção a ela. */
+  id: string;
+  /** A coluna "Turma" do atestado ("02"), parte da chave natural. */
+  numero: string;
   codigo: string | null;
   nome: string;
   /**
@@ -240,4 +244,40 @@ export interface VizinhosCurricularesResponse {
   atual: VizinhoCurricular;
   preRequisitos: VizinhoCurricular[];
   desbloqueia: VizinhoCurricular[];
+}
+
+export type TipoPonto = "PROVA" | "TRABALHO";
+export type ValorVoto = "CONFIRMA" | "CONTESTA";
+
+/**
+ * Um prazo cadastrado por um aluno e visível para a turma inteira. `estado`
+ * vem derivado do backend: CONTESTADO sai da contagem regressiva e do bloco
+ * do dia, e só aparece na lista completa.
+ */
+export interface PontoAtencao {
+  id: string;
+  turmaId: string;
+  turmaCodigo: string | null;
+  turmaNome: string;
+  tipo: TipoPonto;
+  titulo: string;
+  /** YYYY-MM-DD — usar parseIsoDate, nunca new Date(string). */
+  data: string;
+  hora: string | null;
+  observacao: string | null;
+  responsavel: { nome: string } | null;
+  confirmacoes: number;
+  contestacoes: number;
+  meuVoto: ValorVoto | null;
+  estado: "NORMAL" | "CONTESTADO";
+  podeEditar: boolean;
+  podeApagar: boolean;
+}
+
+export interface EntradaPonto {
+  tipo: TipoPonto;
+  titulo: string;
+  data: string;
+  hora?: string;
+  observacao?: string;
 }

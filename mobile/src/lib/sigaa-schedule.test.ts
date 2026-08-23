@@ -109,6 +109,8 @@ describe("getCurrentWeekDays", () => {
 
 const TURMAS: Turma[] = [
   {
+    id: "turma-1",
+    numero: "01",
     codigo: "MATA37",
     nome: "SISTEMAS OPERACIONAIS",
     docente: null,
@@ -134,6 +136,8 @@ const TURMAS: Turma[] = [
     semestre: "2026.2",
   },
   {
+    id: "turma-2",
+    numero: "02",
     codigo: "MATA48",
     nome: "REDES DE COMPUTADORES I",
     docente: null,
@@ -151,6 +155,8 @@ const TURMAS: Turma[] = [
     semestre: "2026.2",
   },
   {
+    id: "turma-3",
+    numero: "03",
     codigo: null,
     nome: "ATIVIDADE DE SÁBADO",
     docente: null,

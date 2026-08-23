@@ -237,6 +237,8 @@ const PERIODO_LETIVO: PeriodoLetivo = {
 
 function turma(): Turma {
   return {
+    id: "turma-1",
+    numero: "01",
     codigo: "MATA37",
     nome: "SISTEMAS OPERACIONAIS",
     docente: "BEATRIZ NUNES CAMPELO",

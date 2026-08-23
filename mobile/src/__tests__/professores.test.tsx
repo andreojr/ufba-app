@@ -63,6 +63,8 @@ function resumo(nome: string, perfil: DocenteResumo["perfil"]): DocenteResumo {
 
 function turma(codigo: string, nome: string, docente: string | null): Turma {
   return {
+    id: `turma-${codigo}`,
+    numero: "01",
     codigo,
     nome,
     docente,

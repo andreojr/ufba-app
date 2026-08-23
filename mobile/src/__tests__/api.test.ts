@@ -1,6 +1,7 @@
 import {
   ApiError,
   deleteAccount,
+  getPontosAtencao,
   getSchedule,
   getSigaaLink,
   onSigaaCredentialsVerdict,
@@ -467,5 +468,41 @@ describe("postScheduleSync", () => {
 
     jest.advanceTimersByTime(45_000);
     await assertion;
+  });
+});
+
+describe("getPontosAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Resolves every call to a 200 with `body` as the JSON payload. */
+  function mockFetchOk(body: unknown) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("pede os vencidos só quando mandado", async () => {
+    const fetchMock = mockFetchOk([]);
+
+    await getPontosAtencao("token", { incluirVencidos: false });
+    expect(fetchMock.mock.calls[0][0]).toContain("/pontos-atencao");
+    expect(fetchMock.mock.calls[0][0]).not.toContain("desde=");
+
+    await getPontosAtencao("token", { incluirVencidos: true });
+    expect(fetchMock.mock.calls[1][0]).toContain("/pontos-atencao?desde=vencidos");
   });
 });

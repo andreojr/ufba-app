@@ -33,6 +33,8 @@ const PERIODO: PeriodoLetivo = {
 
 function turma(overrides: Partial<Turma> = {}): Turma {
   return {
+    id: "turma-1",
+    numero: "01",
     codigo: "MATA37",
     nome: "Cálculo A",
     docente: "Fulano de Tal",

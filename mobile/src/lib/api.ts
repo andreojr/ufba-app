@@ -1,12 +1,15 @@
 import type {
   DocentePerfil,
   DocenteResumo,
+  EntradaPonto,
   GoogleUserInfo,
+  PontoAtencao,
   ScheduleResponse,
   SigaaCredentials,
   SigaaWebSession,
   Session,
   TrajetoriaResponse,
+  ValorVoto,
   VizinhosCurricularesResponse,
 } from "./types";
 
@@ -74,7 +77,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const SIGAA_DOCUMENT_TIMEOUT_MS = 45_000;
 
 interface RequestOptions {
-  method: "GET" | "POST" | "DELETE";
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   accessToken?: string;
   /** Overrides the default timeout; the SIGAA scrape endpoints need far longer. */
@@ -434,4 +437,73 @@ export async function getVizinhosCurriculares(
     `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/vizinhos?curso=${encodeURIComponent(curso)}`,
     { method: "GET", accessToken, timeoutMs: VIZINHOS_CURRICULARES_TIMEOUT_MS },
   );
+}
+
+/**
+ * Prazos visíveis para o aluno logado. Por padrão só os futuros — a lista
+ * completa (com vencidos) é uma tela separada, daí `desde=vencidos` só
+ * entrar na query quando pedido explicitamente.
+ */
+export async function getPontosAtencao(
+  accessToken: string,
+  options: { incluirVencidos: boolean },
+): Promise<PontoAtencao[]> {
+  const query = options.incluirVencidos ? "?desde=vencidos" : "";
+  return request<PontoAtencao[]>(`/pontos-atencao${query}`, {
+    method: "GET",
+    accessToken,
+  });
+}
+
+export async function postPontoAtencao(
+  accessToken: string,
+  turmaId: string,
+  entrada: EntradaPonto,
+): Promise<PontoAtencao> {
+  return request<PontoAtencao>("/pontos-atencao", {
+    method: "POST",
+    accessToken,
+    body: { turmaId, ...entrada },
+  });
+}
+
+export async function patchPontoAtencao(
+  accessToken: string,
+  id: string,
+  entrada: EntradaPonto,
+): Promise<PontoAtencao> {
+  return request<PontoAtencao>(`/pontos-atencao/${id}`, {
+    method: "PATCH",
+    accessToken,
+    body: entrada,
+  });
+}
+
+export async function deletePontoAtencao(
+  accessToken: string,
+  id: string,
+): Promise<void> {
+  return request<void>(`/pontos-atencao/${id}`, { method: "DELETE", accessToken });
+}
+
+export async function putVotoPontoAtencao(
+  accessToken: string,
+  id: string,
+  valor: ValorVoto,
+): Promise<PontoAtencao> {
+  return request<PontoAtencao>(`/pontos-atencao/${id}/voto`, {
+    method: "PUT",
+    accessToken,
+    body: { valor },
+  });
+}
+
+export async function deleteVotoPontoAtencao(
+  accessToken: string,
+  id: string,
+): Promise<PontoAtencao> {
+  return request<PontoAtencao>(`/pontos-atencao/${id}/voto`, {
+    method: "DELETE",
+    accessToken,
+  });
 }
