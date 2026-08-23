@@ -36,6 +36,7 @@ const ICON_MAP = {
   IconCheck: "checkmark",
   IconHouse: "home-outline",
   IconGear: "settings-outline",
+  IconTrash: "trash-outline",
   IconArrowsClockwise: "sync-outline",
   IconInfo: "information-circle-outline",
   IconX: "close",
@@ -48,6 +49,14 @@ const ICON_MAP = {
   IconSun: "sunny-outline",
   IconMoon: "moon-outline",
   IconContrast: "contrast-outline",
+  // The carga-horária density scale — see ESCALA_DENSIDADE. Deliberately not
+  // reusing IconFileText (document-text-outline) for the lightest tier: a
+  // blank page pairs with documents-outline as the same object multiplied,
+  // which is the whole reason the first two steps read in order.
+  IconPaper: "document-outline",
+  IconPapers: "documents-outline",
+  IconBook: "book-outline",
+  IconTrayFull: "file-tray-full-outline",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;

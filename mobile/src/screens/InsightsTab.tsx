@@ -1,7 +1,7 @@
+import { useRouter } from "expo-router";
 import { Button, Tabs, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import {
-  Pressable,
   ScrollView,
   View,
   type LayoutChangeEvent,
@@ -12,9 +12,11 @@ import { Gesture, GestureDetector, type NativeGesture, type PanGesture } from "r
 import Animated, {
   Extrapolation,
   interpolate,
+  useAnimatedRef,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type AnimatedRef,
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -22,15 +24,14 @@ import { scheduleOnRN } from "react-native-worklets";
 import { AppIcon } from "@/components/AppIcon";
 import { BarChart } from "@/components/charts/BarChart";
 import { LineChart } from "@/components/charts/LineChart";
-import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
-import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { getTrajetoria } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { HISTORICO_STAGES } from "@/lib/download-progress";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
-import { getSigaaCredentials } from "@/lib/sigaa-storage";
-import { useRegisterTabSwipeBlockingGesture } from "@/lib/tab-swipe-context";
+import { useSyncFreshness } from "@/lib/sync-freshness-context";
+import { tocouDentroDaArea } from "@/lib/gesture-bounds";
+import { useRegisterTabSwipeBlockingArea, useRegisterTabSwipeBlockingGesture } from "@/lib/tab-swipe-context";
 import {
   agruparPorSemestre,
   calcularCrAcumulado,
@@ -43,10 +44,9 @@ import {
   formatarNota,
   formatarSemestre,
   historicoDesatualizado,
-  maioresImpactos,
+  impactosPorSemestre,
   percentualConcluido,
   periodosComNota,
-  pesoDasNotas,
   posicaoSemestral,
   proximoInsight,
   rotuloRitmo,
@@ -68,29 +68,17 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; historico: Historico; fetchedAt: Date; marcos: MarcosSemestralizacao | null };
 
-/**
- * Sync failures need one message the shared helper cannot give — see the twin
- * of this function in trajetoria.tsx for the full rationale. Duplicated
- * rather than shared: each tab fetches and syncs independently, same as
- * ajustes.tsx does for the schedule.
- */
-function descreverErroSync(error: unknown): string {
-  const status = error instanceof ApiError ? error.status : undefined;
-  if (status !== undefined && status !== 401 && status !== 429) {
-    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Documentos.";
-  }
-  return describeApiError(error);
-}
-
 export default function InsightsTab(): JSX.Element {
+  const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const mutedColor = useThemeColor("muted");
+  // Shared with Início's freshness badge and Perfil's sync item — see
+  // sync-freshness-context's docstring.
+  const { setHistoricoFetchedAt } = useSyncFreshness();
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [sincronizando, setSincronizando] = useState(false);
-  const [erroSync, setErroSync] = useState<string | null>(null);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
   // Carga Horária first — the CR breakdown (item 12 do roadmap) só aparece
   // quando a pessoa arrasta o card, não é mais o que ela vê de cara.
@@ -105,11 +93,11 @@ export default function InsightsTab(): JSX.Element {
 
   // See trajetoria.tsx's identical pair for why these live outside React
   // state — a re-render mid-gesture is what used to crash the app here.
-  const abaAtual = useSharedValue(insight === "cr" ? 0 : 1);
+  const abaAtual = useSharedValue(insight === "cargaHoraria" ? 0 : 1);
   const arrasto = useSharedValue(0);
 
   useEffect(() => {
-    abaAtual.value = withTiming(insight === "cr" ? 0 : 1, { duration: 220 });
+    abaAtual.value = withTiming(insight === "cargaHoraria" ? 0 : 1, { duration: 220 });
   }, [insight, abaAtual]);
 
   const lineChartScrollGesture = useMemo(() => Gesture.Native(), []);
@@ -120,12 +108,30 @@ export default function InsightsTab(): JSX.Element {
   // one level up, the tab pager's own swipe) instead of paging the carousel.
   const pesoScrollGesture = useMemo(() => Gesture.Native(), []);
 
+  // The on-screen bounds of the two charts and the "peso das notas" carousel
+  // — checked on touch-down (see `tocouDentroDaArea`) so a touch that started
+  // over one of them can never read as the CR/Carga-Horária swipe or the tab
+  // pager's own swipe, even once the finger has drifted off that area. A
+  // gesture race (`requireExternalGestureToFail`, below and in TabsPager)
+  // only helps once the nested gesture actually recognizes — a chart with
+  // too little content to scroll never does — so this check doesn't depend
+  // on that at all, just on where the touch began.
+  const lineChartArea = useAnimatedRef<View>();
+  const barChartArea = useAnimatedRef<View>();
+  const pesoArea = useAnimatedRef<View>();
+
   const swipeInsight = useMemo(
     () =>
       Gesture.Pan()
         .activeOffsetX([-10, 10])
         .failOffsetY([-10, 10])
         .requireExternalGestureToFail(lineChartScrollGesture, barChartScrollGesture, pesoScrollGesture)
+        .onTouchesDown((evento, manager) => {
+          "worklet";
+          if (tocouDentroDaArea(evento, lineChartArea) || tocouDentroDaArea(evento, barChartArea)) {
+            manager.fail();
+          }
+        })
         .onChange((evento) => {
           let x = evento.translationX;
           if (abaAtual.value === 0 && x > 0) {
@@ -148,31 +154,60 @@ export default function InsightsTab(): JSX.Element {
             scheduleOnRN(aplicarSwipe, evento.translationX, evento.translationY);
           }
         }),
-    [lineChartScrollGesture, barChartScrollGesture, pesoScrollGesture, abaAtual, arrasto, aplicarSwipe],
+    [
+      lineChartScrollGesture,
+      barChartScrollGesture,
+      pesoScrollGesture,
+      lineChartArea,
+      barChartArea,
+      abaAtual,
+      arrasto,
+      aplicarSwipe,
+    ],
   );
 
   // The tab pager's own left/right swipe (see TabsPager) must lose to this
   // one whenever the drag starts over the CR/Carga-Horária card below —
   // otherwise trying to flip that card would instead flip the whole page.
   useRegisterTabSwipeBlockingGesture(swipeInsight);
+  // The pager also needs to lose directly to the charts' and carousel's own
+  // native scroll gestures, not just to swipeInsight — when one of those wins
+  // a drag, swipeInsight (which was waiting on it) fails, and if the pager
+  // were only watching swipeInsight it would read that failure as its cue to
+  // activate mid-scroll. Registering these too makes the pager wait on the
+  // actual gesture, not on one that's already been shouldered aside.
+  useRegisterTabSwipeBlockingGesture(lineChartScrollGesture);
+  useRegisterTabSwipeBlockingGesture(barChartScrollGesture);
+  useRegisterTabSwipeBlockingGesture(pesoScrollGesture);
+  // Same touch-origin check `swipeInsight` runs above, one level up: the
+  // pager must fail itself for a touch that started over any of these three
+  // areas too, not just wait on a gesture race that a non-scrollable chart
+  // never wins.
+  useRegisterTabSwipeBlockingArea(lineChartArea);
+  useRegisterTabSwipeBlockingArea(barChartArea);
+  useRegisterTabSwipeBlockingArea(pesoArea);
 
   useEffect(() => {
     void getPeriodoCache().then((periodo) => setFimDoPeriodo(periodo?.fim ?? null));
   }, []);
 
-  const aplicar = useCallback((resposta: TrajetoriaResponse) => {
-    if (!("historico" in resposta)) {
-      setState({ status: "unsynced" });
-      return;
-    }
-    setState({
-      status: "ready",
-      historico: resposta.historico,
-      fetchedAt: new Date(resposta.fetchedAt),
-      marcos: resposta.marcos,
-    });
-    setErroSync(null);
-  }, []);
+  const aplicar = useCallback(
+    (resposta: TrajetoriaResponse) => {
+      if (!("historico" in resposta)) {
+        setState({ status: "unsynced" });
+        return;
+      }
+      const fetchedAt = new Date(resposta.fetchedAt);
+      setState({
+        status: "ready",
+        historico: resposta.historico,
+        fetchedAt,
+        marcos: resposta.marcos,
+      });
+      setHistoricoFetchedAt(fetchedAt);
+    },
+    [setHistoricoFetchedAt],
+  );
 
   const carregar = useCallback(
     async () => {
@@ -190,46 +225,14 @@ export default function InsightsTab(): JSX.Element {
     [accessToken, aplicar],
   );
 
+  // Depends on the link status only to re-read after the student links or
+  // unlinks — never to decide *whether* to read. The stored histórico lives in
+  // our own database and needs no SIGAA password to come back out.
   useEffect(() => {
-    if (sigaaLink.status === "linked" && accessToken) {
+    if (accessToken) {
       carregar();
-    } else if (sigaaLink.status === "unlinked") {
-      setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua trajetória." });
     }
   }, [sigaaLink.status, accessToken, carregar]);
-
-  const sincronizar = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-    const credentials = await getSigaaCredentials();
-    if (!credentials) {
-      setErroSync("Vincule sua conta do SIGAA primeiro.");
-      return;
-    }
-
-    setSincronizando(true);
-    setErroSync(null);
-    try {
-      aplicar(
-        await postTrajetoriaSync(accessToken, {
-          login: credentials.login,
-          senha: credentials.senha,
-        }),
-      );
-    } catch (error) {
-      console.warn("Failed to sync trajetória", error);
-      setErroSync(descreverErroSync(error));
-    } finally {
-      setSincronizando(false);
-    }
-  }, [accessToken, aplicar]);
-
-  const erro = erroSync ? (
-    <Typography.Paragraph type="body-xs" className="text-danger">
-      Não deu para sincronizar seu histórico. {erroSync}
-    </Typography.Paragraph>
-  ) : null;
 
   return (
     <View className="flex-1 bg-background">
@@ -258,11 +261,10 @@ export default function InsightsTab(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {state.message}
             </Typography.Paragraph>
-            {sigaaLink.status === "linked" ? (
-              <Button variant="outline" size="sm" onPress={() => carregar()}>
-                Tentar de novo
-              </Button>
-            ) : null}
+            {/* A plain re-read of our own database — offered linked or not. */}
+            <Button variant="outline" size="sm" onPress={() => carregar()}>
+              Tentar de novo
+            </Button>
           </View>
         ) : null}
 
@@ -270,31 +272,31 @@ export default function InsightsTab(): JSX.Element {
           <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
             <Typography.Heading type="h6">Seus insights ainda não foram montados</Typography.Heading>
             <Typography.Paragraph type="body-sm" color="muted">
-              Vamos buscar seu histórico escolar no SIGAA. Leva alguns segundos.
+              {sigaaLink.status === "linked"
+                ? "Sincronize sua conta em Perfil para buscar seu histórico escolar no SIGAA."
+                : "Vincule sua conta em Perfil para buscar seu histórico escolar no SIGAA."}
             </Typography.Paragraph>
-            <Button onPress={sincronizar} isDisabled={sincronizando}>
-              {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
-            </Button>
-            {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
-            {erro}
+            {/* Sync now happens in one place — Perfil syncs the whole
+                profile (horário + histórico) in a single press, instead of
+                each tab re-scraping the same histórico on its own. */}
+            <Button onPress={() => router.push("/ajustes")}>Ir para Perfil</Button>
           </View>
         ) : null}
 
         {state.status === "ready" ? (
           <ReadyInsights
             historico={state.historico}
-            fetchedAt={state.fetchedAt}
             marcos={state.marcos}
             fimDoPeriodo={fimDoPeriodo}
-            onSincronizar={sincronizar}
-            sincronizando={sincronizando}
-            erro={erro}
             insight={insight}
             onInsightChange={setInsight}
             swipeInsight={swipeInsight}
             lineChartScrollGesture={lineChartScrollGesture}
             barChartScrollGesture={barChartScrollGesture}
             pesoScrollGesture={pesoScrollGesture}
+            lineChartArea={lineChartArea}
+            barChartArea={barChartArea}
+            pesoArea={pesoArea}
             abaAtual={abaAtual}
             arrasto={arrasto}
           />
@@ -306,34 +308,32 @@ export default function InsightsTab(): JSX.Element {
 
 function ReadyInsights({
   historico,
-  fetchedAt,
   marcos,
   fimDoPeriodo,
-  onSincronizar,
-  sincronizando,
-  erro,
   insight,
   onInsightChange,
   swipeInsight,
   lineChartScrollGesture,
   barChartScrollGesture,
   pesoScrollGesture,
+  lineChartArea,
+  barChartArea,
+  pesoArea,
   abaAtual,
   arrasto,
 }: {
   historico: Historico;
-  fetchedAt: Date;
   marcos: MarcosSemestralizacao | null;
   fimDoPeriodo: string | null;
-  onSincronizar: () => void;
-  sincronizando: boolean;
-  erro: JSX.Element | null;
   insight: Insight;
   onInsightChange: (insight: Insight) => void;
   swipeInsight: PanGesture;
   lineChartScrollGesture: NativeGesture;
   barChartScrollGesture: NativeGesture;
   pesoScrollGesture: NativeGesture;
+  lineChartArea: AnimatedRef<View>;
+  barChartArea: AnimatedRef<View>;
+  pesoArea: AnimatedRef<View>;
   abaAtual: SharedValue<number>;
   arrasto: SharedValue<number>;
 }): JSX.Element {
@@ -370,6 +370,8 @@ function ReadyInsights({
     valor: ponto.cr,
   }));
   const variacaoCr = variacaoUltimoPeriodo(crPorPeriodo);
+  const impactoVariacaoCr = formatarImpacto(variacaoCr);
+  const textoVariacaoCr = impactoVariacaoCr === "—" ? impactoVariacaoCr : `${impactoVariacaoCr}*`;
   const barrasCargaHoraria = periodos.map((periodo, indice) => ({
     rotulo: rotulosAno[indice],
     valor: somarCargaHoraria(componentesComCargaHorariaContada(periodo.componentes)),
@@ -391,10 +393,10 @@ function ReadyInsights({
   // it was already draggable before this, just with no visual hint that it
   // was. Driven straight off `abaAtual` (0..1) so they track the drag itself,
   // not just the settled tab.
-  const estiloPontoCr = useAnimatedStyle(() => ({
+  const estiloPontoCargaHoraria = useAnimatedStyle(() => ({
     opacity: interpolate(abaAtual.value, [0, 1], [1, 0.3], Extrapolation.CLAMP),
   }));
-  const estiloPontoCargaHoraria = useAnimatedStyle(() => ({
+  const estiloPontoCr = useAnimatedStyle(() => ({
     opacity: interpolate(abaAtual.value, [0, 1], [0.3, 1], Extrapolation.CLAMP),
   }));
 
@@ -426,14 +428,26 @@ function ReadyInsights({
         <Tabs value={insight} onValueChange={(valor) => onInsightChange(valor as Insight)} variant="primary">
           <Tabs.List>
             <Tabs.Indicator />
-            <Tabs.Trigger value="cr">
-              <Tabs.Label>CR</Tabs.Label>
-            </Tabs.Trigger>
             <Tabs.Trigger value="cargaHoraria">
               <Tabs.Label>Carga Horária</Tabs.Label>
             </Tabs.Trigger>
+            <Tabs.Trigger value="cr">
+              <Tabs.Label>CR</Tabs.Label>
+            </Tabs.Trigger>
           </Tabs.List>
         </Tabs>
+
+        {/* The plain "sincronizado em" line is gone — that freshness now
+            lives on Início's badge, fed by every screen that reads the
+            histórico (see sync-freshness-context). Only the actionable
+            nudge survives here, since it's not about freshness but about a
+            specific missing-notas gap. */}
+        {desatualizado ? (
+          <Typography.Paragraph type="body-xs" color="muted">
+            O semestre acabou e seu histórico ainda tem matérias em curso — sincronize em Perfil para ver
+            as notas.
+          </Typography.Paragraph>
+        ) : null}
 
         <View className="gap-0.5">
           {/* Scoped to just this card (not the whole screen, like before this
@@ -443,6 +457,19 @@ function ReadyInsights({
             <View className="rounded-t-3xl rounded-b-md bg-surface-secondary p-4">
               <View className="overflow-hidden" onLayout={aoMedirCard}>
                 <Animated.View style={[{ flexDirection: "row", width: larguraCardPx * 2 }, estiloTrilha]}>
+                  <View className="gap-2" style={{ width: larguraCardPx }}>
+                    <View className="gap-0.5">
+                      <Typography.Paragraph type="body-xs" color="muted">
+                        Carga horária
+                      </Typography.Paragraph>
+                      <Typography.Heading type="h3" className="font-mono">
+                        {total.integralizada.toLocaleString("pt-BR")} h
+                      </Typography.Heading>
+                    </View>
+                    <View ref={barChartArea} collapsable={false}>
+                      <BarChart barras={barrasCargaHoraria} altura={70} scrollGesture={barChartScrollGesture} />
+                    </View>
+                  </View>
                   <View className="gap-2" style={{ width: larguraCardPx }}>
                     <View className="gap-0.5">
                       <Typography.Paragraph type="body-xs" color="muted">
@@ -459,33 +486,30 @@ function ReadyInsights({
                           color={variacaoCr ? undefined : "muted"}
                           className="font-mono"
                         >
-                          {formatarImpacto(variacaoCr)}
+                          {/* The "*" only appears beside an actual number, not
+                              the "—" em-dash — see the matching footnote at
+                              the bottom of the CR breakdown card below, which
+                              explains it's in centésimos. Anchored here too,
+                              not just there, since this is the first such
+                              value a person sees. */}
+                          {textoVariacaoCr}
                         </Typography.Paragraph>
                       </View>
                     </View>
-                    <LineChart pontos={pontosCr} altura={70} scrollGesture={lineChartScrollGesture} />
-                  </View>
-                  <View className="gap-2" style={{ width: larguraCardPx }}>
-                    <View className="gap-0.5">
-                      <Typography.Paragraph type="body-xs" color="muted">
-                        Carga horária
-                      </Typography.Paragraph>
-                      <Typography.Heading type="h3" className="font-mono">
-                        {total.integralizada.toLocaleString("pt-BR")} h
-                      </Typography.Heading>
+                    <View ref={lineChartArea} collapsable={false}>
+                      <LineChart pontos={pontosCr} altura={70} scrollGesture={lineChartScrollGesture} />
                     </View>
-                    <BarChart barras={barrasCargaHoraria} altura={70} scrollGesture={barChartScrollGesture} />
                   </View>
                 </Animated.View>
               </View>
               {/* Signals the card is a carousel — the drag itself already
                   worked before these dots existed, nothing here changes it. */}
               <View className="flex-row justify-center gap-1.5 mt-3">
-                <Animated.View className="w-1.5 h-1.5 rounded-full bg-foreground" style={estiloPontoCr} />
                 <Animated.View
                   className="w-1.5 h-1.5 rounded-full bg-foreground"
                   style={estiloPontoCargaHoraria}
                 />
+                <Animated.View className="w-1.5 h-1.5 rounded-full bg-foreground" style={estiloPontoCr} />
               </View>
             </View>
           </GestureDetector>
@@ -494,7 +518,13 @@ function ReadyInsights({
             className="rounded-t-md rounded-b-3xl bg-surface-secondary overflow-hidden"
             style={estiloAlturaCardInferior}
           >
-            <View className="p-4 gap-4" onLayout={aoMedirCardInferior}>
+            {/* Horizontal padding moved off this shared wrapper and onto each
+                variant's own content (see CargaHorariaResumo/ImpactoCrCard):
+                the carousel inside ImpactoCrCard needs its pages to span the
+                card's full, unpadded width so paging math lines up with what
+                `onLayout` measures — carrying px here would leave adjacent
+                pages' content flush against each other mid-swipe. */}
+            <View className="py-4 gap-4" onLayout={aoMedirCardInferior}>
               {insight === "cargaHoraria" ? (
                 <CargaHorariaResumo
                   historico={historico}
@@ -512,6 +542,7 @@ function ReadyInsights({
                   periodos={periodosCr}
                   cursados={historico.cursados}
                   pesoScrollGesture={pesoScrollGesture}
+                  pesoArea={pesoArea}
                 />
               )}
             </View>
@@ -519,31 +550,15 @@ function ReadyInsights({
         </View>
       </View>
 
-      <View className="gap-2">
-        <View className="flex-row items-center justify-between gap-3">
-          <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
-            {desatualizado ? (
-              "O semestre acabou e seu histórico ainda tem matérias em curso — sincronize para ver as notas."
-            ) : (
-              <>
-                Sincronizado em{" "}
-                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                  {fetchedAt.toLocaleDateString("pt-BR")}
-                </Typography.Paragraph>
-              </>
-            )}
-          </Typography.Paragraph>
-          {sincronizando ? null : (
-            <Pressable onPress={onSincronizar} className="h-9 px-1 justify-center">
-              <Typography.Paragraph type="body-sm" weight="medium" className="text-accent">
-                Sincronizar
-              </Typography.Paragraph>
-            </Pressable>
-          )}
-        </View>
-        {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
-        {erro}
-      </View>
+      {/* Page footer — covers every "*" on the screen (the two titles inside
+          the CR breakdown card, plus `cr-variacao` above it) without
+          repeating itself, and without living inside the card it's
+          footnoting. Only relevant on the CR side, where those "*"s are. */}
+      {insight === "cr" ? (
+        <Typography.Paragraph type="body-xs" color="muted">
+          * Valores de impacto representados em centésimos
+        </Typography.Paragraph>
+      ) : null}
     </>
   );
 }
@@ -580,7 +595,7 @@ function CargaHorariaResumo({
 }): JSX.Element {
   const { obrigatorias, optativas, complementares, total } = historico.cargaHoraria;
   return (
-    <>
+    <View className="px-4 gap-4">
       <View className="gap-1.5">
         <View className="flex-row items-center justify-between">
           <Typography.Paragraph type="body-xs" color="muted">
@@ -674,20 +689,38 @@ function CargaHorariaResumo({
         percentual={percentual}
         descricao="do curso concluído"
       />
-    </>
+    </View>
   );
 }
 
 /**
  * One row of the "impacto por semestre" chart: a bar diverging from a center
  * zero line, green to the right for a term that raised the CR, red to the
- * left for one that lowered it. `magnitude` scales a half-CR-point move
- * (0.5) to a full half-bar — CR moves rarely exceed that in one term, so
- * bigger swings than that just clip to the full width rather than fighting
- * for an ever-shrinking scale.
+ * left for one that lowered it. `maximo` is the biggest |delta| across the
+ * whole series (see `ImpactoCrCard`) — the scale is relative to the
+ * student's own history, not a fixed CR-point guess: whichever term moved
+ * the CR the most fills the bar all the way, every other term is
+ * proportional to that. A flat history (every term moved the CR by the same
+ * amount) makes every bar full, which is the correct read — there's no
+ * "biggest mover" to contrast against.
  */
-function LinhaImpactoPeriodo({ rotulo, delta }: { rotulo: string; delta: number | null }): JSX.Element {
-  const magnitude = delta === null ? 0 : Math.min(Math.abs(delta) / 0.5, 1);
+function LinhaImpactoPeriodo({
+  rotulo,
+  delta,
+  maximo,
+}: {
+  rotulo: string;
+  delta: number | null;
+  maximo: number;
+}): JSX.Element {
+  // Same "rounds to 0 centésimos" check `formatarImpacto` makes internally —
+  // kept in sync here so a near-zero float (0.001, never a real term-to-term
+  // move, just accumulation noise) doesn't draw a sliver of colored bar next
+  // to a value that itself already renders as "—". A term with no move reads
+  // exactly like the first term (which has nothing to compare against at
+  // all): no bar, just the center line, muted "—".
+  const semImpacto = delta === null || Math.round(Math.abs(delta) * 100) === 0;
+  const magnitude = semImpacto || maximo === 0 ? 0 : Math.min(Math.abs(delta as number) / maximo, 1);
   return (
     <View className="flex-row items-center gap-2.5">
       <Typography.Paragraph type="body-xs" color="muted" className="font-mono" style={{ width: 32 }}>
@@ -695,11 +728,11 @@ function LinhaImpactoPeriodo({ rotulo, delta }: { rotulo: string; delta: number 
       </Typography.Paragraph>
       <View className="flex-1 h-3.5 relative justify-center">
         <View className="absolute self-center h-full w-px bg-white/10" />
-        {delta !== null && delta !== 0 ? (
+        {!semImpacto ? (
           <View
-            className={`absolute h-2.5 rounded-sm ${delta > 0 ? "bg-success" : "bg-danger"}`}
+            className={`absolute h-2.5 rounded-sm ${(delta as number) > 0 ? "bg-success" : "bg-danger"}`}
             style={
-              delta > 0
+              (delta as number) > 0
                 ? { left: "50%", width: `${magnitude * 50}%` }
                 : { right: "50%", width: `${magnitude * 50}%` }
             }
@@ -710,7 +743,7 @@ function LinhaImpactoPeriodo({ rotulo, delta }: { rotulo: string; delta: number 
         type="body-sm"
         weight="medium"
         className={`font-mono text-right ${
-          delta === null || delta === 0 ? "text-muted" : delta > 0 ? "text-success" : "text-danger"
+          semImpacto ? "text-muted" : (delta as number) > 0 ? "text-success" : "text-danger"
         }`}
         style={{ width: 52 }}
       >
@@ -722,22 +755,27 @@ function LinhaImpactoPeriodo({ rotulo, delta }: { rotulo: string; delta: number 
 
 /**
  * The bottom card's CR variant (item 12 do roadmap): how much each term
- * moved the CR, a drill-down into which of that term's components pulled it
- * the most, and a carousel — one page per term — showing how much each
- * graded component weighed toward that term's own contribution.
+ * moved the CR, then a carousel — one page per term — spelling out every
+ * graded component's own pull on the CR that term, biggest riser first down
+ * to the biggest drag.
  */
 function ImpactoCrCard({
   periodos,
   cursados,
   pesoScrollGesture,
+  pesoArea,
 }: {
   periodos: PeriodoTrajetoria[];
   cursados: ComponenteCursado[];
   pesoScrollGesture: NativeGesture;
+  pesoArea: AnimatedRef<View>;
 }): JSX.Element {
   const semestresOrdenados = periodos.map((periodo) => periodo.semestre);
   const serieCr = calcularCrAcumulado(cursados, semestresOrdenados);
   const deltas = deltasCrPorPeriodo(serieCr);
+  // The biggest single-term move in this student's own series — see
+  // `LinhaImpactoPeriodo`'s docstring for why this beats a fixed constant.
+  const maiorDelta = Math.max(0, ...deltas.filter((d): d is number => d !== null).map(Math.abs));
 
   const [indiceCarrossel, setIndiceCarrossel] = useState(0);
   const [larguraCarrossel, setLarguraCarrossel] = useState(0);
@@ -751,21 +789,20 @@ function ImpactoCrCard({
   };
 
   const periodoAtivo = periodos[indiceCarrossel] ?? periodos[periodos.length - 1] ?? null;
-  const impactos = periodoAtivo ? maioresImpactos(cursados, periodoAtivo.semestre) : [];
 
   if (periodos.length === 0) {
     return (
-      <Typography.Paragraph type="body-sm" color="muted">
+      <Typography.Paragraph type="body-sm" color="muted" className="px-4">
         Ainda não há notas suficientes para mostrar o impacto no CR.
       </Typography.Paragraph>
     );
   }
 
   return (
-    <>
-      <View className="gap-2">
+    <View className="gap-4">
+      <View className="px-4 gap-2">
         <Typography.Paragraph type="body-xs" color="muted">
-          Impacto no CR por semestre
+          Impacto no CR por semestre*
         </Typography.Paragraph>
         <View className="gap-2">
           {periodos.map((periodo, indice) => (
@@ -773,115 +810,101 @@ function ImpactoCrCard({
               key={periodo.semestre}
               rotulo={rotuloSemestreCurto(periodo.semestre)}
               delta={deltas[indice]}
+              maximo={maiorDelta}
             />
           ))}
         </View>
       </View>
 
-      <View className="h-px bg-white/10" />
+      <View className="h-px bg-white/10 mx-4" />
 
       <View className="gap-2.5">
-        <Typography.Paragraph type="body-xs" color="muted">
-          {periodoAtivo
-            ? `Maiores impactos • ${rotuloSemestreCurto(periodoAtivo.semestre)}`
-            : "Maiores impactos"}
-        </Typography.Paragraph>
-        {impactos.length > 0 ? (
-          <View className="gap-2.5">
-            {impactos.map((item) => (
-              <View key={item.codigo} className="flex-row items-center justify-between gap-3">
-                <View className="flex-1">
-                  <Typography.Paragraph type="body-sm" weight="medium">
-                    {item.nome}
-                  </Typography.Paragraph>
-                  <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                    {item.codigo} · nota {formatarNota(item.nota)}
-                  </Typography.Paragraph>
-                </View>
-                <Typography.Paragraph
-                  type="body-sm"
-                  weight="semibold"
-                  className={`font-mono ${item.impacto > 0 ? "text-success" : "text-danger"}`}
-                >
-                  {item.impacto > 0 ? "↑" : "↓"} {formatarCoeficiente(Math.abs(item.impacto))}
-                </Typography.Paragraph>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <Typography.Paragraph type="body-xs" color="muted">
-            Sem notas suficientes nesse semestre.
-          </Typography.Paragraph>
-        )}
-      </View>
-
-      <View className="h-px bg-white/10" />
-
-      <View className="gap-2.5">
-        <Typography.Paragraph type="body-xs" color="muted">
-          Peso das notas no semestre
+        <Typography.Paragraph type="body-xs" color="muted" className="px-4">
+          {periodoAtivo ? `Notas por impacto* • ${rotuloSemestreCurto(periodoAtivo.semestre)}` : "Notas por impacto*"}
         </Typography.Paragraph>
         {/* `pesoScrollGesture` keeps this drag from reading as the
             CR/Carga-Horária swipe (or the tab pager's, one level up) — same
-            relationship the line/bar charts already have, see InsightsTab. */}
-        <GestureDetector gesture={pesoScrollGesture}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={aoRolarCarrossel}
-            onLayout={(evento) => setLarguraCarrossel(evento.nativeEvent.layout.width)}
-            testID="carrossel-peso-notas"
-          >
-            {periodos.map((periodo) => {
-              const pesos = pesoDasNotas(periodo.componentes);
-              return (
-                <View key={periodo.semestre} style={{ width: larguraCarrossel || undefined }} className="gap-2.5">
-                  <View className="h-2.5 flex-row rounded-full overflow-hidden bg-white/10">
-                    {pesos.map((peso) => (
-                      <View
-                        key={peso.codigo}
-                        style={{ width: `${peso.pesoPercentual}%` }}
-                        className={`h-full ${
-                          peso.faixa === "alta"
-                            ? "bg-success"
-                            : peso.faixa === "media"
-                              ? "bg-accent"
-                              : "bg-danger"
-                        }`}
-                      />
-                    ))}
+            relationship the line/bar charts already have, see InsightsTab.
+            `pesoArea` backs that same relationship for a touch that started
+            here and then drifted outside these bounds.
+
+            No horizontal padding here or on the ScrollView itself — the
+            carousel has to span the card's full, unpadded width so its
+            pages' widths (and therefore the paging math) match exactly what
+            `onLayout` measures below. Each page carries its own `px-4`
+            instead (see the mapped `View` right below), which is what
+            actually keeps a page's content off the card's edges — without
+            it, this card's own `p-4` used to eat into every page equally,
+            but adjacent pages' content still touched at the seam mid-swipe:
+            paging showed exactly one page-width at a time, so there was
+            never a gap between one page's trailing edge and the next page's
+            leading edge for that padding to create. */}
+        <View ref={pesoArea} collapsable={false}>
+          <GestureDetector gesture={pesoScrollGesture}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={aoRolarCarrossel}
+              onLayout={(evento) => setLarguraCarrossel(evento.nativeEvent.layout.width)}
+              testID="carrossel-peso-notas"
+            >
+              {periodos.map((periodo) => {
+                const impactos = impactosPorSemestre(cursados, periodo.semestre);
+                return (
+                  // `overflow-hidden` is what actually enforces the page width
+                  // below: `numberOfLines={1}` only decides *where* a name
+                  // truncates once Yoga has already given its Text a bounded
+                  // width — it doesn't force that bound to exist. Without
+                  // this, a long, space-less nome could still render past
+                  // this page's edge and visibly bleed into the carousel's
+                  // next one instead of getting clipped here.
+                  <View
+                    key={periodo.semestre}
+                    style={{ width: larguraCarrossel || undefined }}
+                    className="gap-2.5 overflow-hidden px-4"
+                  >
+                    {impactos.length > 0 ? (
+                      impactos.map((item) => {
+                        // Same zero-centésimos check `formatarImpacto` makes
+                        // internally — kept in sync here just to pick the
+                        // neutral color for a value it renders as "—".
+                        const semImpacto = Math.round(Math.abs(item.impacto) * 100) === 0;
+                        return (
+                          <View key={item.codigo} className="flex-row items-center justify-between gap-3">
+                            <View className="flex-1 shrink">
+                              <Typography.Paragraph type="body-sm" weight="medium" numberOfLines={1}>
+                                {item.nome}
+                              </Typography.Paragraph>
+                              <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                                {item.codigo} · nota {formatarNota(item.nota)}
+                              </Typography.Paragraph>
+                            </View>
+                            <Typography.Paragraph
+                              type="body-sm"
+                              weight="semibold"
+                              className={`font-mono shrink-0 ${
+                                semImpacto ? "text-muted" : item.impacto > 0 ? "text-success" : "text-danger"
+                              }`}
+                            >
+                              {formatarImpacto(item.impacto)}
+                            </Typography.Paragraph>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Typography.Paragraph type="body-xs" color="muted">
+                        Sem notas suficientes nesse semestre.
+                      </Typography.Paragraph>
+                    )}
                   </View>
-                  <View className="gap-1.5">
-                    {pesos.map((peso) => (
-                      <View key={peso.codigo} className="flex-row items-center justify-between gap-2">
-                        <View className="flex-row items-center gap-2 flex-1">
-                          <View
-                            className={`w-2 h-2 rounded-sm ${
-                              peso.faixa === "alta"
-                                ? "bg-success"
-                                : peso.faixa === "media"
-                                  ? "bg-accent"
-                                  : "bg-danger"
-                            }`}
-                          />
-                          <Typography.Paragraph type="body-xs" className="flex-1" numberOfLines={1}>
-                            {peso.nome}
-                          </Typography.Paragraph>
-                        </View>
-                        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                          nota {formatarNota(peso.nota)} · {peso.cargaHoraria}h
-                        </Typography.Paragraph>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </GestureDetector>
+                );
+              })}
+            </ScrollView>
+          </GestureDetector>
+        </View>
         {periodos.length > 1 ? (
-          <View className="flex-row justify-center gap-1.5">
+          <View className="flex-row justify-center gap-1.5 px-4">
             {periodos.map((periodo, indice) => (
               <View
                 key={periodo.semestre}
@@ -893,7 +916,7 @@ function ImpactoCrCard({
           </View>
         ) : null}
       </View>
-    </>
+    </View>
   );
 }
 

@@ -22,6 +22,10 @@
     --accent-shade: color-mix(in oklab, var(--accent) 65%, black 35%);
     /* Selected bottom-tab icon/label: blue in light mode (the accent itself). */
     --tab-active-foreground: var(--accent);
+    /* HeroUI ships 20% black, which leaves the screen behind a dialog fully
+       legible — fine for a passing notice, not for a confirmation the student
+       has to actually stop and read. */
+    --backdrop: oklch(0% 0 0 / 55%);
   }
 
   @variant dark {
@@ -32,6 +36,9 @@
        for *backgrounds* (see the note above), too washed out as a lone
        icon/label color against the dark background. */
     --tab-active-foreground: var(--snow);
+    /* Heavier than the light-mode backdrop: over an already dark background,
+       the same 55% barely separates the dialog from what is behind it. */
+    --backdrop: oklch(0% 0 0 / 70%);
   }
 }
 

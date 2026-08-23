@@ -1,24 +1,31 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import InsightsTab from "@/screens/InsightsTab";
-import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { ApiError, getTrajetoria } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { Historico, MarcosSemestralizacao, TrajetoriaResponse } from "@/lib/types";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
+jest.mock("@/lib/sync-freshness-context", () => ({
+  ...jest.requireActual("@/lib/sync-freshness-context"),
+  useSyncFreshness: jest.fn(),
+}));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getTrajetoria: jest.fn(),
-  postTrajetoriaSync: jest.fn(),
 }));
 jest.mock("@/lib/periodo-cache", () => ({
   getPeriodoCache: jest.fn(),
   savePeriodoCache: jest.fn(),
+}));
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -122,15 +129,48 @@ beforeEach(() => {
     syncMode: "device",
   });
   jest.mocked(getPeriodoCache).mockResolvedValue(null);
+  jest.mocked(useSyncFreshness).mockReturnValue({
+    scheduleFetchedAt: null,
+    historicoFetchedAt: null,
+    setScheduleFetchedAt: jest.fn(),
+    setHistoricoFetchedAt: jest.fn(),
+  });
 });
 
 describe("Insights", () => {
-  it("offers to sync when the user has never synced", async () => {
+  it("still reads the stored histórico after the account is unlinked", async () => {
+    jest.mocked(useSigaaLink).mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({}));
+
+    await render(<InsightsTab />);
+
+    expect(jest.mocked(getTrajetoria)).toHaveBeenCalledWith("token");
+    expect(screen.queryByText("Vincule sua conta do SIGAA para ver sua trajetória.")).toBeNull();
+  });
+
+  it("asks an unlinked user to link when there is nothing stored", async () => {
+    jest.mocked(useSigaaLink).mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
     jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
 
     await render(<InsightsTab />);
 
-    expect(await screen.findByText(/sincronizar histórico/i)).toBeTruthy();
+    expect(
+      await screen.findByText("Vincule sua conta em Perfil para buscar seu histórico escolar no SIGAA."),
+    ).toBeTruthy();
+  });
+
+  it("points to Perfil to sync when the user has never synced", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+
+    await render(<InsightsTab />);
+
+    expect(await screen.findByText(/ir para perfil/i)).toBeTruthy();
   });
 
   it("shows the coefficient, the carga horária card and the progress bars once synced", async () => {
@@ -200,9 +240,8 @@ describe("Insights", () => {
       fireEvent.press(screen.getByText("CR"));
     });
 
-    expect(screen.getByText("Impacto no CR por semestre")).toBeTruthy();
-    expect(screen.getByText("Peso das notas no semestre")).toBeTruthy();
-    expect(screen.getByText(/maiores impactos/i)).toBeTruthy();
+    expect(screen.getByText("Impacto no CR por semestre*")).toBeTruthy();
+    expect(screen.getByText(/notas por impacto/i)).toBeTruthy();
     expect(screen.getByText("CÁLCULO A")).toBeTruthy();
     expect(screen.queryByText("Obrigatórias")).toBeNull();
   });
@@ -261,7 +300,7 @@ describe("Insights", () => {
 
     await render(<InsightsTab />);
 
-    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("↑ 0,50");
+    expect(await screen.findByTestId("cr-variacao")).toHaveTextContent("↑ 50*");
   });
 
   it("shows a carga horária bar chart once that tab is selected", async () => {
@@ -291,21 +330,6 @@ describe("Insights", () => {
 
     expect(screen.getByTestId("bar-chart")).toBeTruthy();
     expect(screen.getByTestId("line-chart")).toBeTruthy();
-  });
-
-  it("surfaces a sync failure without wiping the disclosure already on screen", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest.mocked(postTrajetoriaSync).mockRejectedValue(new ApiError("Boom", 500));
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
-
-    await render(<InsightsTab />);
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
-
-    expect(screen.getByText(/Pode ser um problema no documento/i)).toBeTruthy();
-    expect(screen.getByText(/baixar o PDF em Documentos/i)).toBeTruthy();
-    consoleWarn.mockRestore();
   });
 
   it("shows the error card with a retry that reloads when the fetch fails", async () => {

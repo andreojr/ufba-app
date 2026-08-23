@@ -16,14 +16,50 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("heroui-native", () => {
-  const { Text, View } = jest.requireActual("react-native");
+  const { Text, View, Pressable } = jest.requireActual("react-native");
+  const { createContext, useContext, useState } = jest.requireActual("react");
+
+  // Stand-in for the real compound Popover: the trigger genuinely toggles open
+  // state and the content only mounts once open, so a test that presses the
+  // trigger is exercising this screen's wiring rather than a always-rendered stub.
+  // No type argument: `createContext` comes from requireActual and is untyped,
+  // and annotating it trips TS2347 (see the same pattern in ajustes.test.tsx).
+  const PopoverContext = createContext({ open: false, setOpen: (_: boolean) => {} });
+  const Popover = Object.assign(
+    ({ children }: any) => {
+      const [open, setOpen] = useState(false);
+      return <PopoverContext.Provider value={{ open, setOpen }}>{children}</PopoverContext.Provider>;
+    },
+    {
+      Trigger: ({ children, ...props }: any) => {
+        const { open, setOpen } = useContext(PopoverContext);
+        return (
+          <Pressable {...props} onPress={() => setOpen(!open)}>
+            {children}
+          </Pressable>
+        );
+      },
+      Portal: ({ children }: any) => {
+        const { open } = useContext(PopoverContext);
+        return open ? <View>{children}</View> : null;
+      },
+      Overlay: () => null,
+      Content: ({ children }: any) => <View>{children}</View>,
+      Arrow: () => null,
+      Close: () => null,
+      Title: ({ children }: any) => <Text>{children}</Text>,
+      Description: ({ children }: any) => <Text>{children}</Text>,
+    },
+  );
 
   return {
     Avatar: Object.assign(({ children }: any) => <View>{children}</View>, {
       Fallback: ({ children }: any) => <Text>{children}</Text>,
     }),
+    Popover,
     Typography: {
       Heading: ({ children, ...props }: any) => <Text {...props}>{children}</Text>,
+      Paragraph: ({ children, ...props }: any) => <Text {...props}>{children}</Text>,
     },
     useThemeColor: (tokens: string | string[]) =>
       Array.isArray(tokens) ? tokens.map(() => "#000000") : "#000000",
@@ -63,6 +99,31 @@ describe("TabsHeader", () => {
       user: { id: "1", email: "a@ufba.br", name: "Ana", avatarUrl: null },
     } as any);
     mockPush.mockClear();
+  });
+
+  it("offers the carga-horária legend behind an info button on the trajetória page", async () => {
+    pinTo(9, 0);
+
+    const { getByTestId, getByText, queryByText } = await render(<TabsHeader activePage={1} />);
+
+    // Closed to start with — the legend is not spilling into the header.
+    expect(queryByText("muito densa")).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("legenda-densidade-trigger"));
+    });
+
+    for (const palavra of ["leve", "média", "pesada", "muito densa"]) {
+      expect(getByText(palavra)).toBeTruthy();
+    }
+  });
+
+  it("keeps the legend button off the pages the scale says nothing about", async () => {
+    pinTo(9, 0);
+
+    const { queryByTestId } = await render(<TabsHeader activePage={0} />);
+
+    expect(queryByTestId("legenda-densidade-trigger")).toBeNull();
   });
 
   it("greets the student by name on the Início page instead of a generic title", async () => {

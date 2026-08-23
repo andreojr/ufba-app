@@ -7,6 +7,7 @@ import { SvgUri } from "react-native-svg";
 
 import { AnimatedPageTitle } from "@/components/AnimatedPageTitle";
 import { AppIcon } from "@/components/AppIcon";
+import { LegendaDensidadeInfo } from "@/components/LegendaDensidade";
 import { useAuth } from "@/lib/auth-context";
 import { buildGreeting, identidadeAppBar } from "@/lib/user-name";
 
@@ -14,6 +15,9 @@ import { buildGreeting, identidadeAppBar } from "@/lib/user-name";
 const AVATAR_SIZE_SM_PX = 40;
 
 const STATIC_TITLES: ReadonlyArray<string> = ["", "Minha trajetória", "Insights", "Professores"];
+
+/** Index of the trajetória page in STATIC_TITLES / TabsPager. */
+const PAGINA_TRAJETORIA = 1;
 
 /**
  * The header shared by all four swipeable tabs (TabsPager) — one instance,
@@ -65,7 +69,13 @@ export function TabsHeader({ activePage }: { activePage: number }): JSX.Element 
       className="flex-row items-center justify-between px-6 pb-3.5 self-stretch"
       style={{ paddingTop: insets.top + 14 }}
     >
-      <AnimatedPageTitle pageKey={activePage} title={titles[activePage]} />
+      {/* Trajetória is the one page with a glyph vocabulary to explain, so it
+          is the one page that gets a trailing control. */}
+      <AnimatedPageTitle
+        pageKey={activePage}
+        title={titles[activePage]}
+        trailing={activePage === PAGINA_TRAJETORIA ? <LegendaDensidadeInfo /> : undefined}
+      />
       {identidade.initials || identidade.avatarUrl ? (
         <Pressable
           testID="app-bar-profile"

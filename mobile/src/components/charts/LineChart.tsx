@@ -53,10 +53,11 @@ const ESPACO_LABEL = 26;
 // chart — the opposite of the contrast auto-scaling this domain is meant to
 // expose.
 const MARGEM_DOMINIO = 0.02;
-// A lighter violet than the accent line itself: a value label that reads as
-// an annotation floating over the point, not another line of body text
-// competing with it.
-const COR_VALOR = "rgba(196, 181, 253, 0.75)";
+// Faded via opacity, not a separate color, so it always tracks whatever
+// `accent` resolves to for the current theme — this used to be a hardcoded
+// violet left over from Gradline's old purple brand, which read wrong once
+// `accent` became UFBA's institutional blue (see global.css).
+const OPACIDADE_VALOR = 0.75;
 
 /**
  * The CR-per-período line chart. The y-axis is scaled to the series' own
@@ -123,7 +124,8 @@ export function LineChart({ pontos, altura = ALTURA_PADRAO, scrollGesture }: Lin
                 fontSize: 10,
                 fontFamily: "SourceCodePro_400Regular",
                 fontWeight: "600",
-                color: COR_VALOR,
+                color: accent,
+                opacity: OPACIDADE_VALOR,
                 transform: [{ rotate: "-45deg" }],
               }}
             >

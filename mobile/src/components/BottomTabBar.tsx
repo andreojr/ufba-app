@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, Text, View, type LayoutChangeEvent } from
 import Animated, {
   Extrapolation,
   interpolate,
+  interpolateColor,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
@@ -35,14 +36,15 @@ const INDICATOR_WIDTH = 20;
 const INDICATOR_HEIGHT = 3;
 
 /**
- * A tab's icon+label, crossfading between its outline/muted and filled/active
- * look as `progress` (the pager's continuous page position — an integer at
- * rest, fractional mid-drag) passes through this tab's own index. Two icons
- * and two labels are stacked and faded against each other rather than
- * animating icon glyph or font weight directly — neither is something
- * Reanimated can tween (a glyph swap isn't a continuous style, and RN font
- * weight is a discrete string), so a crossfade is the standard substitute:
- * the same trick React Navigation's own tab bar icon uses internally.
+ * A tab's icon+label, moving between its outline/muted and filled/active look
+ * as `progress` (the pager's continuous page position — an integer at rest,
+ * fractional mid-drag) passes through this tab's own index. The icon is two
+ * glyphs stacked and crossfaded, since a glyph swap isn't a continuous style
+ * Reanimated can tween — the same trick React Navigation's own tab bar icon
+ * uses internally. The *label*, though, is a single Text at one fixed weight
+ * whose colour alone is interpolated: an earlier version crossfaded a medium
+ * and a bold copy of the label, and swapping weight mid-slide read as the
+ * text wobbling rather than as a selection changing.
  */
 function AnimatedTabButton({
   index,
@@ -66,6 +68,9 @@ function AnimatedTabButton({
   const focusAmount = useDerivedValue(() => 1 - Math.min(Math.abs(progress.value - index), 1));
   const activeStyle = useAnimatedStyle(() => ({ opacity: focusAmount.value }));
   const inactiveStyle = useAnimatedStyle(() => ({ opacity: 1 - focusAmount.value }));
+  const labelStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(focusAmount.value, [0, 1], [mutedColor, activeForeground]),
+  }));
 
   return (
     <Pressable
@@ -83,26 +88,12 @@ function AnimatedTabButton({
           <AppIcon name={icon} variant="fill" size={22} color={activeForeground} />
         </Animated.View>
       </View>
-      <View style={{ marginTop: 2 }}>
-        <Animated.Text
-          numberOfLines={1}
-          style={[
-            { fontFamily: "Poppins", fontSize: 11, fontWeight: "500", color: mutedColor },
-            inactiveStyle,
-          ]}
-        >
-          {label}
-        </Animated.Text>
-        <Animated.Text
-          numberOfLines={1}
-          style={[
-            { position: "absolute", fontFamily: "Poppins", fontSize: 11, fontWeight: "700", color: activeForeground },
-            activeStyle,
-          ]}
-        >
-          {label}
-        </Animated.Text>
-      </View>
+      <Animated.Text
+        numberOfLines={1}
+        style={[{ marginTop: 2, fontFamily: "Poppins", fontSize: 11, fontWeight: "500" }, labelStyle]}
+      >
+        {label}
+      </Animated.Text>
     </Pressable>
   );
 }

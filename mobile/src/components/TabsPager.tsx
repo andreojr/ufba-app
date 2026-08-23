@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState, type JSX } from "react";
 import { View, useWindowDimensions } from "react-native";
-import { Gesture, GestureDetector, type PanGesture } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, type GestureType } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { TabsHeader } from "@/components/TabsHeader";
+import { tocouDentroDaArea } from "@/lib/gesture-bounds";
 import { direcaoDoSwipe } from "@/lib/trajetoria";
-import { TabSwipeRegistryProvider } from "@/lib/tab-swipe-context";
+import { TabSwipeRegistryProvider, type AreaBloqueada } from "@/lib/tab-swipe-context";
 import HomeTab from "@/screens/HomeTab";
 import InsightsTab from "@/screens/InsightsTab";
 import ProfessoresScreen from "@/screens/ProfessoresScreen";
@@ -46,10 +47,17 @@ export default function TabsPager(): JSX.Element {
     transform: [{ translateX: -paginaAtual.value * pageWidth + arrasto.value }],
   }));
 
-  // Gestures registered by child screens (currently just Insights' own
-  // CR/Carga-Horária card) that this pager's swipe must lose to — see
-  // tab-swipe-context's docstring.
-  const [blockingGestures, setBlockingGestures] = useState<PanGesture[]>([]);
+  // Gestures registered by child screens (currently Insights' own
+  // CR/Carga-Horária swipe plus its charts' and carousel's native scroll
+  // gestures) that this pager's swipe must lose to — see tab-swipe-context's
+  // docstring for why the native ones matter just as much as the Pan one.
+  const [blockingGestures, setBlockingGestures] = useState<GestureType[]>([]);
+  // Areas (charts, the "peso das notas" carousel) a touch can start inside
+  // and later drift outside of — a gesture race alone doesn't cover that
+  // (it only helps once the nested gesture actually recognizes, which a
+  // chart with too little content to scroll never does), so the pager fails
+  // itself on touch-down for any of these regardless. See tab-swipe-context.
+  const [blockingAreas, setBlockingAreas] = useState<AreaBloqueada[]>([]);
 
   // Memoized like insights.tsx's own swipeInsight — a fresh `Gesture.Pan()`
   // on every render (this component re-renders on every completed swipe, via
@@ -62,6 +70,15 @@ export default function TabsPager(): JSX.Element {
         .activeOffsetX([-10, 10])
         .failOffsetY([-10, 10])
         .requireExternalGestureToFail(...blockingGestures)
+        .onTouchesDown((evento, manager) => {
+          "worklet";
+          for (const area of blockingAreas) {
+            if (tocouDentroDaArea(evento, area)) {
+              manager.fail();
+              return;
+            }
+          }
+        })
         .onChange((evento) => {
           let x = evento.translationX;
           if (paginaAtual.value === 0 && x > 0) {
@@ -87,7 +104,7 @@ export default function TabsPager(): JSX.Element {
             scheduleOnRN(setActivePage, proxima);
           }
         }),
-    [blockingGestures, paginaAtual, arrasto],
+    [blockingGestures, blockingAreas, paginaAtual, arrasto],
   );
 
   const onSelectPage = useCallback(
@@ -106,7 +123,7 @@ export default function TabsPager(): JSX.Element {
           title itself animates now — see TabsHeader/AnimatedPageTitle. */}
       <TabsHeader activePage={activePage} />
       <View className="flex-1 overflow-hidden">
-        <TabSwipeRegistryProvider onGesturesChange={setBlockingGestures}>
+        <TabSwipeRegistryProvider onGesturesChange={setBlockingGestures} onAreasChange={setBlockingAreas}>
           <GestureDetector gesture={swipePagina}>
             <Animated.View style={[{ flex: 1, flexDirection: "row", width: pageWidth * 4 }, estiloTrilha]}>
               <View style={{ width: pageWidth }}>

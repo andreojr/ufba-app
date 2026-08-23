@@ -29,10 +29,11 @@ const LARGURA_MINIMA_BARRA = 4;
 // themselves (a fixed MARGEM_Y taken out of a short chart) left too little
 // height for the bars to show real contrast between close values.
 const ESPACO_LABEL = 44;
-// A lighter violet than the accent bars themselves: a value label that reads
-// as an annotation floating over the bar, not another line of body text
-// competing with it.
-const COR_VALOR = "rgba(196, 181, 253, 0.75)";
+// Faded via opacity, not a separate color, so it always tracks whatever
+// `accent` resolves to for the current theme — this used to be a hardcoded
+// violet left over from Gradline's old purple brand, which read wrong once
+// `accent` became UFBA's institutional blue (see global.css).
+const OPACIDADE_VALOR = 0.75;
 
 /**
  * The carga-horária-per-período bar chart. Bars scale to the tallest one in
@@ -92,7 +93,8 @@ export function BarChart({ barras, altura = ALTURA_PADRAO, scrollGesture }: BarC
                 fontSize: 10,
                 fontFamily: "SourceCodePro_400Regular",
                 fontWeight: "600",
-                color: COR_VALOR,
+                color: accent,
+                opacity: OPACIDADE_VALOR,
                 transform: [{ rotate: "-90deg" }],
               }}
             >

@@ -19,10 +19,16 @@ export function AnimatedPageTitle({
   pageKey,
   title,
   titleType = "h3",
+  trailing,
 }: {
   pageKey: number;
   title: ReactNode;
   titleType?: "h1" | "h3" | "h4" | "h5" | "h6";
+  /** Sits immediately after the title text, outside the animated window — so a
+   * page-specific control (e.g. the density legend's info button) hugs the
+   * title instead of drifting off toward the avatar, and does not slide or get
+   * clipped along with the title it belongs to. */
+  trailing?: ReactNode;
 }): JSX.Element {
   const [rendered, setRendered] = useState<{ key: number; title: ReactNode; previousTitle: ReactNode | null }>({
     key: pageKey,
@@ -89,21 +95,30 @@ export function AnimatedPageTitle({
   const trackStyle = useAnimatedStyle(() => ({ transform: [{ translateY: trackY.value }] }));
 
   return (
-    <View style={{ height: lineHeight, overflow: "hidden" }} className="flex-1">
-      <Animated.View style={trackStyle}>
-        <Animated.View style={incomingStyle} onLayout={measureLine}>
-          <Typography.Heading type={titleType} numberOfLines={1}>
-            {rendered.title}
-          </Typography.Heading>
-        </Animated.View>
-        {rendered.previousTitle !== null ? (
-          <Animated.View style={outgoingStyle}>
+    <View className="flex-1 flex-row items-center gap-2">
+      {/* `shrink` rather than `flex-1` when there is trailing content: the
+          window sizes to the title text so the trailing control sits against
+          it, while still shrinking to make room on a long title. */}
+      <View
+        style={{ height: lineHeight, overflow: "hidden" }}
+        className={trailing ? "shrink" : "flex-1"}
+      >
+        <Animated.View style={trackStyle}>
+          <Animated.View style={incomingStyle} onLayout={measureLine}>
             <Typography.Heading type={titleType} numberOfLines={1}>
-              {rendered.previousTitle}
+              {rendered.title}
             </Typography.Heading>
           </Animated.View>
-        ) : null}
-      </Animated.View>
+          {rendered.previousTitle !== null ? (
+            <Animated.View style={outgoingStyle}>
+              <Typography.Heading type={titleType} numberOfLines={1}>
+                {rendered.previousTitle}
+              </Typography.Heading>
+            </Animated.View>
+          ) : null}
+        </Animated.View>
+      </View>
+      {trailing}
     </View>
   );
 }

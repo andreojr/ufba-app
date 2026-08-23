@@ -17,14 +17,18 @@ export default function TabsLayout(): JSX.Element {
   const sigaaLink = useSigaaLink();
   const [backgroundColor] = useThemeColor(["background"]);
 
-  // Onboarding gate: send the user to link their SIGAA account before they can use
-  // the app, matching the design's flow (Entrada → Vincular conta → Início).
+  // Onboarding gate: send a first-time user to link their SIGAA account before
+  // they can use the app, matching the design's flow (Entrada → Vincular conta
+  // → Início). Only a *first-time* user, though: someone who unlinks later
+  // still has their horário and histórico in our database, and throwing them
+  // out of the tabs to re-link would take away data they can perfectly well
+  // keep reading. Unlinking only costs them the ability to *update* it.
   useEffect(() => {
-    if (sigaaLink.status === "unlinked") {
+    if (sigaaLink.status === "unlinked" && !sigaaLink.jaVinculou) {
       router.replace("/link-account");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sigaaLink.status]);
+  }, [sigaaLink.status, sigaaLink.jaVinculou]);
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>

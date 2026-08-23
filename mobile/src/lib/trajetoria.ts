@@ -1,3 +1,4 @@
+import type { AppIconName } from "../components/AppIcon";
 import { parseIsoDate, startOfDay } from "./periodo-letivo";
 import type {
   ComponenteCursado,
@@ -18,7 +19,7 @@ export interface PeriodoTrajetoria {
 export type Insight = "cr" | "cargaHoraria";
 
 /** Left to right: swiping toward the next one moves right through this list. */
-const ORDEM_INSIGHT: readonly Insight[] = ["cr", "cargaHoraria"];
+const ORDEM_INSIGHT: readonly Insight[] = ["cargaHoraria", "cr"];
 
 /** Below this, a pan reads as a tap or a scroll correction, not a swipe. */
 const LIMIAR_SWIPE_PX = 40;
@@ -418,16 +419,47 @@ export function maioresImpactos(
 }
 
 /**
- * The arrow + number shown beside a graded component. No arrow for zero
- * impact or nothing to show — an up or down arrow on a value that rounds to
- * nothing would read as a change that isn't there.
+ * Every graded component from one term and its pull on the overall CR,
+ * biggest positive pull first down to the biggest negative one — signed
+ * order, not by magnitude like `maioresImpactos`, and nothing is dropped.
+ * This is what the "Notas por impacto pelo semestre" carousel page for this
+ * term shows: every grade that moved the CR, ranked top to bottom.
+ */
+export function impactosPorSemestre(
+  cursados: ComponenteCursado[],
+  semestre: string,
+): ImpactoComponente[] {
+  return cursados
+    .filter((c) => c.semestre === semestre && c.nota !== null)
+    .map((c) => ({
+      codigo: c.codigo,
+      nome: c.nome,
+      nota: c.nota as number,
+      impacto: impactoNoCr(cursados, c.codigo),
+    }))
+    .filter((c): c is ImpactoComponente => c.impacto !== null)
+    .sort((a, b) => b.impacto - a.impacto);
+}
+
+/**
+ * The arrow + number shown beside a graded component, every place a CR
+ * impact/delta is displayed (the top card's variação, a term's own delta, a
+ * component's pull on the CR). In centésimos, not the CR's own two decimals —
+ * these moves are small enough (0,06, 0,01) that "6" and "1" read far more
+ * naturally than "0,06" and "0,01" do. No arrow for zero, or for a value that
+ * rounds to zero centésimos — an arrow on a change that isn't there would
+ * read as one that is.
  */
 export function formatarImpacto(impacto: number | null): string {
-  if (impacto === null || impacto === 0) {
+  if (impacto === null) {
+    return "—";
+  }
+  const centesimos = Math.round(Math.abs(impacto) * 100);
+  if (centesimos === 0) {
     return "—";
   }
   const seta = impacto > 0 ? "↑" : "↓";
-  return `${seta} ${formatarCoeficiente(Math.abs(impacto))}`;
+  return `${seta} ${centesimos}`;
 }
 
 /**
@@ -478,6 +510,70 @@ export function statusComponente(
   }
   const equivalencia = marcos.equivalencias.find((e) => e.codigo === codigo);
   return equivalencia ? { tipo: "equivalente", equivalenteDe: equivalencia.equivalenteDe } : null;
+}
+
+/**
+ * The status card that hangs off the bottom of a matéria card, and null for
+ * the ordinary case, which is most of them: a matéria only earns one when it
+ * *deviates* from what its período header already says. "Aprovada" and "em
+ * curso" travel in herds — every componente in a closed período is approved,
+ * every one in the open período is being taken — so a card for them would be
+ * repeating the header once per matéria.
+ *
+ * Two axes can fire at once (a reprovada that also left the grade). The
+ * situação wins: a reprovada fora da grade is a reprovada first.
+ */
+export interface FaixaComponente {
+  /** Literal Tailwind classes, never built by concatenation — the JIT only sees whole strings. */
+  corFundo: string;
+  corTexto: string;
+  rotulo: string;
+}
+
+/** Soft fills, not solid: this card sits under every deviating matéria in a
+ *  dense grid, and a saturated block per card would read as an alarm the
+ *  transcript is not raising. Same soft/solid pairing the período badges above
+ *  the grid already use. */
+const FAIXAS_SITUACAO: Record<string, { corFundo: string; corTexto: string }> = {
+  REP: { corFundo: "bg-danger-soft", corTexto: "text-danger" },
+  REPF: { corFundo: "bg-danger-soft", corTexto: "text-danger" },
+  REPMF: { corFundo: "bg-danger-soft", corTexto: "text-danger" },
+  TRANC: { corFundo: "bg-warning-soft", corTexto: "text-warning" },
+  CANC: { corFundo: "bg-warning-soft", corTexto: "text-warning" },
+  // Counted toward the curso without having been cursado in this período —
+  // the same "it's here but it didn't happen here" family, hence one colour.
+  DISP: { corFundo: "bg-accent-soft", corTexto: "text-accent" },
+  CUMP: { corFundo: "bg-accent-soft", corTexto: "text-accent" },
+  TRANS: { corFundo: "bg-accent-soft", corTexto: "text-accent" },
+  INCORP: { corFundo: "bg-accent-soft", corTexto: "text-accent" },
+};
+
+/** No colour to claim: the grade moved on, which is not good or bad news. */
+const FAIXA_NEUTRA = { corFundo: "bg-white/5", corTexto: "text-muted" };
+
+export function faixaComponente(
+  situacao: string,
+  status: StatusComponente | null,
+): FaixaComponente | null {
+  const rotulo = rotuloSituacao(situacao);
+  // rotuloSituacao returns null only for APR, and MATR is the other situação
+  // the período header already covers. Everything else is a deviation.
+  if (rotulo !== null && situacao !== SITUACAO_MATRICULADO) {
+    // An unmapped code means SIGAA's legend grew: the neutral fill plus the
+    // raw code, rather than a colour that would claim to know what it means.
+    return { ...(FAIXAS_SITUACAO[situacao] ?? FAIXA_NEUTRA), rotulo };
+  }
+  if (status?.tipo === "equivalente") {
+    return {
+      corFundo: "bg-success-soft",
+      corTexto: "text-success",
+      rotulo: `equivale a ${status.equivalenteDe}`,
+    };
+  }
+  if (status?.tipo === "obsoleta") {
+    return { ...FAIXA_NEUTRA, rotulo: "fora da grade atual" };
+  }
+  return null;
 }
 
 /** One bar in the workload progress bar's segmented rendering — one per período the grade has a marco for. */
@@ -548,22 +644,53 @@ export function posicaoSemestral(segmentos: SegmentoSemestralizacao[]): PosicaoS
  * here is a fraction of a total, so it never reads as progress toward one. */
 export type NivelDensidade = 1 | 2 | 3 | 4;
 
-const CORES_DENSIDADE: Record<NivelDensidade, string> = {
-  1: "#22C55E", // verde — leve
-  2: "#F59E0B", // amarelo — média
-  3: "#F97316", // laranja — pesada
-  4: "#EF4444", // vermelho — muito densa
+/**
+ * The tier vocabulary: a glyph and the words for it.
+ *
+ * A progression of "how much material is in this matéria" — uma folha, várias
+ * folhas, um livro, uma bandeja cheia. The first two steps multiply the same
+ * object, so they carry their own order; the 3→4 step changes object, and that
+ * is the part the legend earns its place explaining.
+ *
+ * All four come from Ionicons deliberately. An earlier pass reached into
+ * MaterialCommunityIcons for a multiple-books glyph, but two families inside a
+ * four-step scale means two stroke weights in the one place that can least
+ * afford it — the legend line, where all four sit side by side.
+ *
+ * Deliberately no color. The card already spends verde/âmbar/vermelho on the
+ * nota (see gradeColor), and a second ramp in the opposite corner meaning
+ * something else entirely is what made this cue unreadable.
+ */
+const ESCALA_DENSIDADE: Record<
+  NivelDensidade,
+  { icone: AppIconName; rotulo: string; curto: string }
+> = {
+  1: { icone: "IconPaper", rotulo: "Carga leve", curto: "leve" },
+  2: { icone: "IconPapers", rotulo: "Carga média", curto: "média" },
+  3: { icone: "IconBook", rotulo: "Carga pesada", curto: "pesada" },
+  4: { icone: "IconTrayFull", rotulo: "Carga muito densa", curto: "muito densa" },
 };
+
+/** Every tier, lightest first — what the legend at the top of the aba walks through. */
+export const ESCALA_DENSIDADE_ORDENADA = [1, 2, 3, 4].map((nivel) => ({
+  nivel: nivel as NivelDensidade,
+  ...ESCALA_DENSIDADE[nivel as NivelDensidade],
+}));
 
 /**
  * Classifies a componente's carga horária into one of four density tiers.
- * Cuts sit at 50/75/100h so a 90h componente (laranja) reads as heavier than
- * a 60-68h one (amarelo) but lighter than a 120h one (vermelho) — the two
- * ends of the range this app's transcripts actually carry.
+ * Cuts sit at 50/75/100h so a 90h componente (um livro) reads as heavier than
+ * a 60-68h one (várias folhas) but lighter than a 120h one (uma bandeja cheia) —
+ * the two ends of the range this app's transcripts actually carry.
  */
-export function densidadeCarga(horas: number): { nivel: NivelDensidade; cor: string } {
+export function densidadeCarga(horas: number): {
+  nivel: NivelDensidade;
+  icone: AppIconName;
+  rotulo: string;
+  curto: string;
+} {
   const nivel: NivelDensidade = horas <= 50 ? 1 : horas <= 75 ? 2 : horas <= 100 ? 3 : 4;
-  return { nivel, cor: CORES_DENSIDADE[nivel] };
+  return { nivel, ...ESCALA_DENSIDADE[nivel] };
 }
 
 export function historicoDesatualizado(

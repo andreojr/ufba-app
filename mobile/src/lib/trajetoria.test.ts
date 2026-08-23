@@ -6,6 +6,7 @@ import {
   contarFaltantes,
   deltasCrPorPeriodo,
   densidadeCarga,
+  faixaComponente,
   faixaNota,
   formatarCoeficiente,
   formatarImpacto,
@@ -313,17 +314,17 @@ describe("direcaoDoSwipe", () => {
 });
 
 describe("proximoInsight", () => {
-  it("steps to cargaHoraria on a clear leftward swipe from cr", () => {
-    expect(proximoInsight("cr", -60, 0)).toBe("cargaHoraria");
+  it("steps to cr on a clear leftward swipe from cargaHoraria", () => {
+    expect(proximoInsight("cargaHoraria", -60, 0)).toBe("cr");
   });
 
-  it("steps back to cr on a clear rightward swipe from cargaHoraria", () => {
-    expect(proximoInsight("cargaHoraria", 60, 0)).toBe("cr");
+  it("steps back to cargaHoraria on a clear rightward swipe from cr", () => {
+    expect(proximoInsight("cr", 60, 0)).toBe("cargaHoraria");
   });
 
   it("clamps rather than wrapping past the first or last tab", () => {
-    expect(proximoInsight("cr", 60, 0)).toBe("cr");
-    expect(proximoInsight("cargaHoraria", -60, 0)).toBe("cargaHoraria");
+    expect(proximoInsight("cargaHoraria", 60, 0)).toBe("cargaHoraria");
+    expect(proximoInsight("cr", -60, 0)).toBe("cr");
   });
 
   it("ignores a drag that hasn't cleared the swipe threshold", () => {
@@ -597,12 +598,16 @@ describe("variacaoUltimoPeriodo", () => {
 });
 
 describe("formatarImpacto", () => {
-  it("renders a positive impact with an upward arrow", () => {
-    expect(formatarImpacto(0.0842)).toBe("↑ 0,08");
+  it("renders a positive impact with an upward arrow, in centésimos", () => {
+    expect(formatarImpacto(0.0842)).toBe("↑ 8");
   });
 
-  it("renders a negative impact with a downward arrow, without a minus sign", () => {
-    expect(formatarImpacto(-0.031)).toBe("↓ 0,03");
+  it("renders a negative impact with a downward arrow, without a minus sign, in centésimos", () => {
+    expect(formatarImpacto(-0.031)).toBe("↓ 3");
+  });
+
+  it("renders an impact that rounds to zero centésimos as an em dash", () => {
+    expect(formatarImpacto(0.0004)).toBe("—");
   });
 
   it("renders no change as an em dash", () => {
@@ -761,7 +766,12 @@ describe("formatarSemestre", () => {
 
 describe("densidadeCarga", () => {
   it("classifies up to 50h as nível 1 (leve)", () => {
-    expect(densidadeCarga(34)).toEqual({ nivel: 1, cor: expect.any(String) });
+    expect(densidadeCarga(34)).toEqual({
+      nivel: 1,
+      icone: expect.any(String),
+      rotulo: expect.any(String),
+      curto: expect.any(String),
+    });
     expect(densidadeCarga(50)).toMatchObject({ nivel: 1 });
   });
 
@@ -782,10 +792,108 @@ describe("densidadeCarga", () => {
     expect(densidadeCarga(120)).toMatchObject({ nivel: 4 });
   });
 
-  it("gives each nível a distinct color", () => {
-    const cores = new Set(
-      [34, 68, 90, 120].map((horas) => densidadeCarga(horas).cor),
-    );
-    expect(cores.size).toBe(4);
+  it("gives each nível a distinct ícone", () => {
+    const icones = new Set([34, 68, 90, 120].map((horas) => densidadeCarga(horas).icone));
+    expect(icones.size).toBe(4);
+  });
+
+  it("names each tier in words, so the legend has something to spell out", () => {
+    expect(densidadeCarga(34).rotulo).toBe("Carga leve");
+    expect(densidadeCarga(68).rotulo).toBe("Carga média");
+    expect(densidadeCarga(90).rotulo).toBe("Carga pesada");
+    expect(densidadeCarga(120).rotulo).toBe("Carga muito densa");
+  });
+
+  // The legend puts all four side by side on one line, where repeating the
+  // word "Carga" four times is noise — it carries the short word instead,
+  // while the full rótulo stays for the screen reader on each card.
+  it("also carries a short word for the legend line", () => {
+    expect([34, 68, 90, 120].map((horas) => densidadeCarga(horas).curto)).toEqual([
+      "leve",
+      "média",
+      "pesada",
+      "muito densa",
+    ]);
+  });
+
+  // The card already spends verde/âmbar/vermelho on the nota (gradeColor), so
+  // a second color ramp sitting 100px away meaning something else entirely is
+  // the whole reason this cue read as noise. The glyph carries the tier now.
+  it("carries no color, leaving the card's color ramp to mean only nota", () => {
+    expect(densidadeCarga(34)).not.toHaveProperty("cor");
+  });
+});
+
+describe("faixaComponente", () => {
+  const marcos = {
+    marcos: [],
+    ritmo: null,
+    obsoletas: ["VELHA1"],
+    equivalencias: [{ codigo: "VELHA2", equivalenteDe: "NOVA2" }],
+  };
+
+  it("gives an aprovada no faixa at all — o período já disse isso", () => {
+    expect(faixaComponente("APR", null)).toBeNull();
+  });
+
+  it("gives a matriculada no faixa either", () => {
+    expect(faixaComponente("MATR", null)).toBeNull();
+  });
+
+  it("paints every flavour of reprovação danger, keeping the reason", () => {
+    expect(faixaComponente("REP", null)).toEqual({
+      corFundo: "bg-danger-soft",
+      corTexto: "text-danger",
+      rotulo: "reprovado",
+    });
+    expect(faixaComponente("REPMF", null)?.rotulo).toBe("reprovado por média e falta");
+  });
+
+  it("paints trancada and cancelada warning", () => {
+    expect(faixaComponente("TRANC", null)).toEqual({
+      corFundo: "bg-warning-soft",
+      corTexto: "text-warning",
+      rotulo: "trancado",
+    });
+    expect(faixaComponente("CANC", null)?.corFundo).toBe("bg-warning-soft");
+  });
+
+  it("paints a componente that counted without being cursado accent", () => {
+    expect(faixaComponente("DISP", null)).toEqual({
+      corFundo: "bg-accent-soft",
+      corTexto: "text-accent",
+      rotulo: "dispensado",
+    });
+    expect(faixaComponente("CUMP", null)?.corFundo).toBe("bg-accent-soft");
+    expect(faixaComponente("TRANS", null)?.corFundo).toBe("bg-accent-soft");
+    expect(faixaComponente("INCORP", null)?.corFundo).toBe("bg-accent-soft");
+  });
+
+  it("paints an equivalente green and names the componente it maps onto", () => {
+    expect(faixaComponente("APR", statusComponente("VELHA2", marcos))).toEqual({
+      corFundo: "bg-success-soft",
+      corTexto: "text-success",
+      rotulo: "equivale a NOVA2",
+    });
+  });
+
+  it("paints an obsoleta neutral", () => {
+    expect(faixaComponente("APR", statusComponente("VELHA1", marcos))).toEqual({
+      corFundo: "bg-white/5",
+      corTexto: "text-muted",
+      rotulo: "fora da grade atual",
+    });
+  });
+
+  it("lets the situação win over the grade status — uma reprovada fora da grade é antes de tudo uma reprovada", () => {
+    expect(faixaComponente("REP", statusComponente("VELHA1", marcos))?.rotulo).toBe("reprovado");
+  });
+
+  it("still shows an unmapped SIGAA code rather than hiding it", () => {
+    expect(faixaComponente("XPTO", null)).toEqual({
+      corFundo: "bg-white/5",
+      corTexto: "text-muted",
+      rotulo: "XPTO",
+    });
   });
 });
