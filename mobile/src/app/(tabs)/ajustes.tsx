@@ -35,10 +35,12 @@ import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { buildAvatarUrl } from "@/lib/dicebear";
 import { HISTORICO_STAGES } from "@/lib/download-progress";
+import { useMoodleLink } from "@/lib/moodle-link-context";
 import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
+import { useAppUpdate } from "@/lib/use-app-update";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
 import {
   clearSigaaCredentials,
@@ -123,6 +125,8 @@ export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
+  const { versaoInstalada, release, temAtualizacao } = useAppUpdate();
+  const moodle = useMoodleLink();
   const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
     "muted",
     "segment-foreground",
@@ -135,6 +139,7 @@ export default function AjustesTab(): JSX.Element {
   const [isExportingCalendar, setIsExportingCalendar] = useState(false);
   const [isSyncingPerfil, setIsSyncingPerfil] = useState(false);
   const [isConfirmandoExclusao, setIsConfirmandoExclusao] = useState(false);
+  const [confirmMoodleUnlink, setConfirmMoodleUnlink] = useState(false);
   const [isApagando, setIsApagando] = useState(false);
   // Shared with Início's freshness badge and with Insights/Trajetória, which
   // write into the same two timestamps whenever they read the histórico —
@@ -393,12 +398,19 @@ export default function AjustesTab(): JSX.Element {
     }
   }, [accessToken, auth, toast]);
 
+  const handleMoodlePress = (): void => {
+    if (moodle.status === "linked") {
+      setConfirmMoodleUnlink(true);
+      return;
+    }
+    if (moodle.status === "unlinked") {
+      // Opens the in-app SSO WebView; success/failure feedback (and the state
+      // change) happen there via the link context, not here.
+      moodle.link();
+    }
+  };
+
   const perfilFetchedAt = perfilFreshness(scheduleFetchedAt, historicoFetchedAt);
-  // The same consent moment Trajetória used to show right above its own
-  // first-sync button: pressing sync now always fetches the histórico too
-  // (see handleSyncPerfil), so the disclosure belongs here, and only until
-  // the histórico's been fetched at least once.
-  const mostrarAvisoPrivacidade = isSigaaLinked && historicoFetchedAt === null;
 
   return (
     <View className="flex-1 bg-background">
@@ -550,29 +562,6 @@ export default function AjustesTab(): JSX.Element {
           <Typography.Paragraph type="body-xs" color="muted">
             Minha conta
           </Typography.Paragraph>
-          {/* Above the sync item, never below it: pressing sync is the moment
-              the student hands us a document carrying their CPF, RG and date
-              of birth, so both halves — what we keep and what we throw away
-              — have to be readable before the press. Moved here from
-              Trajetória's old first-sync screen since this is now the one
-              place that fetches the histórico. */}
-          {mostrarAvisoPrivacidade ? (
-            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que fica guardado:{" "}
-                </Typography.Paragraph>
-                suas matérias, notas e carga horária.
-              </Typography.Paragraph>
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que não fica:{" "}
-                </Typography.Paragraph>
-                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
-                leitura.
-              </Typography.Paragraph>
-            </View>
-          ) : null}
           <ListGroup>
             <ListGroup.Item onPress={() => router.push("/link-account")}>
               <ListGroup.ItemPrefix>
@@ -633,7 +622,11 @@ export default function AjustesTab(): JSX.Element {
                       : "Nunca sincronizado"}
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isSyncingPerfil ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isSyncingPerfil ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
             <ListGroup.Item
@@ -650,7 +643,11 @@ export default function AjustesTab(): JSX.Element {
                   Inclusive a conta. Sem volta e sem cópia guardada.
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isApagando ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isApagando ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
           </ListGroup>
         </View>
@@ -704,6 +701,40 @@ export default function AjustesTab(): JSX.Element {
           </Dialog.Portal>
         </Dialog>
 
+        <Dialog isOpen={confirmMoodleUnlink} onOpenChange={setConfirmMoodleUnlink}>
+          <Dialog.Portal>
+            <Dialog.Overlay />
+            <Dialog.Content>
+              <Dialog.Close className="self-end" />
+              <View className="gap-2.5 pb-1">
+                <Dialog.Title>Desvincular Moodle?</Dialog.Title>
+                <Dialog.Description className="text-justify">
+                  Você deixará de ver materiais e avisos das suas salas do Moodle neste aparelho.
+                </Dialog.Description>
+              </View>
+              <View className="gap-3 pt-7">
+                <Button
+                  testID="confirmar-desvincular-moodle-button"
+                  variant="danger"
+                  onPress={() => {
+                    setConfirmMoodleUnlink(false);
+                    void moodle.unlink();
+                  }}
+                >
+                  <Button.Label>Desvincular</Button.Label>
+                </Button>
+                <Button
+                  testID="cancelar-desvincular-moodle-button"
+                  variant="tertiary"
+                  onPress={() => setConfirmMoodleUnlink(false)}
+                >
+                  <Button.Label>Cancelar</Button.Label>
+                </Button>
+              </View>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+
         <View className="gap-2.5">
           <Typography.Paragraph type="body-xs" color="muted">
             Integrações
@@ -723,22 +754,43 @@ export default function AjustesTab(): JSX.Element {
                   {'Cria um calendário "UFBA" no aparelho com suas aulas do semestre'}
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isExportingCalendar ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
-            <ListGroup.Item testID="link-moodle-item" disabled className="opacity-50">
+            <ListGroup.Item testID="link-moodle-item" onPress={() => handleMoodlePress()}>
               <ListGroup.ItemPrefix>
                 <MoodleIcon size={22} />
               </ListGroup.ItemPrefix>
               <ListGroup.ItemContent>
                 <ListGroup.ItemTitle>Vincular Moodle</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
+                {moodle.status === "linked" ? (
+                  // Vinculado: espelha o item da Conta acadêmica — check verde +
+                  // "Vinculado" no lugar da descrição. moodle.expired só viraria
+                  // true por veredito de token, inalcançável nesta build
+                  // somente-conexão; o ramo de alerta fica pronto para quando a
+                  // leitura de conteúdo (turma virtual) puder disparar o veredito.
+                  <View className="flex-row items-center gap-1.5">
+                    <AppIcon
+                      name={moodle.expired ? "IconErrorCircle" : "IconCheckCircle"}
+                      size={14}
+                      color={moodle.expired ? dangerColor : successColor}
+                    />
+                    <ListGroup.ItemDescription
+                      testID={moodle.expired ? "moodle-status-alerta" : "moodle-status-ok"}
+                      className={moodle.expired ? "text-danger" : "text-success"}
+                    >
+                      {moodle.expired ? "Reconectar" : "Vinculado"}
+                    </ListGroup.ItemDescription>
+                  </View>
+                ) : (
+                  <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
+                )}
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>
-                <Chip variant="secondary" size="sm">
-                  Em breve
-                </Chip>
-              </ListGroup.ItemSuffix>
+              <ListGroup.ItemSuffix />
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
             <ListGroup.Item testID="link-classroom-item" disabled className="opacity-50">
@@ -753,6 +805,38 @@ export default function AjustesTab(): JSX.Element {
                 <Chip variant="secondary" size="sm">
                   Em breve
                 </Chip>
+              </ListGroup.ItemSuffix>
+            </ListGroup.Item>
+          </ListGroup>
+        </View>
+
+        <View className="gap-2.5">
+          <Typography.Paragraph type="body-xs" color="muted">
+            Sobre
+          </Typography.Paragraph>
+          <ListGroup>
+            <ListGroup.Item testID="app-version-item" disabled>
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconInfo" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Versão do app</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {/* Silence, not a guess, when the check never landed: claiming
+                      "up to date" while offline would be a lie the user cannot
+                      check, and this row is the safety net for someone whose
+                      runtime stopped receiving updates. */}
+                  {temAtualizacao
+                    ? `Nova versão disponível: ${release?.latestVersion}`
+                    : release
+                      ? "Você está na versão mais recente"
+                      : ""}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>
+                <Typography.Paragraph type="body-sm" color="muted">
+                  {versaoInstalada}
+                </Typography.Paragraph>
               </ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>

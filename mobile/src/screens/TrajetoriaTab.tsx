@@ -755,8 +755,8 @@ function MateriaCard({
               8x4 colored pill, which failed twice over: too small to read, and
               painted from the same verde/âmbar/vermelho ramp that gradeColor
               spends on the nota sitting in the opposite corner of this very
-              card. The glyph carries the tier now (uma folha → uma bandeja
-              cheia) and the color ramp is free to mean only nota. Muted and
+              card. The glyph carries the tier now (uma folha → uma estante)
+              and the color ramp is free to mean only nota. Muted and
               bottom-left: still a quiet cue, not another headline number. See
               densidadeCarga for the cut points, and LegendaDensidade for the
               line that teaches the scale. */}

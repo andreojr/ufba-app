@@ -7,8 +7,9 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins";
 import { SourceCodePro_400Regular } from "@expo-google-fonts/source-code-pro";
-import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
+// expo-router 57 dropped its dependency on @react-navigation and vendored the
+// pieces it still needs, re-exporting the theming API from its own entry point.
+import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider, useThemeColor } from "heroui-native";
@@ -19,6 +20,7 @@ import { Uniwind } from "uniwind";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { configureGoogleSignin } from "@/lib/google-signin";
 import { MockAppStateProvider } from "@/lib/mock-app-state";
+import { MoodleLinkProvider } from "@/lib/moodle-link-context";
 import { SigaaLinkProvider, useSigaaLink } from "@/lib/sigaa-link-context";
 import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
 import { getThemePreference } from "@/lib/theme-preference";
@@ -69,6 +71,13 @@ function RootNavigator(): JSX.Element | null {
               presentation: "transparentModal",
               animation: "slide_from_bottom",
               contentStyle: { backgroundColor: "transparent" },
+            }}
+          />
+          <Stack.Screen
+            name="moodle-webview"
+            options={{
+              presentation: "modal",
+              animation: "slide_from_bottom",
             }}
           />
         </Stack.Protected>
@@ -124,9 +133,11 @@ export default function RootLayout(): JSX.Element | null {
           <MockAppStateProvider>
             <AuthProvider>
               <SigaaLinkProvider>
-                <SyncFreshnessProvider>
-                  <RootNavigator />
-                </SyncFreshnessProvider>
+                <MoodleLinkProvider>
+                  <SyncFreshnessProvider>
+                    <RootNavigator />
+                  </SyncFreshnessProvider>
+                </MoodleLinkProvider>
               </SigaaLinkProvider>
             </AuthProvider>
           </MockAppStateProvider>

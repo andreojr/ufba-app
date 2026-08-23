@@ -642,9 +642,11 @@ export type NivelDensidade = 1 | 2 | 3 | 4;
  * The tier vocabulary: a glyph and the words for it.
  *
  * A progression of "how much material is in this matéria" — uma folha, várias
- * folhas, um livro, uma bandeja cheia. The first two steps multiply the same
- * object, so they carry their own order; the 3→4 step changes object, and that
- * is the part the legend earns its place explaining.
+ * folhas, um livro, uma estante. Each step holds more than the last without
+ * ever doubling back: the first two multiply the same object, and 3→4 goes
+ * from one book to the shelf that holds many. An earlier pass had a full paper
+ * tray at the top, which broke that — after reaching a book, the scale went
+ * back to loose paper.
  *
  * All four come from Ionicons deliberately. An earlier pass reached into
  * MaterialCommunityIcons for a multiple-books glyph, but two families inside a
@@ -662,7 +664,7 @@ const ESCALA_DENSIDADE: Record<
   1: { icone: "IconPaper", rotulo: "Carga leve", curto: "leve" },
   2: { icone: "IconPapers", rotulo: "Carga média", curto: "média" },
   3: { icone: "IconBook", rotulo: "Carga pesada", curto: "pesada" },
-  4: { icone: "IconTrayFull", rotulo: "Carga muito densa", curto: "muito densa" },
+  4: { icone: "IconLibrary", rotulo: "Carga muito densa", curto: "muito densa" },
 };
 
 /** Every tier, lightest first — what the legend at the top of the aba walks through. */
@@ -674,7 +676,7 @@ export const ESCALA_DENSIDADE_ORDENADA = [1, 2, 3, 4].map((nivel) => ({
 /**
  * Classifies a componente's carga horária into one of four density tiers.
  * Cuts sit at 50/75/100h so a 90h componente (um livro) reads as heavier than
- * a 60-68h one (várias folhas) but lighter than a 120h one (uma bandeja cheia) —
+ * a 60-68h one (várias folhas) but lighter than a 120h one (uma estante) —
  * the two ends of the range this app's transcripts actually carry.
  */
 export function densidadeCarga(horas: number): {

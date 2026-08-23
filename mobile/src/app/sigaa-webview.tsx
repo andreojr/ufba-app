@@ -8,6 +8,7 @@ import { WebView } from "react-native-webview";
 
 import { AppIcon } from "@/components/AppIcon";
 import { UfbaCrest } from "@/components/UfbaCrest";
+import { sigaaSheetHeights } from "@/lib/sigaa-webview-sheet";
 import { markSigaaWebviewClosed, markSigaaWebviewOpened } from "@/lib/sigaa-webview-state";
 
 // Not the actual login domain (sigaa.ufba.br can front multiple app servers behind a
@@ -15,7 +16,6 @@ import { markSigaaWebviewClosed, markSigaaWebviewOpened } from "@/lib/sigaa-webv
 const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
 
 const SHEET_RADIUS = 24;
-const COLLAPSED_HEIGHT_RATIO = 0.5;
 // How far below the collapsed height the user has to drag before it's read
 // as "let go of this" rather than "snap back down".
 const DISMISS_DRAG_PX = 120;
@@ -51,8 +51,10 @@ export default function SigaaWebViewScreen(): JSX.Element {
   const [cookieError, setCookieError] = useState(false);
 
   const windowHeight = Dimensions.get("window").height;
-  const collapsedHeight = windowHeight * COLLAPSED_HEIGHT_RATIO;
-  const expandedHeight = windowHeight;
+  const { collapsed: collapsedHeight, expanded: expandedHeight } = sigaaSheetHeights(
+    windowHeight,
+    insets.top,
+  );
 
   const height = useRef(new Animated.Value(collapsedHeight)).current;
   const heightAtGestureStart = useRef(collapsedHeight);

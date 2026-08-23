@@ -45,7 +45,10 @@
         {
           "userInterfaceStyle": "automatic"
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

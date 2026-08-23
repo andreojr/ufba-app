@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Linking } from "react-native";
 
 import { ApiError } from "@/lib/api";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -144,9 +145,11 @@ describe("LinkAccountScreen", () => {
   });
 
   it("tells the user plainly which password to type", async () => {
+    // Dito uma vez, no parágrafo de abertura: o Description embaixo do campo
+    // repetia a mesma informação a dois dedos de distância.
     const { getByText } = await render(<LinkAccountScreen />);
 
-    expect(getByText("É a mesma senha que você digita no site da faculdade")).toBeTruthy();
+    expect(getByText(/mesmos dados que você usa no sistema da faculdade/i)).toBeTruthy();
   });
 
   it("confirms the link is healthy when the stored password still works", async () => {
@@ -187,13 +190,41 @@ describe("LinkAccountScreen", () => {
 
     expect(getByTestId("password-stays-on-device")).toBeTruthy();
     expect(getByText("Sua senha nunca sai deste celular")).toBeTruthy();
-    expect(
-      getByText(
-        "Se você mudar de ideia, apaga tudo o que está no nosso servidor com um toque, em Perfil.",
-      ),
-    ).toBeTruthy();
+    expect(getByText(/Fica no cofre do aparelho/i)).toBeTruthy();
+    expect(getByText(/Não sobe para nenhum servidor/i)).toBeTruthy();
     expect(queryByTestId("sync-option-device")).toBeNull();
     expect(queryByTestId("sync-option-cloud")).toBeNull();
+  });
+
+  it("says what the server keeps and what it discards, alongside the password checks", async () => {
+    // Veio do Perfil, onde só aparecia antes do primeiro sync do histórico:
+    // é aqui que a pessoa decide entregar o acesso, então é aqui que a
+    // resposta sobre CPF, RG e data de nascimento precisa estar.
+    const { getByTestId, getByText } = await render(<LinkAccountScreen />);
+
+    expect(getByTestId("password-stays-on-device")).toBeTruthy();
+    expect(getByText("No servidor fica só o que é da faculdade")).toBeTruthy();
+    expect(getByText(/O que fica guardado/i)).toBeTruthy();
+    expect(getByText(/matérias, notas e carga horária/i)).toBeTruthy();
+    expect(getByText(/O que não fica/i)).toBeTruthy();
+    expect(getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
+    expect(getByText(/apaga tudo com um toque, em Perfil/i)).toBeTruthy();
+  });
+
+  it("points at the open-source repo so the privacy claims can be checked, not just believed", async () => {
+    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+    const { getByTestId, getByText } = await render(<LinkAccountScreen />);
+
+    expect(getByText("Código aberto")).toBeTruthy();
+    expect(getByText(/qualquer pessoa pode ler o que o código faz/i)).toBeTruthy();
+    expect(getByText(/pode contribuir com o projeto/i)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("open-source-card"));
+    });
+
+    expect(openURL).toHaveBeenCalledWith(expect.stringContaining("github.com/"));
+    openURL.mockRestore();
   });
 
   it("shows a back arrow that pops the screen when it was pushed (e.g. from Perfil)", async () => {

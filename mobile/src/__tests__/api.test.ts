@@ -1,6 +1,7 @@
 import {
   ApiError,
   deleteAccount,
+  getAppVersion,
   getSchedule,
   getSigaaLink,
   onSigaaCredentialsVerdict,
@@ -504,5 +505,53 @@ describe("putPlano", () => {
         }),
       }),
     );
+  });
+});
+
+describe("checking for an app update", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  const RELEASE = {
+    latestVersion: "1.1.0",
+    versionCode: 3,
+    downloadUrl: "https://example.com/gradline-1.1.0.apk",
+    releaseNotes: "Optativas na Trajetória.",
+    publishedAt: "2026-09-01T12:00:00Z",
+  };
+
+  it("GETs the published release without an Authorization header", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => RELEASE,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(getAppVersion()).resolves.toEqual(RELEASE);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.example.com/app/version");
+    expect(init.method).toBe("GET");
+    expect(init.headers.Authorization).toBeUndefined();
+  });
+
+  it("rejects with an ApiError when nothing is published", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ message: "No app release is published" }),
+    }) as unknown as typeof fetch;
+
+    await expect(getAppVersion()).rejects.toBeInstanceOf(ApiError);
   });
 });
