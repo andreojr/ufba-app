@@ -541,8 +541,10 @@ function LinhaDoTempo({
  * `MateriaCard` hangs off a deviating componente, in the danger tone a
  * reprovada uses rather than the warning tone of a trancada: a matéria whose
  * período has already passed is a hole in the trajectory, not a pause the
- * student chose. Tapping it opens the same árvore de dependências a cursado
- * card would.
+ * student chose. The badge does not name the período it came from — the
+ * student is looking at where the matéria goes now, and which período the
+ * grade originally wanted it in changes nothing about that. Tapping the card
+ * opens the same árvore de dependências a cursado card would.
  */
 function CardProjetado({
   componente,
@@ -559,13 +561,13 @@ function CardProjetado({
 }): JSX.Element {
   return (
     <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
-      {componente.atrasada && componente.periodo !== null ? (
+      {componente.atrasada ? (
         <View
           testID={`atrasada-${componente.codigo}`}
           className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-danger-soft"
         >
           <Typography.Paragraph type="body-xs" className="text-danger">
-            {`atrasada · ${componente.periodo}º período`}
+            atrasada
           </Typography.Paragraph>
         </View>
       ) : null}
@@ -586,9 +588,7 @@ function CardProjetado({
         testID={`card-projetado-${componente.codigo}`}
         onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
         className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
-          componente.atrasada && componente.periodo !== null
-            ? "rounded-t-md rounded-b-2xl"
-            : "rounded-2xl"
+          componente.atrasada ? "rounded-t-md rounded-b-2xl" : "rounded-2xl"
         }`}
       >
         <View className="gap-0.5">
