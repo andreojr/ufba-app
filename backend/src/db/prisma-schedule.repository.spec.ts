@@ -67,6 +67,51 @@ function prismaFalso(overrides: { atualizadoEm?: Date } = {}) {
   return { prisma, tx, upserts };
 }
 
+// Linhas de `matricula` como o Prisma as devolveria de um `findMany({
+// include: { turma: true } })` — cada uma carrega a turma completa, já com
+// o `id` e o `numero` reais que só existem depois do upsert em `salvar`.
+function matriculasFalsas() {
+  return [
+    {
+      ordem: 0,
+      turma: {
+        id: 'turma-1',
+        codigo: 'MATA37',
+        numero: '01',
+        nome: 'CÁLCULO A',
+        docente: 'DR. ALGUEM',
+        semestre: '2026.2',
+        vigenciaInicio: '2026-08-19',
+        vigenciaFim: '2026-12-19',
+        slots: [
+          {
+            dia: 'SEG',
+            inicioMin: 480,
+            fimMin: 600,
+            predio: 'Pavilhão de Aulas',
+            sala: '12',
+            localOriginal: 'PAV. AULAS, sala 12',
+          },
+        ],
+      },
+    },
+    {
+      ordem: 1,
+      turma: {
+        id: 'turma-2',
+        codigo: null,
+        numero: '02',
+        nome: 'REDES DE COMPUTADORES',
+        docente: null,
+        semestre: '2026.2',
+        vigenciaInicio: '2026-08-19',
+        vigenciaFim: '2026-12-19',
+        slots: [],
+      },
+    },
+  ];
+}
+
 describe('PrismaScheduleRepository', () => {
   it('não sobrescreve uma turma que outro aluno sincronizou depois', async () => {
     const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T12:00:00Z') });
@@ -95,6 +140,23 @@ describe('PrismaScheduleRepository', () => {
     expect(tx.turma.upsert.mock.calls[0][0].update.nome).toBe('CÁLCULO A');
   });
 
+  it('não sobrescreve quando o registro tem exatamente o mesmo instante do sync', async () => {
+    // `>=` na guarda é proposital: um empate significa que já existe um
+    // registro tão novo quanto este fetch, então não há dado mais recente
+    // para aplicar.
+    const empate = new Date('2026-08-23T12:00:00Z');
+    const { prisma, tx } = prismaFalso({ atualizadoEm: empate });
+
+    await new PrismaScheduleRepository(prisma).salvar(
+      'user-1',
+      turmasFalsas(),
+      periodoLetivo,
+      empate,
+    );
+
+    expect(tx.turma.upsert.mock.calls[0][0].update).toEqual({});
+  });
+
   it('substitui as matrículas do aluno preservando a ordem do SIGAA', async () => {
     const { prisma, tx } = prismaFalso();
 
@@ -119,5 +181,53 @@ describe('PrismaScheduleRepository', () => {
     const salvo = await new PrismaScheduleRepository(prisma).buscar('user-1');
 
     expect(salvo).toBeNull();
+  });
+
+  it('busca as turmas matriculadas com id e numero reais, na ordem do aluno', async () => {
+    const findMany = jest.fn(async () => matriculasFalsas());
+    const prisma = {
+      cachedSchedule: {
+        findUnique: jest.fn(async () => ({
+          periodoLetivoSemestre: periodoLetivo.semestre,
+          periodoLetivoInicio: periodoLetivo.inicio,
+          periodoLetivoFim: periodoLetivo.fim,
+          fetchedAt: new Date('2026-08-23T12:00:00Z'),
+        })),
+      },
+      matricula: { findMany },
+    } as unknown as PrismaService;
+
+    const salvo = await new PrismaScheduleRepository(prisma).buscar('user-1');
+
+    // A ordem, o id e o numero são exatamente o que essa feature depende:
+    // sem eles a tela de pontos de atenção não sabe qual Turma é qual.
+    expect(salvo?.turmas).toEqual(
+      turmasFalsas().map((t, i) => ({ ...t, id: `turma-${i + 1}` })),
+    );
+    expect(salvo?.periodoLetivo).toEqual(periodoLetivo);
+    expect(salvo?.fetchedAt).toEqual(new Date('2026-08-23T12:00:00Z'));
+    expect(findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      orderBy: { ordem: 'asc' },
+      include: { turma: true },
+    });
+  });
+
+  it('reports periodoLetivo as null when the term fields are unset', async () => {
+    const prisma = {
+      cachedSchedule: {
+        findUnique: jest.fn(async () => ({
+          periodoLetivoSemestre: null,
+          periodoLetivoInicio: null,
+          periodoLetivoFim: null,
+          fetchedAt: new Date('2026-08-23T12:00:00Z'),
+        })),
+      },
+      matricula: { findMany: jest.fn(async () => []) },
+    } as unknown as PrismaService;
+
+    const salvo = await new PrismaScheduleRepository(prisma).buscar('user-1');
+
+    expect(salvo?.periodoLetivo).toBeNull();
   });
 });
