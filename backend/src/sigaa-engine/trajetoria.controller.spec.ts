@@ -21,8 +21,11 @@ function salvaFalsa(
       nomeCurso: 'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR',
       periodoLetivoAtual: 1,
       // A projeção agora sai junto dos marcos (Task 6), então mesmo fixtures
-      // que só testam marcos precisam desses dois campos preenchidos —
-      // sem eles montarProjecao lança ao tentar fatiar undefined.
+      // que só testam marcos precisam desses campos preenchidos —
+      // sem eles montarProjecao lança ao tentar fatiar undefined. `emitidoEm`
+      // entra na conta porque é dele que sai o primeiro semestre projetado de
+      // quem ainda não cursou nada.
+      emitidoEm: '2026-08-19',
       prazoConclusaoPadrao: '2026.2',
       prazoConclusaoMaximo: '2030.2',
       indices: { cr: 8.1597, iap: 0.8434 },
@@ -284,6 +287,30 @@ describe('TrajetoriaController', () => {
     );
 
     expect(resultado.itens[0].semestre).toBe('2027.1');
+  });
+
+  it('o ValidationPipe do controller aceita o semestre null, que tira do plano', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    const resultado = await pipe.transform(
+      { itens: [{ codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: null }] },
+      metadata,
+    );
+
+    expect(resultado.itens[0].semestre).toBeNull();
+  });
+
+  it('o ValidationPipe do controller rejeita um item sem a chave semestre', async () => {
+    // Com `@IsOptional` isto passava, e aí `semestre === null` era falso: o
+    // item escapava do deleteMany e chegava ao upsert com `undefined`. Tirar
+    // do plano tem que ser dito com `null`, não com omissão.
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    await expect(
+      pipe.transform({ itens: [{ codigo: 'X', nome: 'Y', cargaHoraria: 1 }] }, metadata),
+    ).rejects.toThrow();
   });
 
   // Fecha o buraco que os dois testes acima deixam em aberto: prova que o
