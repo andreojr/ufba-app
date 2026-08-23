@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Permitir que o usuário conecte a conta do AVA UFBA (Moodle) uma única vez e leia turmas, materiais/arquivos, avisos e tarefas dentro do app.
+**Goal:** Permitir que o usuário conecte a conta do AVA UFBA (Moodle) uma única vez, guardando no aparelho um token de leitura. **Somente a conexão** — nenhuma leitura de conteúdo, nenhuma tela nova. Consumir os dados (turmas, materiais, etc.) é assunto de specs posteriores (página de turma virtual, item C do ROADMAP).
 
-**Architecture:** Subsistema mobile puro (sem backend). Captura o token de web service do Moodle pelo fluxo oficial do app móvel (SSO Shibboleth → custom scheme), guarda o token só no device (`expo-secure-store`), e lê dados via REST JSON client-direto contra `ava.ufba.br/webservice`. Espelha o padrão já usado pelo SIGAA (`sigaa-storage.ts` + `sigaa-link-context.tsx`).
+**Architecture:** Subsistema mobile puro (sem backend). Captura o token de web service do Moodle pelo fluxo oficial do app móvel (SSO Shibboleth → custom scheme), guarda o token só no device (`expo-secure-store`), e valida a conexão com `core_webservice_get_site_info`. Espelha o padrão já usado pelo SIGAA (`sigaa-storage.ts` + `sigaa-link-context.tsx`).
 
 **Tech Stack:** React Native / Expo ~54, TypeScript, `expo-web-browser` (novo), `expo-crypto` (novo, para MD5 da assinatura), `expo-secure-store`, Jest + React Native Testing Library v14.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Somente leitura:** apenas funções WS de consulta. Nenhuma função de escrita entra no cliente.
+- **Somente conexão:** este plano para na conexão da conta. Nenhuma leitura de conteúdo (turmas/materiais/avisos/tarefas), nenhum contrato de dados agnóstico, nenhuma tela nova. A única função WS chamada é `core_webservice_get_site_info`, para validar o token e obter o `userId`.
 - **Token nunca sai do device:** sem endpoint de backend, sem persistência em nuvem. Único armazenamento é `expo-secure-store`.
 - **Senha nunca toca o app:** digitada apenas no IdP dentro de `WebBrowser.openAuthSessionAsync`.
 - **Scheme atual:** `ufba-app` (em `mobile/app.json`, `expo.scheme`).
