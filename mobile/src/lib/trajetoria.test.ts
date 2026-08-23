@@ -1,5 +1,4 @@
 import {
-  agruparPorAno,
   agruparPorSemestre,
   anosDaProjecao,
   calcularCrAcumulado,
@@ -20,7 +19,6 @@ import {
   periodosComNota,
   pesoDasNotas,
   direcaoDoSwipe,
-  poolPlanejavel,
   proximoInsight,
   posicaoSemestral,
   rotuloRitmo,
@@ -31,7 +29,6 @@ import {
   somarCargaHoraria,
   statusComponente,
   variacaoUltimoPeriodo,
-  zonasDePlanejamento,
 } from "./trajetoria";
 import type {
   ComponenteCursado,
@@ -132,20 +129,6 @@ describe("rotuloSituacao", () => {
   });
 });
 
-describe("poolPlanejavel", () => {
-  const pendentes: ComponentePendente[] = [
-    { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 60, matriculado: false },
-    { codigo: "MATA59", nome: "REDES", cargaHoraria: 60, matriculado: true },
-    { codigo: "ENADE", nome: "ENADE", cargaHoraria: 0, matriculado: false },
-  ];
-
-  it("drops components already being taken and the ENADE rows", () => {
-    // ENADE is not a curricular component, and something already enrolled is
-    // not something to plan.
-    expect(poolPlanejavel(pendentes).map((p) => p.codigo)).toEqual(["MATA60"]);
-  });
-});
-
 describe("contarFaltantes", () => {
   const pendentes: ComponentePendente[] = [
     { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 60, matriculado: false },
@@ -154,36 +137,13 @@ describe("contarFaltantes", () => {
   ];
 
   it("counts a component the student is already taking as still missing", () => {
-    // Unlike poolPlanejavel — the planner shouldn't offer to move something
-    // already placed — this is "how many left", and enrolled-but-ungraded
-    // is still not done.
+    // "How many left" includes enrolled-but-ungraded components, since they
+    // aren't done yet.
     expect(contarFaltantes(pendentes)).toBe(2);
   });
 
   it("excludes ENADE, which isn't a curricular component", () => {
     expect(contarFaltantes([pendentes[2]])).toBe(0);
-  });
-});
-
-describe("zonasDePlanejamento", () => {
-  it("offers the terms after the current one, bounded by the deadline", () => {
-    // The transcript states the deadline; planning past it is not a plan.
-    expect(zonasDePlanejamento("2026.2", "2027.2", 4)).toEqual([
-      "2027.1",
-      "2027.2",
-    ]);
-  });
-
-  it("counts 2 to 1 across the year boundary", () => {
-    expect(zonasDePlanejamento("2025.2", "2030.1", 3)).toEqual([
-      "2026.1",
-      "2026.2",
-      "2027.1",
-    ]);
-  });
-
-  it("returns nothing when the current term is already the deadline", () => {
-    expect(zonasDePlanejamento("2030.1", "2030.1", 4)).toEqual([]);
   });
 });
 
@@ -230,27 +190,6 @@ describe("historicoDesatualizado", () => {
   it("flags the term stale from the first moment after it ends", () => {
     // 00:30 on 2026-07-16: one calendar day past `fim`.
     expect(historicoDesatualizado(emCurso, fim, new Date(2026, 6, 16, 0, 30))).toBe(true);
-  });
-});
-
-describe("agruparPorAno", () => {
-  it("groups periods by the year in their semestre, oldest first", () => {
-    const anos = agruparPorAno([
-      { semestre: "2025.1", emCurso: false, componentes: [] },
-      { semestre: "2025.2", emCurso: false, componentes: [] },
-      { semestre: "2026.1", emCurso: true, componentes: [] },
-    ]);
-
-    expect(anos.map((a) => a.ano)).toEqual(["2025", "2026"]);
-    expect(anos[0].periodos.map((p) => p.semestre)).toEqual(["2025.1", "2025.2"]);
-    expect(anos[1].periodos.map((p) => p.semestre)).toEqual(["2026.1"]);
-  });
-
-  it("keeps a lone period in its own year", () => {
-    const anos = agruparPorAno([{ semestre: "2024.2", emCurso: false, componentes: [] }]);
-    expect(anos).toEqual([
-      { ano: "2024", periodos: [{ semestre: "2024.2", emCurso: false, componentes: [] }], projetados: [] },
-    ]);
   });
 });
 

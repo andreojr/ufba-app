@@ -135,43 +135,13 @@ export function rotuloSituacao(situacao: string): string | null {
   return ROTULOS_SITUACAO[situacao] ?? situacao;
 }
 
-/** What the planner may offer: pending, not already enrolled, actually curricular. */
-export function poolPlanejavel(pendentes: ComponentePendente[]): ComponentePendente[] {
-  return pendentes.filter((p) => !p.matriculado && p.codigo !== CODIGO_ENADE);
-}
-
 /**
- * How many obligatory components are still missing — unlike `poolPlanejavel`,
- * this counts a component the student is already taking too: the planner
- * shouldn't offer to move something already placed, but "how many left" isn't
- * done just because it's enrolled and waiting on a grade.
+ * How many obligatory components are still missing — doesn't count just those
+ * not yet enrolled: includes components the student is already taking too,
+ * because an enrolled-but-ungraded component is still not done.
  */
 export function contarFaltantes(pendentes: ComponentePendente[]): number {
   return pendentes.filter((p) => p.codigo !== CODIGO_ENADE).length;
-}
-
-/**
- * The terms the planner offers as drop zones: the ones after the current term,
- * capped at `limite` and never past the conclusion deadline the transcript
- * states. SIGAA terms run `.1` then `.2` within a year.
- */
-export function zonasDePlanejamento(
-  semestreAtual: string,
-  prazoMaximo: string,
-  limite: number,
-): string[] {
-  const proximo = (semestre: string): string => {
-    const [ano, periodo] = semestre.split(".").map(Number);
-    return periodo === 1 ? `${ano}.2` : `${ano + 1}.1`;
-  };
-
-  const zonas: string[] = [];
-  let atual = proximo(semestreAtual);
-  while (zonas.length < limite && atual.localeCompare(prazoMaximo) <= 0) {
-    zonas.push(atual);
-    atual = proximo(atual);
-  }
-  return zonas;
 }
 
 export interface AnoTrajetoria {
@@ -179,21 +149,6 @@ export interface AnoTrajetoria {
   periodos: PeriodoTrajetoria[];
   /** Os semestres que ainda não aconteceram, no mesmo ano. */
   projetados: SemestreProjetado[];
-}
-
-/**
- * Groups already-ordered periods by the year in their "AAAA.N" semestre.
- * Superseded by `anosDaProjecao`, which does the same grouping plus the
- * projected terms — kept only until Task 11 removes it, its callers already
- * gone.
- */
-export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
-  const porAno = new Map<string, PeriodoTrajetoria[]>();
-  for (const periodo of periodos) {
-    const ano = periodo.semestre.slice(0, 4);
-    porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
-  }
-  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos, projetados: [] }));
 }
 
 /**
