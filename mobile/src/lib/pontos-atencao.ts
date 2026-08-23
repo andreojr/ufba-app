@@ -53,7 +53,13 @@ function minutoDoPonto(ponto: PontoAtencao): number {
     return MINUTO_FIM_DO_DIA;
   }
   const [h, m] = ponto.hora.split(":");
-  return Number(h) * 60 + Number(m);
+  const minuto = Number(h) * 60 + Number(m);
+  // Se hora for malformada (ex: "abc", "17", "", "17:xx"), a conversão retorna
+  // NaN. NaN em comparadores é ordenação indefinida per spec — não "último",
+  // e sim indefinido. Sem este guard, a home screen mostraria um dia silenciosamente
+  // embaralhado. Aqui, hora inválida é hora desconhecida — = fim do dia, como
+  // prazos sem hora.
+  return Number.isFinite(minuto) ? minuto : MINUTO_FIM_DO_DIA;
 }
 
 /**

@@ -66,6 +66,11 @@ describe("dataIsoLocal", () => {
     // dia errado, e o prazo de hoje não casaria com o bloco de hoje.
     expect(dataIsoLocal(new Date(2026, 7, 24, 23, 0))).toBe("2026-08-24");
   });
+
+  it("formata mês e dia com padStart quando são um dígito", () => {
+    // Valida que padStart é aplicado quando mês ou dia têm um dígito.
+    expect(dataIsoLocal(new Date(2026, 0, 5, 10, 30))).toBe("2026-01-05");
+  });
 });
 
 describe("classificarUrgencia", () => {
@@ -102,5 +107,28 @@ describe("intercalarDia", () => {
     const itens = intercalarDia([aula(1000)], [ponto({ estado: "CONTESTADO" })]);
 
     expect(itens.map((i) => i.kind)).toEqual(["aula"]);
+  });
+
+  it("trata hora malformada como prazo sem hora — fim do dia", () => {
+    // Se hora for "abc", "17", "", ou "17:xx", `Number(h) * 60 + Number(m)`
+    // retorna NaN. NaN no comparador é ordenação indefinida per spec, não
+    // "último". O comportamento correto é tratar como "hora desconhecida" e
+    // colocar no fim do dia, junto com prazos sem hora — não deixar silenciosamente
+    // embaralhado.
+    const itens = intercalarDia([aula(1000)], [ponto({ hora: "abc" as any })]);
+
+    expect(itens.map((i) => i.kind)).toEqual(["aula", "ponto"]);
+    expect(itens[1].inicioMin).toBe(23 * 60 + 59);
+  });
+
+  it("mantém aula antes de ponto no mesmo inicioMin — sort é estável", () => {
+    // Sort é estável desde ES2019, e como construímos com aulas primeiro,
+    // uma aula no mesmo minuto que um prazo vem antes. Nenhum guard deve
+    // mudar isso — é a ordem sensata, e a construção + estabilidade a
+    // preservam. Sem este teste, um refator que reordenasse a construção ou
+    // usasse sort instável viraria a home screen em silêncio.
+    const itens = intercalarDia([aula(1000)], [ponto({ hora: "16:40" })]);
+
+    expect(itens.map((i) => i.kind)).toEqual(["aula", "ponto"]);
   });
 });
