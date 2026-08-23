@@ -501,11 +501,11 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    expect(await screen.findByText(/5 obrigatórias atrasadas/)).toBeTruthy();
-    // Duas ocorrências agora, e as duas propositais: a frase de resumo e a
-    // linha de chegada, que passou a marcar o semestre.
-    expect(screen.getAllByText(/2028\.2/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/2 semestres além do previsto/)).toBeTruthy();
+    // A previsão é uma frase só; o atraso vira badge embaixo dela.
+    expect(await screen.findByText(/Neste ritmo, você conclui em 2028\.2/)).toBeTruthy();
+    const badge = screen.getByTestId("badge-atrasadas");
+    expect(badge.props.className).toContain("bg-danger-soft");
+    expect(screen.getByText("5 atrasadas")).toBeTruthy();
     expect(screen.getByTestId("conclusao-projetada").props.children).toBe("2028.2");
   });
 
@@ -518,8 +518,10 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    expect(await screen.findByText(/Neste ritmo você conclui em 2029\.1/)).toBeTruthy();
+    expect(await screen.findByText(/Neste ritmo, você conclui em 2029\.1/)).toBeTruthy();
     expect(screen.getByTestId("conclusao-projetada").props.children).toBe("2029.1");
+    // Sem atrasada não há badge nenhum — nem a palavra na tela.
+    expect(screen.queryByTestId("badge-atrasadas")).toBeNull();
     expect(screen.queryByText(/atrasada/)).toBeNull();
   });
 

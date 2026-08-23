@@ -267,29 +267,24 @@ function ReadyTrajetoria({
         </Typography.Paragraph>
       ) : null}
 
-      {/* The summary line is not conditional on being late anymore: a student
-          on track still deserves to read when they finish. Only the wording
-          changes — the atraso count when there is one, the plain forecast
-          otherwise. The prazo-máximo warning stays independent of both. */}
+      {/* Two beats instead of one sentence: the forecast, and — only when
+          there is one — the debt. The old line packed the atraso count, the
+          semestre and the delta into a single muted paragraph, and the number
+          the student actually came for got buried in the middle of it.
+          `items-start` keeps the badge hugging its text instead of stretching
+          the row. */}
       {projecao ? (
-        <View className="gap-0.5">
+        <View className="gap-2 items-start">
+          <Typography.Paragraph type="body-sm" color="muted">
+            {`Neste ritmo, você conclui em ${projecao.conclusaoProjetada}.`}
+          </Typography.Paragraph>
           {projecao.atrasadas > 0 ? (
-            <Typography.Paragraph type="body-sm" color="muted">
-              {`${projecao.atrasadas} ${projecao.atrasadas === 1 ? "obrigatória atrasada" : "obrigatórias atrasadas"} · neste ritmo você conclui em ${projecao.conclusaoProjetada}${
-                projecao.semestresAlemDoPrevisto > 0
-                  ? `, ${projecao.semestresAlemDoPrevisto} ${projecao.semestresAlemDoPrevisto === 1 ? "semestre" : "semestres"} além do previsto`
-                  : ""
-              }.`}
-            </Typography.Paragraph>
-          ) : (
-            <Typography.Paragraph type="body-sm" color="muted">
-              {`Neste ritmo você conclui em ${projecao.conclusaoProjetada}${
-                projecao.semestresAlemDoPrevisto > 0
-                  ? `, ${projecao.semestresAlemDoPrevisto} ${projecao.semestresAlemDoPrevisto === 1 ? "semestre" : "semestres"} além do previsto`
-                  : ""
-              }.`}
-            </Typography.Paragraph>
-          )}
+            <View testID="badge-atrasadas" className="rounded-full bg-danger-soft px-2 py-1">
+              <Typography.Paragraph type="body-xs" className="text-danger">
+                {`${projecao.atrasadas} ${projecao.atrasadas === 1 ? "atrasada" : "atrasadas"}`}
+              </Typography.Paragraph>
+            </View>
+          ) : null}
           {projecao.alemDoPrazoMaximo ? (
             <Typography.Paragraph type="body-sm" color="muted">
               Nesse ritmo, a conclusão passa do prazo máximo do seu histórico.
