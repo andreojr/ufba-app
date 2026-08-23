@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type {
   DadosPonto,
   PontoAtencaoLinha,
@@ -5,8 +6,16 @@ import type {
 } from '../pontos-atencao/ponto-atencao.repository';
 import { PrismaService } from './prisma.service';
 
-function paraLinha(registro: any, userId: string): PontoAtencaoLinha {
-  const votos = registro.votos as { userId: string; valor: string }[];
+const INCLUDE = {
+  turma: { select: { codigo: true, nome: true } },
+  responsavel: { select: { id: true, name: true } },
+  votos: { select: { userId: true, valor: true } },
+} as const;
+
+type Registro = Prisma.PontoAtencaoGetPayload<{ include: typeof INCLUDE }>;
+
+function paraLinha(registro: Registro, userId: string): PontoAtencaoLinha {
+  const votos = registro.votos;
   return {
     id: registro.id,
     turmaId: registro.turmaId,
@@ -14,7 +23,9 @@ function paraLinha(registro: any, userId: string): PontoAtencaoLinha {
     turmaNome: registro.turma.nome,
     responsavelId: registro.responsavelId,
     responsavelNome: registro.responsavel?.name ?? null,
-    tipo: registro.tipo,
+    // `tipo` e `valor` são String no schema, mais largos que o domínio: não
+    // há enum no Postgres aqui, então a garantia mora na escrita.
+    tipo: registro.tipo as 'PROVA' | 'TRABALHO',
     titulo: registro.titulo,
     data: registro.data,
     hora: registro.hora,
@@ -26,12 +37,6 @@ function paraLinha(registro: any, userId: string): PontoAtencaoLinha {
         'CONFIRMA' | 'CONTESTA' | undefined) ?? null,
   };
 }
-
-const INCLUDE = {
-  turma: { select: { codigo: true, nome: true } },
-  responsavel: { select: { id: true, name: true } },
-  votos: { select: { userId: true, valor: true } },
-} as const;
 
 export class PrismaPontoAtencaoRepository implements PontoAtencaoRepository {
   constructor(private readonly prisma: PrismaService) {}
