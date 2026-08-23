@@ -21,10 +21,8 @@ import {
   CriarPontoAtencaoDto,
   VotarDto,
 } from './ponto-atencao.dto';
-import type {
-  PontoAtencaoService,
-  PontoAtencaoVisao,
-} from './ponto-atencao.service';
+import { PontoAtencaoService } from './ponto-atencao.service';
+import type { PontoAtencaoVisao } from './ponto-atencao.service';
 
 /**
  * O id do responsável não sai daqui — a tela mostra o nome, e devolver o id
