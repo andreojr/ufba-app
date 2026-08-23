@@ -34,4 +34,16 @@ describe('parseComponenteResumo', () => {
     // fixture is exactly the case that proves it.
     expect(detalhe.equivalencias).not.toBeNull();
   });
+
+  it('reads back the código the page itself is describing, so a caller can tell a mismatched response apart', () => {
+    // resumo_curriculo.jsf is stateful per JSF session: a detail POST can come
+    // back describing a *different* component than the one asked for. The only
+    // way a caller can catch that is the código printed on the page itself.
+    expect(
+      parseComponenteResumo(fixture('componente-resumo-com-prerequisito.html')).codigo,
+    ).toBe('ENG295');
+    expect(
+      parseComponenteResumo(fixture('componente-resumo-sem-prerequisito.html')).codigo,
+    ).toBe('FISD36');
+  });
 });

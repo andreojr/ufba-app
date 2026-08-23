@@ -14,9 +14,13 @@ const JSESSIONID_PATTERN = /JSESSIONID=[^;]+/;
  *
  * `capture` silently keeps the previous ViewState when a response carries
  * none — measured against the real component-detail page, which renders no
- * `<form>` at all and does not advance the JSF conversation. That is what
- * makes the per-component detail fetches in CurriculoService safe to run in
- * parallel while reusing one ViewState.
+ * `<form>` at all and does not advance the JSF conversation, so every
+ * per-component detail fetch reuses the matrix's ViewState.
+ *
+ * That reuse does NOT make those fetches parallel-safe: resumo_curriculo.jsf
+ * also keeps the component it is currently showing in the *session*, so
+ * overlapping POSTs come back describing each other's components. See the
+ * sequential loop (and the código check) in CurriculoService.resolverCurso.
  */
 export class CurriculoPublicSession {
   private jsessionId: string | undefined;
@@ -36,15 +40,12 @@ export class CurriculoPublicSession {
 
   /**
    * `opcoes.capturarViewState` (default `true`) controls whether this
-   * response's ViewState (if any) replaces the session's current one.
-   * Callers running several `postar`s concurrently against one shared
-   * session (e.g. the per-component detail fetches in CurriculoService) must
-   * pass `false` — otherwise two concurrent responses racing to update
-   * `this.viewState` could hand a later postar the wrong conversation state.
-   * This is currently moot for those leaf responses (they carry no
-   * ViewState at all, so `capture` would be a no-op either way), but the
-   * option makes that safe structurally rather than by accident of the
-   * server's current behaviour.
+   * response's ViewState (if any) replaces the session's current one. Leaf
+   * responses that must not advance the session's conversation state — the
+   * per-component detail pages in CurriculoService — pass `false`. That is
+   * currently moot for them (they carry no ViewState at all, so `capture`
+   * would be a no-op either way), but it states the intent structurally
+   * instead of relying on the server's current behaviour.
    */
   async postar(
     path: string,

@@ -288,7 +288,7 @@ describe('CurriculoService', () => {
     );
   });
 
-  it('resolves a course end to end — directory → estruturas → matrix → per-component parallel fetch → persistence — with real request bodies', async () => {
+  it('resolves a course end to end — directory → estruturas → matrix → per-component sequential fetch → persistence — with real request bodies', async () => {
     const http = fakeHttpParaResolucao({
       cursoEstruturas: CURSO_ESTRUTURAS_HTML,
       matriz: ESTRUTURA_RESUMO_HTML,
@@ -372,6 +372,88 @@ describe('CurriculoService', () => {
       'formulario:j_id_jsp_337523315_66': 'formulario:j_id_jsp_337523315_66',
       publico: 'public',
     });
+  });
+
+  it('fetches component details one at a time — resumo_curriculo.jsf is stateful per JSF session', async () => {
+    // Running these in parallel made SIGAA answer a component's POST with a
+    // *sibling* component's detail page: the persisted grade came out with
+    // runs of components sharing one pré-requisito expression, and even a
+    // component listing itself as its own pré-requisito. The endpoint keeps
+    // the "currently shown component" in the session, so overlapping
+    // requests are never safe, no matter whose ViewState they carry.
+    const base = fakeHttpParaResolucao({
+      cursoEstruturas: CURSO_ESTRUTURAS_HTML,
+      matriz: ESTRUTURA_RESUMO_HTML,
+      detalhePorId: {
+        '30548': parserFixture('componente-resumo-com-prerequisito.html'),
+        '34997': parserFixture('componente-resumo-sem-prerequisito.html'),
+      },
+    });
+    let emVoo = 0;
+    let maxEmVoo = 0;
+    const http: SigaaHttpClient = {
+      async request(req) {
+        const ehDetalhe =
+          req.method === 'POST' && req.path.includes('resumo_curriculo.jsf');
+        if (ehDetalhe) {
+          emVoo += 1;
+          maxEmVoo = Math.max(maxEmVoo, emVoo);
+        }
+        // Yield, so a genuinely parallel batch has both requests overlapping
+        // here rather than each completing before the next one starts.
+        await new Promise((resolve) => setImmediate(resolve));
+        try {
+          return await base.request(req);
+        } finally {
+          if (ehDetalhe) {
+            emVoo -= 1;
+          }
+        }
+      },
+    };
+    const repository = fakeRepository({
+      buscarCursoPorId: jest
+        .fn()
+        .mockResolvedValue({ idSigaa: '1876880', nome: 'X', sede: 'SALVADOR', nivel: 'G' }),
+    });
+    const service = new CurriculoService(http, repository, agora);
+
+    await service.resolverCurso('1876880').catch(() => undefined);
+
+    expect(repository.salvarEstrutura).toHaveBeenCalledTimes(1);
+    expect(maxEmVoo).toBe(1);
+  });
+
+  it('never persists detail read off a page describing a different component', async () => {
+    // The wrong-page failure mode above is invisible in the response itself
+    // unless the código printed on the page is checked against the one asked
+    // for. Silently keeping it is the worst outcome: a bogus pré-requisito
+    // expression shows the student a lock (or an unlock) that is not real.
+    const http = fakeHttpParaResolucao({
+      cursoEstruturas: CURSO_ESTRUTURAS_HTML,
+      matriz: ESTRUTURA_RESUMO_HTML,
+      detalhePorId: {
+        '30548': parserFixture('componente-resumo-com-prerequisito.html'),
+        // FISD36's request answered with ENG295's page.
+        '34997': parserFixture('componente-resumo-com-prerequisito.html'),
+      },
+    });
+    const repository = fakeRepository({
+      buscarCursoPorId: jest
+        .fn()
+        .mockResolvedValue({ idSigaa: '1876880', nome: 'X', sede: 'SALVADOR', nivel: 'G' }),
+    });
+    const service = new CurriculoService(http, repository, agora);
+
+    await service.resolverCurso('1876880').catch(() => undefined);
+
+    const [, , , , componentesDetalhados] = repository.salvarEstrutura.mock.calls[0];
+    const fisd36 = componentesDetalhados.find((c: { codigo: string }) => c.codigo === 'FISD36');
+    expect(fisd36?.preRequisito).toBeNull();
+    expect(fisd36?.unidadeResponsavel).toBeNull();
+    // The component whose page really was its own keeps its detail.
+    const eng295 = componentesDetalhados.find((c: { codigo: string }) => c.codigo === 'ENG295');
+    expect(eng295?.preRequisito).toContain('FISD36');
   });
 
   it('throws SemEstruturaAtivaError, writing nothing, when no structure is marked Ativa', async () => {

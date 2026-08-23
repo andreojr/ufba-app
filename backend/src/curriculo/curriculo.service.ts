@@ -3,7 +3,10 @@ import { CurriculoPublicSession } from '../sigaa-engine/curriculo-session';
 import type { SigaaHttpClient } from '../sigaa-engine/session';
 import { parseCursoLista, type CursoListaItem } from '../sigaa-engine/parsers/curso-lista';
 import { parseCursoEstruturas } from '../sigaa-engine/parsers/curso-estruturas';
-import { parseEstruturaResumo } from '../sigaa-engine/parsers/estrutura-resumo';
+import {
+  parseEstruturaResumo,
+  type EstruturaResumo,
+} from '../sigaa-engine/parsers/estrutura-resumo';
 import { parseComponenteResumo } from '../sigaa-engine/parsers/componente-resumo';
 import type {
   ComponenteCurricularSalvo,
@@ -22,7 +25,9 @@ import {
 const LISTA_PATH = '/sigaa/public/curso/lista.jsf';
 const CURRICULO_PATH = '/sigaa/public/curso/curriculo.jsf';
 const RESUMO_PATH = '/sigaa/public/curso/resumo_curriculo.jsf';
-const CONCORRENCIA_COMPONENTES = 4;
+// One retry for a detail page that comes back describing another component —
+// see buscarDetalheDoComponente.
+const TENTATIVAS_DETALHE = 2;
 
 export class SemEstruturaAtivaError extends Error {
   constructor(cursoId: string) {
@@ -52,23 +57,6 @@ export class ComponenteDesconhecidoError extends Error {
     // VizinhosCurriculares válido (com listas vazias).
     this.name = 'ComponenteDesconhecidoError';
   }
-}
-
-async function withLimitedConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  run: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker(): Promise<void> {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await run(items[i]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
 }
 
 // Default seguro pro 4º parâmetro do construtor — "sem histórico
@@ -146,41 +134,18 @@ export class CurriculoService {
     });
     const resumo = parseEstruturaResumo(matrizHtml);
 
-    const componentesDetalhados = await withLimitedConcurrency(
-      resumo.componentes,
-      CONCORRENCIA_COMPONENTES,
-      async (componente): Promise<ComponenteCurricularSalvo> => {
-        // Only the network call is caught here: a parser exception is a
-        // programming bug (or an unexpected page shape SIGAA never actually
-        // serves), not a transient per-component failure, and must not be
-        // silently absorbed into the same "treat as absence" path as a
-        // genuine fetch failure.
-        let detalheHtml: string;
-        try {
-          // capturarViewState: false — these run concurrently against one
-          // shared session; see CurriculoPublicSession.postar's doc comment.
-          detalheHtml = await session.postar(
-            RESUMO_PATH,
-            { ...resumo.formFields, ...componente.jsfParams },
-            { capturarViewState: false },
-          );
-        } catch (erro) {
-          this.logger.warn(
-            `Falha ao buscar detalhe do componente ${componente.codigo}: ${erro}`,
-          );
-          const { jsfParams: _jsfParams, ...componenteSalvo } = componente;
-          return {
-            ...componenteSalvo,
-            unidadeResponsavel: null,
-            preRequisito: null,
-            coRequisito: null,
-            equivalencias: null,
-          };
-        }
-        const { jsfParams: _jsfParams, ...componenteSalvo } = componente;
-        return { ...componenteSalvo, ...parseComponenteResumo(detalheHtml) };
-      },
-    );
+    // Sequential, deliberately: resumo_curriculo.jsf keeps the component it
+    // is currently showing in the JSF session, so overlapping detail POSTs
+    // get answered with each other's pages. Fetching four at a time is what
+    // wrote a grade where runs of components shared one pré-requisito
+    // expression — and one component listed itself as its own
+    // pré-requisito. Slower to resolve, but the result is the real grade.
+    const componentesDetalhados: ComponenteCurricularSalvo[] = [];
+    for (const componente of resumo.componentes) {
+      componentesDetalhados.push(
+        await this.buscarDetalheDoComponente(session, resumo.formFields, componente),
+      );
+    }
 
     await this.repository.salvarEstrutura(
       cursoId,
@@ -196,6 +161,67 @@ export class CurriculoService {
       throw new Error('Estrutura salva mas não encontrada logo depois.');
     }
     return salva;
+  }
+
+  /**
+   * One component's detail row, or the same component with every detail field
+   * null when it could not be read for real. Two things count as "could not
+   * be read": the POST failing, and the page coming back describing a
+   * *different* código than the one asked for — SIGAA answers from its own
+   * session state, so a mismatch means this is some other component's page.
+   * Both fail to absence rather than to a wrong pré-requisito expression: a
+   * bogus expression shows the student a lock (or an unlock) that isn't real.
+   */
+  private async buscarDetalheDoComponente(
+    session: CurriculoPublicSession,
+    formFields: Record<string, string>,
+    componente: EstruturaResumo['componentes'][number],
+  ): Promise<ComponenteCurricularSalvo> {
+    const { jsfParams, ...componenteSalvo } = componente;
+    const semDetalhe: ComponenteCurricularSalvo = {
+      ...componenteSalvo,
+      unidadeResponsavel: null,
+      preRequisito: null,
+      coRequisito: null,
+      equivalencias: null,
+    };
+
+    for (let tentativa = 1; tentativa <= TENTATIVAS_DETALHE; tentativa++) {
+      // Only the network call is caught: a parser exception is a programming
+      // bug (or a page shape SIGAA never actually serves), not a transient
+      // per-component failure, and must not be silently absorbed into the
+      // same "treat as absence" path as a genuine fetch failure.
+      let detalheHtml: string;
+      try {
+        // capturarViewState: false — the detail page carries no ViewState of
+        // its own and does not advance the JSF conversation; see
+        // CurriculoPublicSession.postar's doc comment.
+        detalheHtml = await session.postar(
+          RESUMO_PATH,
+          { ...formFields, ...jsfParams },
+          { capturarViewState: false },
+        );
+      } catch (erro) {
+        this.logger.warn(
+          `Falha ao buscar detalhe do componente ${componente.codigo}: ${erro}`,
+        );
+        return semDetalhe;
+      }
+
+      const { codigo: codigoDaPagina, ...detalhe } = parseComponenteResumo(detalheHtml);
+      if (codigoDaPagina === null || codigoDaPagina === componente.codigo) {
+        return { ...componenteSalvo, ...detalhe };
+      }
+      this.logger.warn(
+        `Detalhe pedido para ${componente.codigo} voltou descrevendo ${codigoDaPagina} ` +
+          `(tentativa ${tentativa}/${TENTATIVAS_DETALHE})`,
+      );
+    }
+
+    this.logger.error(
+      `Descartando o detalhe de ${componente.codigo}: nenhuma tentativa devolveu a página dele.`,
+    );
+    return semDetalhe;
   }
 
   /**

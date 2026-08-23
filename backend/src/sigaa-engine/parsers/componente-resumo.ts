@@ -7,6 +7,17 @@ export interface ComponenteResumoDetalhe {
   equivalencias: string | null;
 }
 
+/**
+ * What the page itself says it is describing, alongside the detail fields.
+ * Deliberately NOT part of `ComponenteResumoDetalhe` (the shape that gets
+ * persisted, where the código already comes from the matrix row): this is a
+ * verification field, read back so a caller can tell a response describing
+ * the *wrong* component apart from the one it asked for.
+ */
+export interface ComponenteResumoPagina extends ComponenteResumoDetalhe {
+  codigo: string | null;
+}
+
 function normalizeLabel(label: string): string {
   return label
     .normalize('NFD')
@@ -34,9 +45,10 @@ function valorOuNulo(texto: string): string | null {
  * referenced código in an <ACRONYM> tag, but .text() already flattens that —
  * no special-casing needed beyond the "-" → null rule.
  */
-export function parseComponenteResumo(html: string): ComponenteResumoDetalhe {
+export function parseComponenteResumo(html: string): ComponenteResumoPagina {
   const $ = cheerio.load(html);
-  const detalhe: ComponenteResumoDetalhe = {
+  const detalhe: ComponenteResumoPagina = {
+    codigo: null,
     unidadeResponsavel: null,
     preRequisito: null,
     coRequisito: null,
@@ -45,15 +57,21 @@ export function parseComponenteResumo(html: string): ComponenteResumoDetalhe {
 
   $('table.visualizacao tr').each((_, row) => {
     const $row = $(row);
-    const th = $row.find('th').first();
-    const td = $row.find('td').first();
+    // `children`, not `find`: the page nests a whole "Currículos" table
+    // inside one of this table's own rows, and that nested table's header
+    // carries its own `<th>Código</th>` — a deep search reads that as this
+    // row's label and hands back the entire nested table as its value.
+    const th = $row.children('th').first();
+    const td = $row.children('td').first();
     if (!th.length || !td.length) {
       return;
     }
     const label = normalizeLabel(th.text());
     const valor = valorOuNulo(td.text());
 
-    if (label === 'unidade responsavel') {
+    if (label === 'codigo') {
+      detalhe.codigo = valor;
+    } else if (label === 'unidade responsavel') {
       detalhe.unidadeResponsavel = valor;
     } else if (label === 'pre-requisitos') {
       detalhe.preRequisito = valor;
