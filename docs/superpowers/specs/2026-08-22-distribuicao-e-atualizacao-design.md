@@ -74,6 +74,14 @@ O corolário importante: **sem OTA, o APK é o único canal**, e por isso vale
 pagar o custo *único* do download-e-instala embutido (trabalho nativo de uma
 vez, manutenção zero depois) em vez do custo *recorrente* do OTA.
 
+## Pré-requisito: SDK 57
+
+Esta entrega assume o app no **Expo SDK 57** (RN 0.86, React 19.2), feito na
+branch `upgrade-sdk-57`. O upgrade não é cosmético para esta spec: é o que traz
+o `onProgress` no download, e foi feito antes da primeira release pública
+justamente porque, depois dela, um upgrade de SDK vira uma atualização nativa
+que precisa alcançar todo mundo — sem OTA, sem rollback remoto.
+
 ## Fonte da verdade da versão
 
 `mobile/app.json` é a fonte única:
@@ -195,7 +203,8 @@ quando sair a próxima.
 
 1. Baixa o APK de `downloadUrl` com `File.downloadFileAsync` (`expo-file-system`,
    já nas deps) pro diretório de cache do app — invisível na pasta Downloads e
-   limpável pelo sistema sob pressão de armazenamento.
+   limpável pelo sistema sob pressão de armazenamento. O progresso vem do
+   `onProgress`, com bytes reais.
 2. Lê `File#contentUri` (o `content://` do FileProvider) e dispara a intent
    `android.intent.action.INSTALL_PACKAGE` com `FLAG_GRANT_READ_URI_PERMISSION`,
    usando `expo-intent-launcher`.
@@ -206,18 +215,22 @@ Se o usuário não tiver concedido "instalar apps desconhecidos", encaminha pra
 fallback de abrir a landing no navegador — o caminho manual nunca deixa de
 existir.
 
-**Nada de `expo-file-system/legacy`.** O subpath legacy tem download com
-callback de progresso e `getContentUriAsync`, e à primeira vista seria o
-caminho — mas está marcado pra remoção na SDK 55, e adotá-lo criaria dívida de
-migração num app cujo objetivo declarado é parar de exigir atenção. A API
-moderna cobre o essencial: a v19.0.24 instalada já tem `File#contentUri`
-(Android, adicionada na 19.0.19), que é o substituto do `getContentUriAsync`.
+**Nada de `expo-file-system/legacy`.** O subpath legacy está depreciado, e
+adotá-lo criaria dívida de migração num app cujo objetivo declarado é parar de
+exigir atenção. Não é preciso: desde a SDK 56 a API moderna cobre as duas coisas
+que faltavam. Confirmado na 57.0.5:
 
-O que se perde é a porcentagem: `File.downloadFileAsync` não reporta bytes. O
-card mostra estado indeterminado ("Baixando a atualização…" com spinner) em vez
-de inventar uma estimativa. Também não reusa o `DownloadProgressBar` do fluxo de
-histórico — aquele encena progresso a partir de estágios conhecidos do backend,
-que não existem aqui.
+- `File.downloadFileAsync(url, destino, { headers, idempotent, onProgress, signal })`
+- `DownloadProgress { bytesWritten, totalBytes }`, com `totalBytes: -1` quando o
+  servidor não manda `Content-Length`
+- `File#contentUri` (Android), herdado de `FileSystemFile` — é o substituto do
+  `getContentUriAsync`
+
+Então o progresso é **medido**, não estimado. O card usa a mesma linguagem visual
+do `DownloadProgressBar` do fluxo de histórico, mas **não reusa o componente**:
+aquele encena progresso a partir de estágios conhecidos do backend, que não
+existem aqui. Quando `totalBytes` vem `-1` não há fração, e o card mostra spinner
+em vez de inventar um número.
 
 ### Mudanças nativas (exigem `expo prebuild` + rebuild)
 

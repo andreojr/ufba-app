@@ -20,6 +20,7 @@ import { Uniwind } from "uniwind";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { configureGoogleSignin } from "@/lib/google-signin";
 import { MockAppStateProvider } from "@/lib/mock-app-state";
+import { MoodleLinkProvider } from "@/lib/moodle-link-context";
 import { SigaaLinkProvider, useSigaaLink } from "@/lib/sigaa-link-context";
 import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
 import { getThemePreference } from "@/lib/theme-preference";
@@ -70,6 +71,13 @@ function RootNavigator(): JSX.Element | null {
               presentation: "transparentModal",
               animation: "slide_from_bottom",
               contentStyle: { backgroundColor: "transparent" },
+            }}
+          />
+          <Stack.Screen
+            name="moodle-webview"
+            options={{
+              presentation: "modal",
+              animation: "slide_from_bottom",
             }}
           />
         </Stack.Protected>
@@ -125,9 +133,11 @@ export default function RootLayout(): JSX.Element | null {
           <MockAppStateProvider>
             <AuthProvider>
               <SigaaLinkProvider>
-                <SyncFreshnessProvider>
-                  <RootNavigator />
-                </SyncFreshnessProvider>
+                <MoodleLinkProvider>
+                  <SyncFreshnessProvider>
+                    <RootNavigator />
+                  </SyncFreshnessProvider>
+                </MoodleLinkProvider>
               </SigaaLinkProvider>
             </AuthProvider>
           </MockAppStateProvider>
