@@ -38,6 +38,17 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
 };
 
 /**
+ * A 401 alone doesn't tell the client *whose* credentials were rejected: the
+ * JwtAuthGuard answers 401 when our own access token expires, and three
+ * different SIGAA errors answer 401 too. Only one of them means "the student
+ * changed their SIGAA password" — this tag marks it, so the app can flag the
+ * saved password as stale without doing it every time a JWT lapses.
+ */
+const ERROR_CODE_BY_NAME: Record<string, string> = {
+  [SigaaInvalidCredentialsError.name]: 'SIGAA_INVALID_CREDENTIALS',
+};
+
+/**
  * Maps the sigaa-engine's domain errors (which are plain `Error` subclasses, not
  * `HttpException`s) to the HTTP status a client can actually branch on, instead of
  * letting them fall through to Nest's default 500. Anything not in the map above
@@ -74,9 +85,12 @@ export class SigaaExceptionFilter implements ExceptionFilter {
       this.logger.error(exception.message, exception.stack);
     }
 
+    const code = ERROR_CODE_BY_NAME[exception.name];
+
     response.status(status).json({
       statusCode: status,
       message: exception.message,
+      ...(code ? { code } : {}),
     });
   }
 }

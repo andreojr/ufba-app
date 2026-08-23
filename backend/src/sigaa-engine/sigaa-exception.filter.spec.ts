@@ -27,7 +27,7 @@ function fakeHost() {
 describe('SigaaExceptionFilter', () => {
   const filter = new SigaaExceptionFilter();
 
-  it('maps SigaaInvalidCredentialsError to 401 with the error message', () => {
+  it('maps SigaaInvalidCredentialsError to 401, tagged so the client can tell it apart from its own expired JWT', () => {
     const { host, status, json } = fakeHost();
     const error = new SigaaInvalidCredentialsError();
 
@@ -37,23 +37,26 @@ describe('SigaaExceptionFilter', () => {
     expect(json).toHaveBeenCalledWith({
       statusCode: HttpStatus.UNAUTHORIZED,
       message: error.message,
+      code: 'SIGAA_INVALID_CREDENTIALS',
     });
   });
 
-  it('maps SigaaCredentialsRequiredError to 401', () => {
-    const { host, status } = fakeHost();
+  it('maps SigaaCredentialsRequiredError to 401 without the rejected-password tag', () => {
+    const { host, status, json } = fakeHost();
 
     filter.catch(new SigaaCredentialsRequiredError(), host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(json.mock.calls[0][0]).not.toHaveProperty('code');
   });
 
-  it('maps SigaaSessionExpiredError to 401', () => {
-    const { host, status } = fakeHost();
+  it('maps SigaaSessionExpiredError to 401 without the rejected-password tag', () => {
+    const { host, status, json } = fakeHost();
 
     filter.catch(new SigaaSessionExpiredError(), host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(json.mock.calls[0][0]).not.toHaveProperty('code');
   });
 
   it('maps SigaaRateLimitedError to 429', () => {
