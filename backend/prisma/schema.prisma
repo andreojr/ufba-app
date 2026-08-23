@@ -29,6 +29,9 @@ model User {
   cachedSchedule  CachedSchedule?
   historico       Historico?
   planoItens      PlanoItem[]
+  matriculas      Matricula[]
+  pontosAtencao   PontoAtencao[]
+  votosPontos     PontoAtencaoVoto[]
 
   @@map("users")
 }
@@ -90,32 +93,95 @@ model CachedSchedule {
   periodoLetivoFim      String?  @map("periodo_letivo_fim")
   fetchedAt             DateTime @default(now()) @map("fetched_at")
 
-  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  turmas CachedTurma[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("cached_schedule")
 }
 
-model CachedTurma {
-  id             String  @id @default(uuid())
-  scheduleUserId String  @map("schedule_user_id")
-  // SIGAA's own order isn't guaranteed by any other column here, and the
-  // screen wants a stable list — not one reshuffled by a uuid sort order.
-  ordem          Int
-  codigo         String?
+// Global — uma turma é a mesma para todos os alunos nela, ao contrário do
+// CachedTurma que isto substitui (aquele era um snapshot por aluno). A chave
+// natural vem do atestado de matrícula: 2026.2 / ENGG54 / 02.
+model Turma {
+  id             String   @id @default(uuid())
+  semestre       String
+  // Não nulável, ao contrário do CachedTurma que isto substitui: a chave
+  // natural precisa dos três, e o Prisma não consulta um @@unique com null.
+  // O atestado sempre traz o código — a Task 2 rejeita a sincronização
+  // quando não traz.
+  codigo         String
+  numero         String
   nome           String
   docente        String?
-  semestre       String
-  vigenciaInicio String  @map("vigencia_inicio")
-  vigenciaFim    String  @map("vigencia_fim")
-  // TurmaSlot[]: dia/horário/local per weekday. Kept as JSON rather than its
-  // own table — nothing queries a schedule by slot, only by turma.
+  vigenciaInicio String   @map("vigencia_inicio")
+  vigenciaFim    String   @map("vigencia_fim")
+  // TurmaSlot[] — mesmo formato do CachedTurma que isto substitui.
   slots          Json
+  // Guarda contra regressão: um app offline com dado velho não pode
+  // sobrescrever o que um colega sincronizou depois.
+  atualizadoEm   DateTime @default(now()) @map("atualizado_em")
 
-  schedule CachedSchedule @relation(fields: [scheduleUserId], references: [userId], onDelete: Cascade)
+  matriculas Matricula[]
+  pontos     PontoAtencao[]
 
-  @@unique([scheduleUserId, ordem])
-  @@map("cached_turma")
+  @@unique([semestre, codigo, numero])
+  @@map("turmas")
+}
+
+// A junção aluno↔turma. Substituída por inteiro a cada sync, e é também a
+// guarda de autorização de todo ponto de atenção.
+model Matricula {
+  userId  String @map("user_id")
+  turmaId String @map("turma_id")
+  // A posição em que o SIGAA lista a turma para ESTE aluno — por aluno, não
+  // da turma, por isso mora aqui e não em Turma.
+  ordem   Int
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turma Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@id([userId, turmaId])
+  @@unique([userId, ordem])
+  @@map("matriculas")
+}
+
+// Prova ou trabalho com data marcada, cadastrado por um aluno e visível para
+// toda a turma. Não vem do SIGAA: a Turma Virtual não é confiável para prazos.
+model PontoAtencao {
+  id            String   @id @default(uuid())
+  turmaId       String   @map("turma_id")
+  // Quem responde pelo item AGORA — reatribuído a quem corrige. Não existe
+  // registro de quem criou: quem corrige assume, e o nome anterior sai.
+  responsavelId String?  @map("responsavel_id")
+  tipo          String // PROVA | TRABALHO
+  titulo        String
+  data          DateTime @db.Date
+  hora          String? // "HH:MM"
+  observacao    String?
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  turma Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  // SetNull, não Cascade: conta apagada não pode fazer o item sumir para as
+  // outras trinta pessoas da turma. Sem responsável, o item destrava.
+  responsavel User? @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  votos       PontoAtencaoVoto[]
+
+  @@index([turmaId, data])
+  @@map("pontos_atencao")
+}
+
+// A chave composta já garante um voto por pessoa — sem lógica de aplicação.
+model PontoAtencaoVoto {
+  pontoId  String   @map("ponto_id")
+  userId   String   @map("user_id")
+  valor    String // CONFIRMA | CONTESTA
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  ponto PontoAtencao @relation(fields: [pontoId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pontoId, userId])
+  @@map("pontos_atencao_voto")
 }
 
 // Parsed snapshot of the student's Histórico Escolar PDF. Replaced wholesale on
