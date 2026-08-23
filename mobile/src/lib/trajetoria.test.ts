@@ -1,6 +1,7 @@
 import {
   agruparPorAno,
   agruparPorSemestre,
+  anosDaProjecao,
   calcularCrAcumulado,
   componentesComCargaHorariaContada,
   contarFaltantes,
@@ -32,7 +33,12 @@ import {
   variacaoUltimoPeriodo,
   zonasDePlanejamento,
 } from "./trajetoria";
-import type { ComponenteCursado, ComponentePendente, MarcoSemestre } from "./types";
+import type {
+  ComponenteCursado,
+  ComponentePendente,
+  MarcoSemestre,
+  ProjecaoTrajetoria,
+} from "./types";
 
 function componente(over: Partial<ComponenteCursado> = {}): ComponenteCursado {
   return {
@@ -242,7 +248,38 @@ describe("agruparPorAno", () => {
 
   it("keeps a lone period in its own year", () => {
     const anos = agruparPorAno([{ semestre: "2024.2", emCurso: false, componentes: [] }]);
-    expect(anos).toEqual([{ ano: "2024", periodos: [{ semestre: "2024.2", emCurso: false, componentes: [] }] }]);
+    expect(anos).toEqual([
+      { ano: "2024", periodos: [{ semestre: "2024.2", emCurso: false, componentes: [] }], projetados: [] },
+    ]);
+  });
+});
+
+describe("anosDaProjecao", () => {
+  it("emenda os semestres futuros depois dos cursados, no mesmo eixo de anos", () => {
+    const periodos = [{ semestre: "2026.1", componentes: [], emCurso: true }];
+    const projecao: ProjecaoTrajetoria = {
+      semestres: [
+        { semestre: "2026.2", componentes: [], horasOptativas: 0, horasComplementares: 0 },
+        { semestre: "2027.1", componentes: [], horasOptativas: 0, horasComplementares: 0 },
+      ],
+      teto: 300,
+      atrasadas: 0,
+      conclusaoProjetada: "2027.1",
+      semestresAlemDoPrevisto: 0,
+      alemDoPrazoMaximo: false,
+    };
+
+    const anos = anosDaProjecao(periodos, projecao);
+
+    expect(anos.map((a) => a.ano)).toEqual(["2026", "2027"]);
+    // 2026 junta o cursado e o projetado no mesmo ano.
+    expect(anos[0].periodos.map((p) => p.semestre)).toEqual(["2026.1"]);
+    expect(anos[0].projetados.map((s) => s.semestre)).toEqual(["2026.2"]);
+  });
+
+  it("devolve só o passado quando não há projeção", () => {
+    const periodos = [{ semestre: "2026.1", componentes: [], emCurso: true }];
+    expect(anosDaProjecao(periodos, null).map((a) => a.ano)).toEqual(["2026"]);
   });
 });
 

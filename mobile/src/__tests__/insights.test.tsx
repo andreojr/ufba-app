@@ -103,6 +103,7 @@ function trajetoria(
     fetchedAt: "2026-08-19T03:35:00.000Z",
     plano: [],
     marcos,
+    projecao: null,
     historico: {
       indices: { cr: null, iap: null },
       cursados: [],

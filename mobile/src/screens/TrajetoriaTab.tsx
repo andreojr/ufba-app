@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Button, Menu, Typography, useThemeColor } from "heroui-native";
+import { Button, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { LinearTransition } from "react-native-reanimated";
@@ -12,22 +12,22 @@ import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import {
-  agruparPorAno,
   agruparPorSemestre,
+  anosDaProjecao,
   densidadeCarga,
   formatarNota,
   historicoDesatualizado,
-  poolPlanejavel,
   statusComponente,
   faixaComponente,
-  zonasDePlanejamento,
   type AnoTrajetoria,
 } from "@/lib/trajetoria";
 import type {
   ComponenteCursado,
+  ComponenteProjetado,
   Historico,
   ItemPlano,
   MarcosSemestralizacao,
+  ProjecaoTrajetoria,
   TrajetoriaResponse,
 } from "@/lib/types";
 import { gradeColor } from "@/lib/mock-data";
@@ -42,20 +42,8 @@ type LoadState =
       fetchedAt: Date;
       plano: ItemPlano[];
       marcos: MarcosSemestralizacao | null;
+      projecao: ProjecaoTrajetoria | null;
     };
-
-/** The planner's catch-all: everything not assigned to a term sits here. */
-const ZONA_SEM_PERIODO = "pool";
-
-/** How many upcoming terms the planner offers as drop zones. */
-const ZONAS_FUTURAS = 2;
-
-/**
- * Which term each pending component was put in, keyed by código. Keyed rather
- * than a list per zone so a move is a single overwrite: a component has one
- * term by construction and cannot end up listed under two.
- */
-type Plano = Record<string, string>;
 
 /**
  * "Em curso" would be a lie once the term's end date has passed: the MATR rows
@@ -70,13 +58,6 @@ function rotuloPeriodo(emCurso: boolean, desatualizado: boolean): string {
   return desatualizado ? "Aguardando notas" : "Em curso";
 }
 
-/** The saved plan, in the shape the zones read. Unplaced items stay out of it. */
-function planoSalvo(plano: ItemPlano[]): Plano {
-  return Object.fromEntries(
-    plano.flatMap((item) => (item.semestre ? [[item.codigo, item.semestre] as const] : [])),
-  );
-}
-
 export default function TrajetoriaTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
@@ -88,11 +69,6 @@ export default function TrajetoriaTab(): JSX.Element {
   const { setHistoricoFetchedAt } = useSyncFreshness();
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
-  // Moves the student made in this session, on top of the plan the server sent.
-  // Persisting them is a later task, so leaving the screen drops them — but a
-  // refresh must not, since nothing about the plan changed. Only a re-sync
-  // clears them, and there the server's plan is the authority.
-  const [movimentos, setMovimentos] = useState<Plano>({});
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
 
   // No request of its own: the home screen writes this cache after every
@@ -115,13 +91,9 @@ export default function TrajetoriaTab(): JSX.Element {
         fetchedAt,
         plano: resposta.plano,
         marcos: resposta.marcos,
+        projecao: resposta.projecao,
       });
       setHistoricoFetchedAt(fetchedAt);
-      // A fresh transcript replaces the one the moves were made against, and
-      // the plan the server sent back is the authority — same reset the old
-      // in-screen re-sync used to do, now covering the only path left that can
-      // bring in a fresh transcript: reloading after a sync done in Perfil.
-      setMovimentos({});
     },
     [setHistoricoFetchedAt],
   );
@@ -153,10 +125,6 @@ export default function TrajetoriaTab(): JSX.Element {
       carregar();
     }
   }, [sigaaLink.status, accessToken, carregar]);
-
-  function moverComponente(codigo: string, zona: string): void {
-    setMovimentos((atual) => ({ ...atual, [codigo]: zona }));
-  }
 
   return (
     <View className="flex-1 bg-background">
@@ -206,10 +174,8 @@ export default function TrajetoriaTab(): JSX.Element {
           <ReadyTrajetoria
             historico={state.historico}
             fimDoPeriodo={fimDoPeriodo}
-            plano={state.plano}
             marcos={state.marcos}
-            movimentos={movimentos}
-            onMover={moverComponente}
+            projecao={state.projecao}
             mutedColor={mutedColor}
             onAbrirVizinhos={(codigo, nome) =>
               router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
@@ -224,36 +190,21 @@ export default function TrajetoriaTab(): JSX.Element {
 function ReadyTrajetoria({
   historico,
   fimDoPeriodo,
-  plano,
   marcos,
-  movimentos,
-  onMover,
+  projecao,
   mutedColor,
   onAbrirVizinhos,
 }: {
   historico: Historico;
   fimDoPeriodo: string | null;
-  plano: ItemPlano[];
   marcos: MarcosSemestralizacao | null;
-  movimentos: Plano;
-  onMover: (codigo: string, zona: string) => void;
+  projecao: ProjecaoTrajetoria | null;
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const periodos = agruparPorSemestre(historico.cursados);
-  const anos = agruparPorAno(periodos);
-  const pendentes = poolPlanejavel(historico.pendentesObrigatorios);
+  const anos = anosDaProjecao(periodos, projecao);
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
-
-  // The term in progress, or — on a transcript with nothing enrolled — the last
-  // one on it, so the planner still has somewhere to count forward from.
-  const semestreAtual =
-    periodos.find((periodo) => periodo.emCurso)?.semestre ??
-    periodos[periodos.length - 1]?.semestre;
-  const zonas = semestreAtual
-    ? zonasDePlanejamento(semestreAtual, historico.prazoConclusaoMaximo, ZONAS_FUTURAS)
-    : [];
-  const salvo = planoSalvo(plano);
 
   return (
     <>
@@ -269,106 +220,31 @@ function ReadyTrajetoria({
         </Typography.Paragraph>
       ) : null}
 
+      {projecao && (projecao.atrasadas > 0 || projecao.alemDoPrazoMaximo) ? (
+        <View className="gap-0.5">
+          {projecao.atrasadas > 0 ? (
+            <Typography.Paragraph type="body-sm" color="muted">
+              {`${projecao.atrasadas} ${projecao.atrasadas === 1 ? "obrigatória atrasada" : "obrigatórias atrasadas"} · neste ritmo você conclui em ${projecao.conclusaoProjetada}${
+                projecao.semestresAlemDoPrevisto > 0
+                  ? `, ${projecao.semestresAlemDoPrevisto} ${projecao.semestresAlemDoPrevisto === 1 ? "semestre" : "semestres"} além do previsto`
+                  : ""
+              }.`}
+            </Typography.Paragraph>
+          ) : null}
+          {projecao.alemDoPrazoMaximo ? (
+            <Typography.Paragraph type="body-sm" color="muted">
+              Nesse ritmo, a conclusão passa do prazo máximo do seu histórico.
+            </Typography.Paragraph>
+          ) : null}
+        </View>
+      ) : null}
+
       <LinhaDoTempo
         anos={anos}
         desatualizado={desatualizado}
         marcos={marcos}
         onAbrirVizinhos={onAbrirVizinhos}
       />
-
-      <View className="gap-5">
-        {/* Everything around the planner now reads as the student's real
-            transcript — the coefficient, the grades, the periods — so a
-            dragged card reads as saved too. It is not: `movimentos` is
-            session-only state, and nothing here writes it back. */}
-        <Typography.Paragraph type="body-xs" color="muted">
-          Ainda não salva: mudar uma matéria de período aqui vale só para esta
-          visita à tela — ao sair, ela volta para onde estava.
-        </Typography.Paragraph>
-        {[...zonas, ZONA_SEM_PERIODO].map((zona) => {
-          const semPeriodo = zona === ZONA_SEM_PERIODO;
-          const componentes = pendentes.filter((pendente) => {
-            const atual = movimentos[pendente.codigo] ?? salvo[pendente.codigo];
-            // A term the planner no longer offers (past the deadline, or beyond
-            // the two it shows) falls back to the pool rather than taking its
-            // component off the screen entirely.
-            return atual && zonas.includes(atual) ? atual === zona : semPeriodo;
-          });
-          const vazia = componentes.length === 0;
-          return (
-            <View key={zona} className="gap-2.5">
-              <View className="flex-row items-center gap-2.5">
-                <Typography.Paragraph weight="medium">
-                  {semPeriodo ? "Sem período" : zona}
-                </Typography.Paragraph>
-                <View className="rounded-full bg-white/5 px-2 py-1">
-                  <Typography.Paragraph type="body-xs" color="muted">
-                    {semPeriodo
-                      ? `a cursar · ${componentes.length}`
-                      : vazia
-                        ? "vazio"
-                        : `${componentes.length} ${componentes.length === 1 ? "matéria" : "matérias"}`}
-                  </Typography.Paragraph>
-                </View>
-                <View className="flex-1 h-px bg-white/10" />
-              </View>
-              <View
-                className={`gap-2 rounded-[20px] p-2 min-h-16 ${
-                  vazia ? "border border-dashed border-white/20" : ""
-                }`}
-              >
-                {componentes.map((componente) => (
-                  <Menu key={componente.codigo}>
-                    <Menu.Trigger asChild>
-                      <Pressable className="rounded-2xl bg-surface-secondary p-3 flex-row items-center gap-2.5">
-                        <AppIcon name="IconCheck" size={18} color={mutedColor} />
-                        <View className="flex-1 gap-0.5">
-                          <Typography.Paragraph weight="medium">
-                            {componente.nome}
-                          </Typography.Paragraph>
-                          <Typography.Paragraph type="body-xs" color="muted">
-                            {componente.codigo} ·{" "}
-                            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                              {componente.cargaHoraria} h
-                            </Typography.Paragraph>
-                          </Typography.Paragraph>
-                        </View>
-                      </Pressable>
-                    </Menu.Trigger>
-                    <Menu.Portal>
-                      <Menu.Overlay />
-                      <Menu.Content presentation="popover" width={220}>
-                        <Menu.Label>Mover para</Menu.Label>
-                        {[...zonas, ZONA_SEM_PERIODO]
-                          .filter((destino) => destino !== zona)
-                          .map((destino) => (
-                            <Menu.Item
-                              key={destino}
-                              onPress={() => onMover(componente.codigo, destino)}
-                            >
-                              <Menu.ItemTitle>
-                                {destino === ZONA_SEM_PERIODO ? "Sem período" : destino}
-                              </Menu.ItemTitle>
-                            </Menu.Item>
-                          ))}
-                      </Menu.Content>
-                    </Menu.Portal>
-                  </Menu>
-                ))}
-                {vazia ? (
-                  <View className="py-3.5 px-1.5 items-center">
-                    <Typography.Paragraph type="body-sm" color="muted">
-                      {semPeriodo
-                        ? "Tudo planejado."
-                        : "Nenhuma matéria planejada para este período."}
-                    </Typography.Paragraph>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          );
-        })}
-      </View>
     </>
   );
 }
@@ -397,12 +273,14 @@ function LinhaDoTempo({
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
-  // Only the year in progress — or, on a transcript with nothing enrolled, the
-  // last one on it, so the grid never opens with every year folded.
+  // Only the year in progress — or, failing that, the last year that actually
+  // has cursado periods, so a future-only ano projetado never opens by
+  // default for a student with nothing em curso. `anos` comes back oldest
+  // first, so the search for "the last one with periodos" walks it reversed.
   const [anosAbertos, setAnosAbertos] = useState<Set<string>>(() => {
     const atual =
       anos.find((anoBloco) => anoBloco.periodos.some((periodo) => periodo.emCurso)) ??
-      anos[anos.length - 1];
+      [...anos].reverse().find((anoBloco) => anoBloco.periodos.length > 0);
     return new Set(atual ? [atual.ano] : []);
   });
 
@@ -421,12 +299,15 @@ function LinhaDoTempo({
       {anos.map((anoBloco) => {
         // A year only reads as done once every period on it is — one
         // "Em curso"/"Aguardando notas" left is still a year in progress.
-        const anoConcluido = anoBloco.periodos.every((periodo) => !periodo.emCurso);
+        // `.every()` on an empty array is vacuously true, so a year that only
+        // holds projetados (no periodos at all) needs its own guard — a
+        // future-only year is never "concluído".
+        const anoConcluido =
+          anoBloco.periodos.length > 0 && anoBloco.periodos.every((periodo) => !periodo.emCurso);
         const aberto = anosAbertos.has(anoBloco.ano);
-        const materias = anoBloco.periodos.reduce(
-          (total, periodo) => total + periodo.componentes.length,
-          0,
-        );
+        const materias =
+          anoBloco.periodos.reduce((total, periodo) => total + periodo.componentes.length, 0) +
+          anoBloco.projetados.reduce((total, semestre) => total + semestre.componentes.length, 0);
         return (
         <View key={anoBloco.ano} className="flex-row gap-3">
           <View className="w-3 items-center">
@@ -509,6 +390,38 @@ function LinhaDoTempo({
                   </View>
                 </View>
               ))}
+              {anoBloco.projetados.map((semestre) => (
+                <View key={semestre.semestre} className="gap-2">
+                  <View className="flex-row items-center gap-2">
+                    <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
+                      {semestre.semestre}
+                    </Typography.Paragraph>
+                    <View className="rounded-full px-2 py-0.5 bg-white/5">
+                      <Typography.Paragraph type="body-xs" color="muted">
+                        projetado
+                      </Typography.Paragraph>
+                    </View>
+                  </View>
+                  <View className="flex-row flex-wrap gap-2">
+                    {semestre.componentes.map((componente) => (
+                      <CardProjetado
+                        key={`${semestre.semestre}-${componente.codigo}`}
+                        componente={componente}
+                        onAbrirVizinhos={onAbrirVizinhos}
+                      />
+                    ))}
+                    {semestre.horasOptativas > 0 ? (
+                      <BlocoHoras horas={semestre.horasOptativas} rotulo="optativas" />
+                    ) : null}
+                    {semestre.horasComplementares > 0 ? (
+                      <BlocoHoras
+                        horas={semestre.horasComplementares}
+                        rotulo="atividades complementares"
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              ))}
             </View>
             ) : null}
           </Animated.View>
@@ -525,6 +438,74 @@ function LinhaDoTempo({
           <Typography.Paragraph weight="medium">Linha de chegada</Typography.Paragraph>
         </View>
       </View>
+    </View>
+  );
+}
+
+/**
+ * A componente the projector placed in a future semestre: no nota to show yet
+ * and no density meter — the card is a placeholder for work not yet done, not
+ * a record of work already measured. An atrasada carries the same warning
+ * badge `MateriaCard`'s status card would, just repurposed for "this used to
+ * belong to an earlier período" instead of a situação deviation. Tapping it
+ * opens the same árvore de dependências a cursado card would.
+ */
+function CardProjetado({
+  componente,
+  onAbrirVizinhos,
+}: {
+  componente: ComponenteProjetado;
+  onAbrirVizinhos: (codigo: string, nome: string) => void;
+}): JSX.Element {
+  return (
+    <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
+      {componente.atrasada && componente.periodo !== null ? (
+        <View className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-warning-soft">
+          <Typography.Paragraph type="body-xs" className="text-warning">
+            {`atrasada · ${componente.periodo}º período`}
+          </Typography.Paragraph>
+        </View>
+      ) : null}
+      <Pressable
+        testID={`materia-card-${componente.codigo}`}
+        onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
+        className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
+          componente.atrasada && componente.periodo !== null
+            ? "rounded-t-md rounded-b-2xl"
+            : "rounded-2xl"
+        }`}
+      >
+        <View className="gap-0.5">
+          <View className="flex-row items-baseline gap-1.5">
+            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+              {componente.codigo}
+            </Typography.Paragraph>
+            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+              · {componente.cargaHoraria} h
+            </Typography.Paragraph>
+          </View>
+          <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The horas genéricas a projected semestre carries — optativas or atividades
+ * complementares — that never resolve to a named componente, so they get no
+ * card at all: a dashed block deliberately unlike a matéria, since it isn't
+ * one.
+ */
+function BlocoHoras({ horas, rotulo }: { horas: number; rotulo: string }): JSX.Element {
+  return (
+    <View
+      className="rounded-2xl border border-dashed border-white/20 p-3 gap-0.5"
+      style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}
+    >
+      <Typography.Paragraph type="body-sm" color="muted">
+        {`${horas} h de ${rotulo}`}
+      </Typography.Paragraph>
     </View>
   );
 }

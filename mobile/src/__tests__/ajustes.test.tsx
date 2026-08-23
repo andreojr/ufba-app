@@ -835,6 +835,7 @@ describe("AjustesTab", () => {
           fetchedAt: new Date().toISOString(),
           plano: [],
           marcos: null,
+          projecao: null,
         });
 
         const { queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
@@ -863,6 +864,7 @@ describe("AjustesTab", () => {
           fetchedAt: new Date().toISOString(),
           plano: [],
           marcos: null,
+          projecao: null,
         });
 
         const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);

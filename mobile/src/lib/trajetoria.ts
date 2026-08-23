@@ -5,8 +5,10 @@ import type {
   ComponentePendente,
   MarcoSemestre,
   MarcosSemestralizacao,
+  ProjecaoTrajetoria,
   ResumoCargaHoraria,
   Ritmo,
+  SemestreProjetado,
 } from "./types";
 
 export interface PeriodoTrajetoria {
@@ -175,16 +177,53 @@ export function zonasDePlanejamento(
 export interface AnoTrajetoria {
   ano: string;
   periodos: PeriodoTrajetoria[];
+  /** Os semestres que ainda não aconteceram, no mesmo ano. */
+  projetados: SemestreProjetado[];
 }
 
-/** Groups already-ordered periods by the year in their "AAAA.N" semestre. */
+/**
+ * Groups already-ordered periods by the year in their "AAAA.N" semestre.
+ * Superseded by `anosDaProjecao`, which does the same grouping plus the
+ * projected terms — kept only until Task 11 removes it, its callers already
+ * gone.
+ */
 export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
   const porAno = new Map<string, PeriodoTrajetoria[]>();
   for (const periodo of periodos) {
     const ano = periodo.semestre.slice(0, 4);
     porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
   }
-  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos }));
+  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos, projetados: [] }));
+}
+
+/**
+ * Passado e futuro no mesmo eixo de anos. Um ano pode ter os dois — o ano
+ * corrente costuma ter o semestre em curso e o seguinte já projetado — então
+ * agrupar os dois separadamente e concatenar produziria "2026" duas vezes.
+ */
+export function anosDaProjecao(
+  periodos: PeriodoTrajetoria[],
+  projecao: ProjecaoTrajetoria | null,
+): AnoTrajetoria[] {
+  const anos = new Map<string, AnoTrajetoria>();
+  const doAno = (semestre: string): AnoTrajetoria => {
+    const ano = semestre.slice(0, 4);
+    const existente = anos.get(ano);
+    if (existente) {
+      return existente;
+    }
+    const criado: AnoTrajetoria = { ano, periodos: [], projetados: [] };
+    anos.set(ano, criado);
+    return criado;
+  };
+
+  for (const periodo of periodos) {
+    doAno(periodo.semestre).periodos.push(periodo);
+  }
+  for (const semestre of projecao?.semestres ?? []) {
+    doAno(semestre.semestre).projetados.push(semestre);
+  }
+  return [...anos.values()];
 }
 
 /**
