@@ -35,6 +35,7 @@ import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@
 import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { buildAvatarUrl } from "@/lib/dicebear";
 import { HISTORICO_STAGES } from "@/lib/download-progress";
+import { useMoodleLink } from "@/lib/moodle-link-context";
 import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -123,6 +124,7 @@ export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
+  const moodle = useMoodleLink();
   const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
     "muted",
     "segment-foreground",
@@ -135,6 +137,7 @@ export default function AjustesTab(): JSX.Element {
   const [isExportingCalendar, setIsExportingCalendar] = useState(false);
   const [isSyncingPerfil, setIsSyncingPerfil] = useState(false);
   const [isConfirmandoExclusao, setIsConfirmandoExclusao] = useState(false);
+  const [confirmMoodleUnlink, setConfirmMoodleUnlink] = useState(false);
   const [isApagando, setIsApagando] = useState(false);
   // Shared with Início's freshness badge and with Insights/Trajetória, which
   // write into the same two timestamps whenever they read the histórico —
@@ -392,6 +395,19 @@ export default function AjustesTab(): JSX.Element {
       setIsApagando(false);
     }
   }, [accessToken, auth, toast]);
+
+  const handleMoodlePress = async (): Promise<void> => {
+    if (moodle.status === "linked") {
+      setConfirmMoodleUnlink(true);
+      return;
+    }
+    if (moodle.status === "unlinked") {
+      const result = await moodle.link();
+      if (result.status === "failed") {
+        toast.show(dangerToast({ label: "Não foi possível conectar ao Moodle. Tente novamente." }));
+      }
+    }
+  };
 
   const perfilFetchedAt = perfilFreshness(scheduleFetchedAt, historicoFetchedAt);
   // The same consent moment Trajetória used to show right above its own
@@ -704,6 +720,40 @@ export default function AjustesTab(): JSX.Element {
           </Dialog.Portal>
         </Dialog>
 
+        <Dialog isOpen={confirmMoodleUnlink} onOpenChange={setConfirmMoodleUnlink}>
+          <Dialog.Portal>
+            <Dialog.Overlay />
+            <Dialog.Content>
+              <Dialog.Close className="self-end" />
+              <View className="gap-2.5 pb-1">
+                <Dialog.Title>Desvincular Moodle?</Dialog.Title>
+                <Dialog.Description className="text-justify">
+                  Você deixará de ver materiais e avisos das suas salas do Moodle neste aparelho.
+                </Dialog.Description>
+              </View>
+              <View className="gap-3 pt-7">
+                <Button
+                  testID="confirmar-desvincular-moodle-button"
+                  variant="danger"
+                  onPress={() => {
+                    setConfirmMoodleUnlink(false);
+                    void moodle.unlink();
+                  }}
+                >
+                  <Button.Label>Desvincular</Button.Label>
+                </Button>
+                <Button
+                  testID="cancelar-desvincular-moodle-button"
+                  variant="tertiary"
+                  onPress={() => setConfirmMoodleUnlink(false)}
+                >
+                  <Button.Label>Cancelar</Button.Label>
+                </Button>
+              </View>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+
         <View className="gap-2.5">
           <Typography.Paragraph type="body-xs" color="muted">
             Integrações
@@ -726,7 +776,7 @@ export default function AjustesTab(): JSX.Element {
               <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
-            <ListGroup.Item testID="link-moodle-item" disabled className="opacity-50">
+            <ListGroup.Item testID="link-moodle-item" onPress={() => void handleMoodlePress()}>
               <ListGroup.ItemPrefix>
                 <MoodleIcon size={22} />
               </ListGroup.ItemPrefix>
@@ -735,9 +785,16 @@ export default function AjustesTab(): JSX.Element {
                 <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix>
-                <Chip variant="secondary" size="sm">
-                  Em breve
-                </Chip>
+                {moodle.status === "linked" ? (
+                  <Chip variant="secondary" size="sm">
+                    {/* moodle.expired só vira true via veredito de token dentro de
+                        link()/getSiteInfo — nesta build somente-conexão nada mais
+                        dispara esse veredito, então "Reconectar" é inalcançável
+                        na prática. Uma ação de reconexão real fica para o
+                        trabalho de turma virtual (leitura de conteúdo). */}
+                    {moodle.expired ? "Reconectar" : "Conectado"}
+                  </Chip>
+                ) : null}
               </ListGroup.ItemSuffix>
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
