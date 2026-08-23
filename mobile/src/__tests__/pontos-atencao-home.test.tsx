@@ -4,8 +4,9 @@ import { getPontosAtencao, getSchedule } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { SCHEDULE_PALETTE } from "@/lib/sigaa-schedule";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
-import type { PontoAtencao } from "@/lib/types";
+import type { PontoAtencao, Turma } from "@/lib/types";
 
 import HomeTab from "@/screens/HomeTab";
 
@@ -93,6 +94,33 @@ function scheduleVazio() {
   return { turmas: [], periodoLetivo: null, fetchedAt: "2026-08-24T10:00:00.000Z" };
 }
 
+/** Uma turma com uma aula, para os testes que checam a cor herdada da grade. */
+function turmaComAula(): Turma {
+  return {
+    id: "turma-1",
+    numero: "01",
+    codigo: "MATA37",
+    nome: "SISTEMAS OPERACIONAIS",
+    docente: "BEATRIZ NUNES CAMPELO",
+    slots: [
+      {
+        dia: "Segunda",
+        inicioMin: 480,
+        fimMin: 540,
+        predio: "PAF 1",
+        sala: "208",
+        localOriginal: "PAF 1 - 208",
+      },
+    ],
+    vigencia: { inicio: "19/08/2026", fim: "19/12/2026" },
+    semestre: "2026.2",
+  };
+}
+
+function scheduleComTurma() {
+  return { turmas: [turmaComAula()], periodoLetivo: null, fetchedAt: "2026-08-24T10:00:00.000Z" };
+}
+
 function pontoFalso(overrides: Partial<PontoAtencao> = {}): PontoAtencao {
   return {
     id: "p0",
@@ -128,9 +156,11 @@ function pinToMonday(): void {
 async function renderHome({
   pontos,
   diaSelecionado,
+  schedule = scheduleVazio(),
 }: {
   pontos: PontoAtencao[];
   diaSelecionado?: number;
+  schedule?: ReturnType<typeof scheduleVazio> | ReturnType<typeof scheduleComTurma>;
 }) {
   pinToMonday();
   mockedUseAuth.mockReturnValue({
@@ -151,7 +181,7 @@ async function renderHome({
     senha: "segredo",
     syncMode: "device",
   });
-  mockedGetSchedule.mockResolvedValue(scheduleVazio());
+  mockedGetSchedule.mockResolvedValue(schedule);
   mockedGetPontosAtencao.mockResolvedValue(pontos);
   jest.mocked(useSyncFreshness).mockReturnValue({
     scheduleFetchedAt: null,
@@ -179,15 +209,18 @@ describe("PontosAtencaoSection na home", () => {
 
   it("mostra o prazo mais próximo no card herói", async () => {
     const { getByTestId } = await renderHome({
+      // turmaCodigo "MATA37" contém um "3" — se a asserção do contador caísse
+      // de volta para um match solto contra o card inteiro, ela passaria
+      // mesmo com diasAte quebrado. O número tem testID próprio por isso.
       pontos: [pontoFalso({ id: "p1", data: "2026-08-27", titulo: "Relatório final" })],
     });
 
-    // toHaveTextContent faz match exato por padrão — o herói concatena vários
-    // Text (dias, chip, título, código), então as checagens usam exact: false,
-    // igual às outras asserções de conteúdo composto neste arquivo de testes.
-    const hero = getByTestId("pontos-atencao-hero");
-    expect(hero).toHaveTextContent("3", { exact: false });
-    expect(hero).toHaveTextContent("Relatório final", { exact: false });
+    expect(getByTestId("pontos-atencao-hero-dias")).toHaveTextContent(/^3$/);
+    // O título é o único texto do card que contém "Relatório final" — sem
+    // outro campo (código, data, contador) que possa colidir com ele.
+    expect(getByTestId("pontos-atencao-hero")).toHaveTextContent("Relatório final", {
+      exact: false,
+    });
   });
 
   it("mostra a linha de vazio quando não há nenhum prazo", async () => {
@@ -213,5 +246,22 @@ describe("PontosAtencaoSection na home", () => {
     });
 
     expect(getByTestId("ponto-do-dia-p1")).toBeTruthy();
+  });
+
+  it("pinta a turma do prazo com a mesma cor que ela tem na grade semanal", async () => {
+    const { getByTestId, getAllByText } = await renderHome({
+      schedule: scheduleComTurma(),
+      pontos: [pontoFalso({ id: "p1", turmaId: "turma-1", turmaCodigo: "MATA37" })],
+    });
+
+    // Espera a semana carregar de verdade — só então o mapa de cores lido dos
+    // ScheduleBlocks (que a home passa para a seção) deixa de ser um mapa vazio.
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+
+    // Única turma da semana: buildWeekSchedule dá a ela o primeiro índice da
+    // paleta. A seção lê essa cor de volta, não numera por conta própria.
+    const corEsperada = SCHEDULE_PALETTE[0].bar;
+    const bolinha = getByTestId("pontos-atencao-hero-cor");
+    expect(bolinha.props.style).toEqual(expect.objectContaining({ backgroundColor: corEsperada }));
   });
 });

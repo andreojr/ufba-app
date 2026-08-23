@@ -30,9 +30,15 @@ const ICONE_TIPO: Record<TipoPonto, AppIconName> = {
   PROVA: "IconFlag",
 };
 
-/** Rótulo curto para o chip de tipo — mesma anatomia no herói e no bloco do dia. */
+/**
+ * Rótulo curto para o chip de tipo — mesma anatomia no herói e no bloco do
+ * dia. Só o trabalho ganha o qualificador "· entrega": a data de um trabalho
+ * é quando ele é ENTREGUE, distinta de quando foi criado, então o
+ * qualificador desfaz uma ambiguidade real. Numa prova a data já É a
+ * avaliação — "Prova · avaliação" seria só um sinônimo repetido.
+ */
 function rotuloTipo(tipo: TipoPonto): string {
-  return tipo === "TRABALHO" ? "Trabalho · entrega" : "Prova · avaliação";
+  return tipo === "TRABALHO" ? "Trabalho · entrega" : "Prova";
 }
 
 function formatarDiaMes(data: string): { dia: string; mes: string } {
@@ -52,28 +58,33 @@ function formatarDiaSemanaData(data: string): string {
 }
 
 /**
- * Mapeia cada turma a uma cor da mesma paleta usada na grade semanal, na
- * ordem em que aparece nesta lista (já ordenada por data). Não tenta casar
- * com o índice que a grade atribuiu à mesma turma — os dois lêem a mesma
- * paleta, mas cada um a percorre pela ordem em que enxerga as turmas.
+ * Cor da barra/pontinho de uma turma, lida do MESMO mapa que colore a grade
+ * semanal (ver `HomeTab`, que o constrói a partir dos `ScheduleBlock`s já
+ * numerados por `buildWeekSchedule`) — nunca uma numeração própria, senão a
+ * mesma turma pinta uma cor no herói e outra na grade logo abaixo. Uma turma
+ * sem aula na semana mascarada (ex.: fora do período letivo já sincronizado)
+ * não aparece nesse mapa; cai numa cor neutra em vez de inventar um segundo
+ * índice.
  */
-function corPorTurma(pontos: PontoAtencao[]): Map<string, (typeof SCHEDULE_PALETTE)[number]> {
-  const indicePorTurma = new Map<string, number>();
-  for (const ponto of pontos) {
-    if (!indicePorTurma.has(ponto.turmaId)) {
-      indicePorTurma.set(ponto.turmaId, indicePorTurma.size % SCHEDULE_PALETTE.length);
-    }
-  }
-  const corPorId = new Map<string, (typeof SCHEDULE_PALETTE)[number]>();
-  for (const [turmaId, indice] of indicePorTurma) {
-    corPorId.set(turmaId, SCHEDULE_PALETTE[indice]);
-  }
-  return corPorId;
+function corBarPorTurma(
+  ponto: PontoAtencao,
+  indicePorTurma: Map<string, number>,
+  corNeutra: string,
+): string {
+  const chave = ponto.turmaCodigo ?? ponto.turmaNome;
+  const indice = indicePorTurma.get(chave);
+  return indice === undefined ? corNeutra : SCHEDULE_PALETTE[indice].bar;
 }
 
 interface PontosAtencaoSectionProps {
   pontos: PontoAtencao[];
   agora: Date;
+  /**
+   * `(codigo ?? nome) -> colorIndex` na paleta `SCHEDULE_PALETTE` — o mesmo
+   * mapa que a grade semanal usa, para que a cor de uma turma bata nas duas
+   * superfícies. Ver `corBarPorTurma`.
+   */
+  indicePorTurma: Map<string, number>;
   onNovo?: () => void;
   onVerTudo?: () => void;
 }
@@ -87,6 +98,7 @@ interface PontosAtencaoSectionProps {
 export function PontosAtencaoSection({
   pontos,
   agora,
+  indicePorTurma,
   onNovo,
   onVerTudo,
 }: PontosAtencaoSectionProps): JSX.Element {
@@ -100,7 +112,6 @@ export function PontosAtencaoSection({
     .sort((a, b) => a.data.localeCompare(b.data) || (a.hora ?? "").localeCompare(b.hora ?? ""));
 
   const [proximo, ...restantes] = visiveis;
-  const cores = corPorTurma(visiveis);
 
   return (
     <View className="gap-3">
@@ -140,6 +151,8 @@ export function PontosAtencaoSection({
           <Typography.Paragraph type="body-sm" color="muted">
             Nenhuma prova ou trabalho cadastrado
           </Typography.Paragraph>
+          {/* AppIcon não tem um "+" no seu vocabulário (ver ICON_MAP em
+              AppIcon.tsx) — glifo de texto cru em vez de um ícone faltando. */}
           <Typography.Heading type="h6">+</Typography.Heading>
         </Pressable>
       ) : (
@@ -147,7 +160,7 @@ export function PontosAtencaoSection({
           {(() => {
             const diasRestantes = diasAte(proximo.data, agora);
             const urgencia = classificarUrgencia(diasRestantes);
-            const corTurma = cores.get(proximo.turmaId) ?? SCHEDULE_PALETTE[0];
+            const corTurma = corBarPorTurma(proximo, indicePorTurma, mutedColor);
             return (
               <View
                 testID="pontos-atencao-hero"
@@ -163,6 +176,7 @@ export function PontosAtencaoSection({
               >
                 <View className="items-center w-[84px]">
                   <Typography.Paragraph
+                    testID="pontos-atencao-hero-dias"
                     className={`font-mono text-[52px] leading-[52px] ${
                       urgencia === "critico" ? "text-danger-soft-foreground" : undefined
                     }`}
@@ -198,10 +212,16 @@ export function PontosAtencaoSection({
                   <View className="flex-row items-center gap-2">
                     <View className="flex-row items-center gap-1.5">
                       <View
+                        testID="pontos-atencao-hero-cor"
                         className="w-1.5 h-1.5 rounded-sm"
-                        style={{ backgroundColor: corTurma.bar }}
+                        style={{ backgroundColor: corTurma }}
                       />
-                      <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                      <Typography.Paragraph
+                        testID="pontos-atencao-hero-codigo"
+                        type="body-xs"
+                        color="muted"
+                        className="font-mono"
+                      >
                         {proximo.turmaCodigo ?? proximo.turmaNome}
                       </Typography.Paragraph>
                     </View>
@@ -226,10 +246,11 @@ export function PontosAtencaoSection({
                   const diasRestantes = diasAte(ponto.data, agora);
                   const { dia, mes } = formatarDiaMes(ponto.data);
                   const urgencia = classificarUrgencia(diasRestantes);
-                  const corTurma = cores.get(ponto.turmaId) ?? SCHEDULE_PALETTE[0];
+                  const corTurma = corBarPorTurma(ponto, indicePorTurma, mutedColor);
                   return (
                     <View
                       key={ponto.id}
+                      testID={`pontos-atencao-item-${ponto.id}`}
                       className="flex-row items-center gap-3 py-2 border-t border-white/[0.06]"
                     >
                       <View className="w-[46px] items-center">
@@ -248,7 +269,7 @@ export function PontosAtencaoSection({
                       </View>
                       <View
                         className="w-[3px] rounded-full"
-                        style={{ backgroundColor: corTurma.bar, minHeight: 26 }}
+                        style={{ backgroundColor: corTurma, minHeight: 26 }}
                       />
                       <View className="flex-1 gap-0.5">
                         <Typography.Paragraph type="body-sm" weight="medium">

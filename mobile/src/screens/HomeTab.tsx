@@ -197,6 +197,22 @@ export default function HomeTab(): JSX.Element {
   }, [sigaaLink.status, accessToken, loadSchedule]);
 
   const week = state.status === "ready" ? state.week : EMPTY_WEEK;
+  // Mesma chave que buildWeekSchedule usa para numerar as cores da grade
+  // (codigo ?? nome) — lida de volta dos ScheduleBlocks já numerados, em vez
+  // de recalculada, para que PontosAtencaoSection nunca invente uma segunda
+  // numeração e a mesma turma acabe com duas cores diferentes na tela.
+  const indiceCorPorTurma = useMemo(() => {
+    const indices = new Map<string, number>();
+    for (const entries of week) {
+      for (const entry of entries) {
+        const chave = entry.codigo ?? entry.nome;
+        if (!indices.has(chave)) {
+          indices.set(chave, entry.colorIndex);
+        }
+      }
+    }
+    return indices;
+  }, [week]);
   const pontosDoDia = useMemo(
     () =>
       days[selectedDay]
@@ -279,7 +295,7 @@ export default function HomeTab(): JSX.Element {
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
       >
-        <PontosAtencaoSection pontos={pontos} agora={now} />
+        <PontosAtencaoSection pontos={pontos} agora={now} indicePorTurma={indiceCorPorTurma} />
 
         {/* Heading and freshness share one row — the semester moved out of this
             text and into the badge on the term track inside the grid card. */}
