@@ -60,6 +60,15 @@ describe('CriarPontoAtencaoDto (via ValidationPipe)', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('rejeita um datetime ISO 8601 completo (só YYYY-MM-DD é aceito)', async () => {
+    // `paraData` concatena a data recebida com "T00:00:00Z"; um datetime
+    // completo aqui vira "...T10:00:00ZT00:00:00Z", uma Date inválida que o
+    // Prisma rejeita com um 500 em vez de um 400 de validação.
+    await expect(
+      validarCriar({ ...payloadValido, data: '2026-09-22T10:00:00Z' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('rejeita título vazio', async () => {
     await expect(
       validarCriar({ ...payloadValido, titulo: '' }),

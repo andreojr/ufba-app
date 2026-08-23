@@ -1,6 +1,5 @@
 import {
   IsIn,
-  IsISO8601,
   IsOptional,
   IsString,
   Matches,
@@ -20,8 +19,13 @@ export class CriarPontoAtencaoDto {
   @MaxLength(120)
   titulo!: string;
 
-  /** YYYY-MM-DD; a hora, quando existe, vem separada. */
-  @IsISO8601({ strict: true })
+  /**
+   * YYYY-MM-DD; a hora, quando existe, vem separada. `@IsISO8601` aceitava um
+   * datetime completo ("2026-09-22T10:00:00Z"), que `paraData` concatenava
+   * com um segundo "T00:00:00Z" e virava uma Date inválida — 500 em vez de
+   * 400. O formato de data pura é a única entrada válida.
+   */
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   data!: string;
 
   @IsOptional()
@@ -43,7 +47,7 @@ export class AtualizarPontoAtencaoDto {
   @MaxLength(120)
   titulo!: string;
 
-  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   data!: string;
 
   @IsOptional()
