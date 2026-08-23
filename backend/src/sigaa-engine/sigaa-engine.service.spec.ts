@@ -1,5 +1,8 @@
 import { Logger } from '@nestjs/common';
-import { SigaaEngineService } from './sigaa-engine.service';
+import {
+  SigaaEngineService,
+  SigaaScheduleIndisponivelError,
+} from './sigaa-engine.service';
 import { SigaaInvalidCredentialsError, SigaaSession } from './session';
 
 const PORTAL_HTML = `
@@ -75,6 +78,7 @@ const ATESTADO_SCHEDULE_HTML = `
         <td><span class="componente">SISTEMAS OPERACIONAIS</span>
             <span class="docente">BEATRIZ NUNES CAMPELO</span>
             <span class="local"><b>Local:</b> ENG (ENG)</span></td>
+        <td class="turma">02</td>
         <td class="status">MATRICULADO</td>
         <td class="horario">2N34 (19/08/2026 - 19/12/2026)</td>
       </tr>
@@ -82,6 +86,7 @@ const ATESTADO_SCHEDULE_HTML = `
         <td class="codigo">ECOB40</td>
         <td><span class="componente">INTRODUÇÃO À ECONOMIA I</span>
             <span class="local"><b>Local:</b> PAC (PAC)</span></td>
+        <td class="turma">05</td>
         <td class="status">INDEFERIDO</td>
         <td class="horario">6N1234 (19/08/2026 - 19/12/2026)</td>
       </tr>
@@ -174,9 +179,10 @@ describe('SigaaEngineService.fetchSchedule', () => {
     });
   });
 
-  it('falls back to the portal home turmas when the atestado postback fails', async () => {
-    // The jscook_action token varies per deploy; losing the atestado must cost
-    // the course code and the periodo letivo, not the whole schedule.
+  it('fails instead of falling back to the portal home when the atestado postback fails', async () => {
+    // O atestado é a única fonte com código e número de turma (ver o
+    // comentário em SigaaScheduleIndisponivelError) — perder o postback não
+    // pode mais degradar para a home, tem que falhar.
     const session = scheduleSession({
       postback: jest.fn().mockRejectedValue(new Error('postback exploded')),
     });
@@ -184,35 +190,60 @@ describe('SigaaEngineService.fetchSchedule', () => {
       () => session as unknown as SigaaSession,
     );
 
-    const { turmas, periodoLetivo } = await service.fetchSchedule({
-      login: 'user',
-      senha: 'pass',
-    });
-
-    expect(turmas).toHaveLength(1);
-    expect(turmas[0].nome).toBe('LABORATÓRIO INTEGRADO III-A');
-    expect(turmas[0].docente).toBeNull();
-    expect(periodoLetivo).toBeNull();
+    await expect(
+      service.fetchSchedule({ login: 'user', senha: 'pass' }),
+    ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('falling back to the portal home'),
+      'Could not read the schedule off the atestado de matrícula',
       expect.any(String),
     );
   });
 
-  it('falls back to the portal home turmas when the atestado menu item is absent', async () => {
+  it('fails instead of falling back to the portal home when the atestado menu item is absent', async () => {
     const session = fakeSession();
     const service = new SigaaEngineService(
       () => session as unknown as SigaaSession,
     );
 
-    const { turmas, periodoLetivo } = await service.fetchSchedule({
-      login: 'user',
-      senha: 'pass',
-    });
+    await expect(
+      service.fetchSchedule({ login: 'user', senha: 'pass' }),
+    ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
+  });
 
-    expect(turmas).toHaveLength(1);
-    expect(turmas[0].nome).toBe('LABORATÓRIO INTEGRADO III-A');
-    expect(periodoLetivo).toBeNull();
+  it('falha quando uma turma vem sem código ou sem número', async () => {
+    // Sem os dois, não há como ligar o aluno a uma turma compartilhada —
+    // mesmo com um horário perfeitamente parseável.
+    const session = scheduleSession({
+      postback: jest
+        .fn()
+        .mockResolvedValue(
+          ATESTADO_SCHEDULE_HTML.replace(
+            /<td class="turma">[^<]*<\/td>/g,
+            '<td class="turma"></td>',
+          ),
+        ),
+    });
+    const service = new SigaaEngineService(
+      () => session as unknown as SigaaSession,
+    );
+
+    await expect(
+      service.fetchSchedule({ login: 'user', senha: 'pass' }),
+    ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
+  });
+
+  it('falha em vez de cair no portal quando o atestado não rende turmas', async () => {
+    // Sessão que responde a home normalmente, mas devolve um atestado vazio.
+    const session = scheduleSession({
+      postback: jest.fn().mockResolvedValue('<html><body></body></html>'),
+    });
+    const service = new SigaaEngineService(
+      () => session as unknown as SigaaSession,
+    );
+
+    await expect(
+      service.fetchSchedule({ login: 'user', senha: 'pass' }),
+    ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
   });
 
   it('propagates SigaaInvalidCredentialsError without attempting to fetch the portal', async () => {
@@ -232,7 +263,7 @@ describe('SigaaEngineService.fetchSchedule', () => {
 
   it('creates a fresh session per call (credentials are never reused across calls)', async () => {
     const sessionFactory = jest.fn(
-      () => fakeSession() as unknown as SigaaSession,
+      () => scheduleSession() as unknown as SigaaSession,
     );
     const service = new SigaaEngineService(sessionFactory);
 

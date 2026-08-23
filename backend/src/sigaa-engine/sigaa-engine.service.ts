@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SigaaCredentials, SigaaSession } from './session';
-import { parseTurmasHorario } from './parsers/turmas-horario';
 import { Turma } from './parsers/turma';
 import { parseAtestadoTurmas, PeriodoLetivo } from './parsers/atestado-turmas';
 import { DiscentePerfil, parseDiscentePerfil } from './parsers/discente-perfil';
@@ -26,6 +25,22 @@ export interface SigaaWebSession {
   targetUrl: string;
 }
 
+/**
+ * O atestado de matrícula é a única fonte de horário desde que a turma virou
+ * entidade compartilhada: só ele traz código e número da turma, e sem os dois
+ * não há como ligar o aluno a uma turma que outros alunos também enxergam.
+ * A "Minhas Turmas" da home continua parseável (parseTurmasHorario), mas só
+ * para diagnóstico — devolvê-la aqui daria um horário que não se conecta a
+ * nada.
+ */
+export class SigaaScheduleIndisponivelError extends Error {
+  constructor(cause?: unknown) {
+    super('Não foi possível sincronizar sua conta com o SIGAA.');
+    this.name = 'SigaaScheduleIndisponivelError';
+    this.cause = cause;
+  }
+}
+
 @Injectable()
 export class SigaaEngineService {
   private readonly logger = new Logger(SigaaEngineService.name);
@@ -41,9 +56,10 @@ export class SigaaEngineService {
    * where the postback fields come from — so the student's identity box
    * (#agenda-docente) comes along for free, nullable fields and all.
    *
-   * The atestado's jscook_action token varies per deploy, so a failure there
-   * degrades to the home's "Minhas Turmas" table: no code, no docente, no
-   * periodoLetivo, but a schedule rather than an error screen.
+   * A ausência de código ou número em qualquer turma — inclusive um atestado
+   * que não rende turma nenhuma — vira `SigaaScheduleIndisponivelError`: sem
+   * os dois não há como ligar o aluno a uma turma compartilhada (ver o
+   * comentário da classe).
    */
   async fetchSchedule(credentials: SigaaCredentials): Promise<{
     turmas: Turma[];
@@ -65,29 +81,25 @@ export class SigaaEngineService {
         jscook_action: jscookAction,
       });
       const { turmas, periodoLetivo } = parseAtestadoTurmas(atestadoHtml);
-      if (turmas.length > 0) {
-        return { turmas, perfil, periodoLetivo };
+      // Código e número são a identidade compartilhada da turma. Sem eles o
+      // horário até renderizaria, mas não se conectaria a turma nenhuma — é
+      // o mesmo motivo pelo qual a home do portal deixou de valer.
+      if (
+        turmas.length === 0 ||
+        turmas.some((turma) => !turma.codigo || !turma.numero)
+      ) {
+        throw new SigaaScheduleIndisponivelError();
       }
-      this.logger.warn(
-        'The atestado de matrícula yielded no turmas; falling back to the portal home',
-      );
+      return { turmas, perfil, periodoLetivo };
     } catch (error) {
       this.logger.warn(
-        'Could not read the schedule off the atestado de matrícula; falling back to the portal home',
+        'Could not read the schedule off the atestado de matrícula',
         error instanceof Error ? error.stack : String(error),
       );
+      throw error instanceof SigaaScheduleIndisponivelError
+        ? error
+        : new SigaaScheduleIndisponivelError(error);
     }
-
-    return {
-      // A home não tem a coluna "Turma": não dá pra identificar uma turma
-      // compartilhada por esse fallback, então numero fica vazio.
-      turmas: parseTurmasHorario(portalHtml).map((turma) => ({
-        ...turma,
-        numero: '',
-      })),
-      perfil,
-      periodoLetivo: null,
-    };
   }
 
   /**

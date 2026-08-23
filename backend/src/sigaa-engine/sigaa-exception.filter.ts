@@ -14,6 +14,7 @@ import {
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
 import { SigaaScheduleUnavailableError } from './schedule.service';
+import { SigaaScheduleIndisponivelError } from './sigaa-engine.service';
 import {
   ComponenteDesconhecidoError,
   CursoDesconhecidoError,
@@ -28,6 +29,9 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   // distinct from a 500: the client needs to say "your data is safe, try
   // again later" instead of the generic "something broke" message.
   [SigaaScheduleUnavailableError.name]: HttpStatus.SERVICE_UNAVAILABLE,
+  // O atestado de matrícula não rendeu turma identificável (sem código ou
+  // sem número) — um 502 porque a origem é o SIGAA, não o cliente.
+  [SigaaScheduleIndisponivelError.name]: HttpStatus.BAD_GATEWAY,
   // An unknown cursoId — either /curriculo/cursos/:cursoId with an id not in
   // the directory, or resolverPorNomeUsuario finding no match — is a client
   // error about *what* was asked for, not a server failure.
