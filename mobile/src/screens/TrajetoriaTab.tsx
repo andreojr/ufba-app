@@ -70,6 +70,11 @@ export default function TrajetoriaTab(): JSX.Element {
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
+  // Kept separate from `state` on purpose: a failed move must not blow away
+  // the loaded trajectory — the student would lose open years and scroll
+  // position over a single failed PUT. This renders as an inline warning
+  // instead, and clears itself on the next move that succeeds.
+  const [erroAoMover, setErroAoMover] = useState<string | null>(null);
 
   // No request of its own: the home screen writes this cache after every
   // schedule fetch, and reading it is what lets this screen tell whether the
@@ -127,10 +132,11 @@ export default function TrajetoriaTab(): JSX.Element {
   }, [sigaaLink.status, accessToken, carregar]);
 
   /**
-   * Mover é override puro: grava a posição e aplica a trajetória reprojetada
-   * que o servidor devolve. Deliberadamente sem otimismo local — a resposta
-   * pode reordenar outros semestres por causa de pré-requisito, e uma tela
-   * que se corrige sozinha meio segundo depois é pior que uma que espera.
+   * Moving is a pure override: save the position and apply whatever
+   * reprojected trajectory the server sends back. Deliberately no local
+   * optimism — the response can reorder other semestres over a pré-requisito,
+   * and a screen that corrects itself half a second later is worse than one
+   * that waits.
    */
   const moverComponente = useCallback(
     async (componente: ComponenteProjetado, semestre: string) => {
@@ -148,9 +154,10 @@ export default function TrajetoriaTab(): JSX.Element {
             },
           ]),
         );
+        setErroAoMover(null);
       } catch (error) {
         console.warn("Failed to save plano", error);
-        setState({ status: "error", message: describeApiError(error) });
+        setErroAoMover(describeApiError(error));
       }
     },
     [accessToken, aplicar],
@@ -206,6 +213,7 @@ export default function TrajetoriaTab(): JSX.Element {
             fimDoPeriodo={fimDoPeriodo}
             marcos={state.marcos}
             projecao={state.projecao}
+            erroAoMover={erroAoMover}
             mutedColor={mutedColor}
             onAbrirVizinhos={(codigo, nome) =>
               router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
@@ -223,6 +231,7 @@ function ReadyTrajetoria({
   fimDoPeriodo,
   marcos,
   projecao,
+  erroAoMover,
   mutedColor,
   onAbrirVizinhos,
   onMover,
@@ -231,6 +240,7 @@ function ReadyTrajetoria({
   fimDoPeriodo: string | null;
   marcos: MarcosSemestralizacao | null;
   projecao: ProjecaoTrajetoria | null;
+  erroAoMover: string | null;
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
   onMover: (componente: ComponenteProjetado, semestre: string) => void;
@@ -269,6 +279,18 @@ function ReadyTrajetoria({
               Nesse ritmo, a conclusão passa do prazo máximo do seu histórico.
             </Typography.Paragraph>
           ) : null}
+        </View>
+      ) : null}
+
+      {/* Inline, not a page-swallowing error card: a failed move must not cost
+          the student their loaded trajectory — open years, scroll position,
+          all of it. It clears itself the moment a move succeeds. */}
+      {erroAoMover ? (
+        <View className="rounded-2xl bg-danger-soft p-3 flex-row items-center gap-2.5">
+          <AppIcon name="IconWarningCircle" size={18} color={mutedColor} />
+          <Typography.Paragraph type="body-sm" className="text-danger flex-1">
+            {erroAoMover}
+          </Typography.Paragraph>
         </View>
       ) : null}
 
@@ -447,6 +469,7 @@ function LinhaDoTempo({
                         key={`${semestre.semestre}-${componente.codigo}`}
                         componente={componente}
                         destinos={semestresProjetados.filter((destino) => destino !== semestre.semestre)}
+                        mutedColor={mutedColor}
                         onAbrirVizinhos={onAbrirVizinhos}
                         onMover={onMover}
                       />
@@ -494,11 +517,13 @@ function LinhaDoTempo({
 function CardProjetado({
   componente,
   destinos,
+  mutedColor,
   onAbrirVizinhos,
   onMover,
 }: {
   componente: ComponenteProjetado;
   destinos: string[];
+  mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
   onMover: (componente: ComponenteProjetado, semestre: string) => void;
 }): JSX.Element {
@@ -511,48 +536,62 @@ function CardProjetado({
           </Typography.Paragraph>
         </View>
       ) : null}
-      {/* A tap opens the árvore de dependências, same as a cursado card; a
-          long-press — the Menu's own trigger gesture — offers "Mover para"
-          instead of stealing the tap. Only offered when there is another
-          projected semestre to move it into. */}
-      <Menu>
-        <Menu.Trigger asChild>
-          <Pressable
-            testID={`materia-card-${componente.codigo}`}
-            onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
-            className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
-              componente.atrasada && componente.periodo !== null
-                ? "rounded-t-md rounded-b-2xl"
-                : "rounded-2xl"
-            }`}
-          >
-            <View className="gap-0.5">
-              <View className="flex-row items-baseline gap-1.5">
-                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                  {componente.codigo}
-                </Typography.Paragraph>
-                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                  · {componente.cargaHoraria} h
-                </Typography.Paragraph>
-              </View>
-              <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+      {/* A tap on the card body opens the árvore de dependências, same as a
+          cursado card. HeroUI Native's Menu.Trigger just toggles the menu on
+          press — there is no separate long-press gesture — so "mover" gets
+          its own small icon button instead of sharing the card's Pressable:
+          nesting Pressables gives React Native's responder system the two
+          disjoint targets it needs, without one gesture swallowing the
+          other. Only shown when there is another projected semestre to move
+          it into. */}
+      <Pressable
+        testID={`materia-card-${componente.codigo}`}
+        onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
+        className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
+          componente.atrasada && componente.periodo !== null
+            ? "rounded-t-md rounded-b-2xl"
+            : "rounded-2xl"
+        }`}
+      >
+        <View className="gap-0.5">
+          <View className="flex-row items-center justify-between gap-1.5">
+            <View className="flex-row items-baseline gap-1.5">
+              <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                {componente.codigo}
+              </Typography.Paragraph>
+              <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                · {componente.cargaHoraria} h
+              </Typography.Paragraph>
             </View>
-          </Pressable>
-        </Menu.Trigger>
-        {destinos.length > 0 ? (
-          <Menu.Portal>
-            <Menu.Overlay />
-            <Menu.Content presentation="popover" width={220}>
-              <Menu.Label>Mover para</Menu.Label>
-              {destinos.map((destino) => (
-                <Menu.Item key={destino} onPress={() => onMover(componente, destino)}>
-                  <Menu.ItemTitle>{destino}</Menu.ItemTitle>
-                </Menu.Item>
-              ))}
-            </Menu.Content>
-          </Menu.Portal>
-        ) : null}
-      </Menu>
+            {destinos.length > 0 ? (
+              <Menu>
+                <Menu.Trigger asChild>
+                  <Pressable
+                    testID={`mover-${componente.codigo}`}
+                    accessibilityRole="button"
+                    accessibilityLabel="Mover para outro semestre"
+                    hitSlop={8}
+                  >
+                    <AppIcon name="IconCalendarBlank" size={16} color={mutedColor} />
+                  </Pressable>
+                </Menu.Trigger>
+                <Menu.Portal>
+                  <Menu.Overlay />
+                  <Menu.Content presentation="popover" width={220}>
+                    <Menu.Label>Mover para</Menu.Label>
+                    {destinos.map((destino) => (
+                      <Menu.Item key={destino} onPress={() => onMover(componente, destino)}>
+                        <Menu.ItemTitle>{destino}</Menu.ItemTitle>
+                      </Menu.Item>
+                    ))}
+                  </Menu.Content>
+                </Menu.Portal>
+              </Menu>
+            ) : null}
+          </View>
+          <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+        </View>
+      </Pressable>
     </View>
   );
 }

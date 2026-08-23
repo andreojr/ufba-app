@@ -60,20 +60,61 @@ jest.mock("@expo/vector-icons", () => {
 // same for the components the home screen uses. This screen needs Typography,
 // Menu, Button, Tabs and useThemeColor.
 jest.mock("heroui-native", () => {
-  const { createContext, useContext } = jest.requireActual("react");
+  const React = jest.requireActual("react");
+  const { createContext, useContext, useState, cloneElement } = React;
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
-  const Menu = Object.assign(({ children }: any) => <View>{children}</View>, {
-    Trigger: ({ children }: any) => <View>{children}</View>,
-    Portal: ({ children }: any) => <View>{children}</View>,
-    Overlay: () => null,
-    Content: ({ children }: any) => <View>{children}</View>,
-    Label: ({ children }: any) => <Text>{children}</Text>,
-    Item: ({ children, onPress }: any) => (
-      <TouchableOpacity onPress={onPress}>{children}</TouchableOpacity>
-    ),
-    ItemTitle: ({ children }: any) => <Text>{children}</Text>,
+  // A real toggle, not a pass-through: Menu.Trigger has to actually open the
+  // menu on press and Menu.Content has to actually stay hidden until it
+  // does, or a test pressing a "destino" item would pass without ever
+  // proving the student can reach it in the first place.
+  const MenuContext = createContext({
+    open: false,
+    setOpen: (_open: boolean) => {},
   });
+
+  function Menu({ children }: any) {
+    const [open, setOpen] = useState(false);
+    return <MenuContext.Provider value={{ open, setOpen }}>{children}</MenuContext.Provider>;
+  }
+  Menu.Trigger = ({ children, asChild }: any) => {
+    const ctx = useContext(MenuContext);
+    const toggle = () => ctx.setOpen(!ctx.open);
+    if (asChild) {
+      const child = React.Children.only(children);
+      return cloneElement(child, {
+        onPress: (...args: unknown[]) => {
+          child.props.onPress?.(...args);
+          toggle();
+        },
+      });
+    }
+    return <TouchableOpacity onPress={toggle}>{children}</TouchableOpacity>;
+  };
+  Menu.Portal = ({ children }: any) => {
+    const ctx = useContext(MenuContext);
+    return ctx.open ? <View>{children}</View> : null;
+  };
+  Menu.Overlay = () => {
+    const ctx = useContext(MenuContext);
+    return <TouchableOpacity onPress={() => ctx.setOpen(false)} />;
+  };
+  Menu.Content = ({ children }: any) => <View>{children}</View>;
+  Menu.Label = ({ children }: any) => <Text>{children}</Text>;
+  Menu.Item = ({ children, onPress }: any) => {
+    const ctx = useContext(MenuContext);
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          onPress?.();
+          ctx.setOpen(false);
+        }}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  };
+  Menu.ItemTitle = ({ children }: any) => <Text>{children}</Text>;
 
   // A minimal stand-in for the real compound component: just enough context
   // to let a Trigger press flip which Content is shown, which is all the
@@ -511,8 +552,17 @@ describe("Trajetória", () => {
     await render(<TrajetoriaTab />);
     await screen.findByText("MATA60");
 
-    // O cabeçalho do semestre e a opção do menu compartilham o texto; a opção é
-    // a última das duas, dentro do card da própria matéria.
+    // The card body and the "mover" icon are two separate Pressables now —
+    // opening the menu is its own step, not implied by the destino being on
+    // screen. Only after that does "2027.1" (the option, not the semestre
+    // header) become pressable.
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
+    // Pressing the icon must not also fire the card's own onPress — the two
+    // gestures used to be the same Pressable, which opened the menu and
+    // navigated to the árvore de dependências in the same tap.
+    expect(mockRouterPush).not.toHaveBeenCalled();
     const opcoes = screen.getAllByText("2027.1");
     await act(async () => {
       fireEvent.press(opcoes[opcoes.length - 1]);
@@ -523,7 +573,7 @@ describe("Trajetória", () => {
     ]);
   });
 
-  it("mostra o erro quando o salvamento falha", async () => {
+  it("mostra o erro quando o salvamento falha, sem perder a trajetória carregada", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
     jest.mocked(putPlano).mockRejectedValue(new ApiError("Unauthorized", 401));
     const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -531,12 +581,18 @@ describe("Trajetória", () => {
     await render(<TrajetoriaTab />);
     await screen.findByText("MATA60");
 
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
     const opcoes = screen.getAllByText("2027.1");
     await act(async () => {
       fireEvent.press(opcoes[opcoes.length - 1]);
     });
 
     expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+    // The trajectory itself must still be there — a failed move is an inline
+    // warning, not a full-page error that throws away what was loaded.
+    expect(screen.getByText("MATA60")).toBeTruthy();
     consoleWarn.mockRestore();
   });
 
