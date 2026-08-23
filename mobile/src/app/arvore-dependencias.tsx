@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppBar } from "@/components/AppBar";
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { ApiError, getVizinhosCurriculares } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -24,10 +25,16 @@ type Estado =
   // encontrado, que cai no estado de erro genérico.
   | { status: "naoNaGrade" };
 
-const ICONE_POR_SITUACAO: Record<SituacaoVizinho, AppIconName> = {
+/**
+ * `liberada` deliberately has NO icon: the only padlock on this screen means
+ * "você não pode cursar isso ainda". An open-padlock glyph still reads as a
+ * padlock at 20px, so it made a matéria labelled "liberada" look locked. The
+ * hollow dot plus the "liberada" label already carry that state.
+ */
+const ICONE_POR_SITUACAO: Record<SituacaoVizinho, AppIconName | null> = {
   cursada: "IconCheck",
   emCurso: "IconClock",
-  liberada: "IconLockKeyOpen",
+  liberada: null,
   bloqueada: "IconLockKey",
 };
 
@@ -61,6 +68,7 @@ function CardVizinho({
     "muted",
     "foreground",
   ]);
+  const icone = ICONE_POR_SITUACAO[vizinho.situacao];
   const bloqueada = vizinho.situacao === "bloqueada";
   const preenchido = vizinho.situacao === "cursada" || vizinho.situacao === "emCurso";
   const corPonto =
@@ -82,19 +90,31 @@ function CardVizinho({
             : "bg-surface-secondary"
       }`}
     >
-      <View className="gap-0.5">
-        <Typography.Paragraph weight="medium" className={destaque ? "text-accent" : undefined}>
+      {/* `flex-1` + `numberOfLines`: a real grade name runs to "INTRODUÇÃO A
+          ENGENHARIA DE AGRIMENSURA E CARTOGRÁFICA", which without both pushed
+          the trailing icon off the card and blew the row's height out. */}
+      <View className="flex-1 gap-0.5">
+        <Typography.Paragraph
+          weight="medium"
+          numberOfLines={2}
+          className={destaque ? "text-accent" : undefined}
+        >
           {vizinho.nome}
         </Typography.Paragraph>
         <Typography.Paragraph
           type="body-xs"
           color="muted"
+          numberOfLines={1}
           className={`font-mono ${destaque ? "text-accent" : ""}`}
         >
           {vizinho.codigo} · {ROTULO_POR_SITUACAO[vizinho.situacao]}
         </Typography.Paragraph>
       </View>
-      <AppIcon name={ICONE_POR_SITUACAO[vizinho.situacao]} size={20} color={corPonto} />
+      {icone ? (
+        <View testID={`vizinho-icone-${vizinho.codigo}`}>
+          <AppIcon name={icone} size={20} color={corPonto} />
+        </View>
+      ) : null}
     </View>
   );
 
@@ -138,7 +158,6 @@ export default function VizinhosCurricularesScreen(): JSX.Element {
   const auth = useAuth();
   const insets = useSafeAreaInsets();
   const { codigo, nome } = useLocalSearchParams<{ codigo: string; nome?: string }>();
-  const [foregroundColor] = useThemeColor(["foreground"]);
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
   // Guards against setEstado firing after the modal is dismissed while the
   // fetch is still in flight (same pattern as professor/[siape].tsx).
@@ -188,15 +207,11 @@ export default function VizinhosCurricularesScreen(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <View
-        className="flex-row items-center justify-between px-6 pb-3.5"
-        style={{ paddingTop: insets.top + 14 }}
-      >
-        <Typography.Heading type="h4">{nome ?? codigo}</Typography.Heading>
-        <Pressable testID="vizinhos-curriculares-close" onPress={() => router.back()} hitSlop={12}>
-          <AppIcon name="IconX" size={24} color={foregroundColor} />
-        </Pressable>
-      </View>
+      {/* No onClose here — closing happens through the "Fechar" button pinned
+          at the bottom, the same danger-soft pattern as documentos.tsx and
+          professor/[siape].tsx. A matéria's name is long and variable, so it
+          gets the smaller heading and the whole width. */}
+      <AppBar title={nome ?? codigo} titleType="h5" />
 
       {estado.status === "loading" ? (
         <View className="flex-1 items-center justify-center">
@@ -260,6 +275,19 @@ export default function VizinhosCurricularesScreen(): JSX.Element {
           ) : null}
         </ScrollView>
       )}
+
+      {/* Fixed footer, outside the ScrollView — same pattern as
+          documentos.tsx/professor/[siape].tsx: the close action stays
+          reachable instead of scrolling away with the trilha. */}
+      <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
+        <Button
+          testID="vizinhos-curriculares-fechar"
+          variant="danger-soft"
+          onPress={() => router.back()}
+        >
+          Fechar
+        </Button>
+      </View>
     </View>
   );
 }

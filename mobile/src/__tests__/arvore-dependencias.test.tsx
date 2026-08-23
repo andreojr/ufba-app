@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import VizinhosCurricularesScreen from "@/app/arvore-dependencias";
 import { getVizinhosCurriculares } from "@/lib/api";
@@ -29,17 +29,28 @@ jest.mock("@expo/vector-icons", () => {
 jest.mock("heroui-native", () => {
   const { Pressable, Text, View } = jest.requireActual("react-native");
   return {
-    Button: ({ children, onPress }: any) => (
-      <Pressable onPress={onPress}>
+    Avatar: Object.assign(({ children }: any) => <View>{children}</View>, {
+      Fallback: ({ children }: any) => <Text>{children}</Text>,
+    }),
+    Button: ({ children, onPress, testID }: any) => (
+      <Pressable testID={testID} onPress={onPress}>
         <Text>{children}</Text>
       </Pressable>
     ),
     Spinner: (props: any) => <View testID={props.testID} />,
     Typography: {
       Heading: ({ children }: any) => <Text>{children}</Text>,
-      Paragraph: ({ children, testID }: any) => <Text testID={testID}>{children}</Text>,
+      // `numberOfLines` is forwarded on purpose: the truncation of a long
+      // component name is a real assertion of this screen's layout, not a
+      // styling detail the mock can drop.
+      Paragraph: ({ children, testID, numberOfLines }: any) => (
+        <Text testID={testID} numberOfLines={numberOfLines}>
+          {children}
+        </Text>
+      ),
     },
-    useThemeColor: (keys: string[]) => keys.map(() => "#888888"),
+    useThemeColor: (tokens: string | string[]) =>
+      Array.isArray(tokens) ? tokens.map(() => "#888888") : "#888888",
   };
 });
 
@@ -200,8 +211,14 @@ describe("VizinhosCurricularesScreen", () => {
     await waitFor(() => expect(screen.getByText("Cálculo A")).toBeTruthy());
     await waitFor(() => expect(screen.getByText("Cálculo C")).toBeTruthy());
 
+    // Cada toque vai dentro do seu próprio `await act`: dois fireEvent.press
+    // seguidos no mesmo teste sobrepõem os act() internos do RTL, e essa
+    // sobreposição derrubava o ambiente de act pra todos os testes seguintes
+    // do arquivo (que passavam a renderizar nada).
     // Primeiro nível: toca no pré-requisito.
-    fireEvent.press(screen.getByTestId("vizinho-card-MATA02"));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("vizinho-card-MATA02"));
+    });
     expect(mockRouterPush).toHaveBeenNthCalledWith(1, {
       pathname: "/arvore-dependencias",
       params: { codigo: "MATA02", nome: "Cálculo A" },
@@ -211,11 +228,64 @@ describe("VizinhosCurricularesScreen", () => {
     // primeiro toque — é essa repetição que permite empilhar quantos níveis
     // o aluno quiser (cascata), cada um um push da mesma rota recentrada no
     // vizinho tocado, e não um modal one-shot que só fecha um de cada vez.
-    fireEvent.press(screen.getByTestId("vizinho-card-MATA04"));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("vizinho-card-MATA04"));
+    });
     expect(mockRouterPush).toHaveBeenNthCalledWith(2, {
       pathname: "/arvore-dependencias",
       params: { codigo: "MATA04", nome: "Cálculo C" },
     });
     expect(mockRouterPush).toHaveBeenCalledTimes(2);
+  });
+  it("fecha pelo botão Fechar do rodapé — o mesmo padrão danger-soft das outras telas empilhadas, não um X no header", async () => {
+    mockedGet.mockResolvedValue({
+      atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
+      preRequisitos: [],
+      desbloqueia: [],
+    });
+
+    await render(<VizinhosCurricularesScreen />);
+    await waitFor(() => expect(screen.getAllByText("Cálculo B").length).toBeGreaterThan(0));
+
+    expect(screen.queryByTestId("app-bar-close")).toBeNull();
+    fireEvent.press(screen.getByTestId("vizinhos-curriculares-fechar"));
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("trunca o nome da matéria em duas linhas — nome de grade curricular é longo e empurrava o ícone fora do card", async () => {
+    mockedGet.mockResolvedValue({
+      atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
+      preRequisitos: [],
+      desbloqueia: [
+        {
+          codigo: "ENGJ18",
+          nome: "INTRODUÇÃO A ENGENHARIA DE AGRIMENSURA E CARTOGRÁFICA",
+          situacao: "bloqueada",
+        },
+      ],
+    });
+
+    await render(<VizinhosCurricularesScreen />);
+    const nome = await screen.findByText(
+      "INTRODUÇÃO A ENGENHARIA DE AGRIMENSURA E CARTOGRÁFICA"
+    );
+    expect(nome.props.numberOfLines).toBe(2);
+  });
+
+  it("não mostra cadeado numa matéria liberada — cadeado é só de bloqueada", async () => {
+    mockedGet.mockResolvedValue({
+      atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
+      preRequisitos: [],
+      desbloqueia: [
+        { codigo: "ENGC30", nome: "Mecânica dos Sólidos", situacao: "liberada" },
+        { codigo: "MATA04", nome: "Cálculo C", situacao: "bloqueada" },
+      ],
+    });
+
+    await render(<VizinhosCurricularesScreen />);
+    await waitFor(() => expect(screen.getByText("Mecânica dos Sólidos")).toBeTruthy());
+
+    expect(screen.queryByTestId("vizinho-icone-ENGC30")).toBeNull();
+    expect(screen.getByTestId("vizinho-icone-MATA04")).toBeTruthy();
   });
 });
