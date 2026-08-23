@@ -72,6 +72,13 @@ function RootNavigator(): JSX.Element | null {
               contentStyle: { backgroundColor: "transparent" },
             }}
           />
+          <Stack.Screen
+            name="moodle-webview"
+            options={{
+              presentation: "modal",
+              animation: "slide_from_bottom",
+            }}
+          />
         </Stack.Protected>
         <Stack.Protected guard={auth.status === "signedOut"}>
           <Stack.Screen name="login" />

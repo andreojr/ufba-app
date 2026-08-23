@@ -1,5 +1,4 @@
 import * as Crypto from "expo-crypto";
-import * as WebBrowser from "expo-web-browser";
 
 import type { MoodleSession } from "./moodle-storage";
 
@@ -55,24 +54,42 @@ function extractTokenParam(url: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export async function startMoodleLogin(
+/** A fresh passport for one login attempt (the Moodle app uses a random number). */
+export function newMoodlePassport(): string {
+  return String(Math.random());
+}
+
+/** The Moodle mobile-app launch URL that kicks off the SSO for a given passport. */
+export function buildMoodleLaunchUrl(passport: string): string {
+  return (
+    `${MOODLE_SITE_URL}/admin/tool/mobile/launch.php` +
+    `?service=moodle_mobile_app&passport=${passport}&urlscheme=${MOODLE_RETURN_SCHEME}`
+  );
+}
+
+/**
+ * Whether a URL the WebView is about to load is the Moodle token redirect
+ * (`ufba-app://token=...`). The WebView screen returns `false` from
+ * `onShouldStartLoadWithRequest` for these so the redirect is consumed inside
+ * the WebView and never leaks to the OS/Expo Router as a deep link — the whole
+ * reason we host this flow in an embedded WebView instead of the system browser.
+ */
+export function isMoodleReturnUrl(url: string): boolean {
+  return url.startsWith(`${MOODLE_RETURN_SCHEME}://`);
+}
+
+/**
+ * Turns the Moodle redirect URL (captured inside the WebView) into a login
+ * result: extracts the base64 token, parses it, verifies the passport signature
+ * BEFORE trusting anything, and resolves the user id. The browser/WebView side
+ * is deliberately not this function's concern, so it stays pure and testable.
+ */
+export async function completeMoodleLogin(
+  returnedUrl: string,
+  passport: string,
   resolveUserId: (wstoken: string, siteUrl: string) => Promise<number>,
 ): Promise<MoodleLoginResult> {
-  const passport = String(Math.random());
-  const launchUrl =
-    `${MOODLE_SITE_URL}/admin/tool/mobile/launch.php` +
-    `?service=moodle_mobile_app&passport=${passport}&urlscheme=${MOODLE_RETURN_SCHEME}`;
-
-  const result = await WebBrowser.openAuthSessionAsync(
-    launchUrl,
-    `${MOODLE_RETURN_SCHEME}://token`,
-  );
-
-  if (result.type !== "success" || !result.url) {
-    return { status: "cancelled" };
-  }
-
-  const base64 = extractTokenParam(result.url);
+  const base64 = extractTokenParam(returnedUrl);
   if (!base64) {
     return { status: "failed", reason: "Nenhum token no retorno do Moodle" };
   }

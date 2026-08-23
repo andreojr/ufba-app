@@ -1,30 +1,32 @@
 import { act, render, waitFor } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { Text } from "react-native";
 import { type JSX } from "react";
 
-import { startMoodleLogin } from "./moodle-auth";
-import { getSiteInfo, onMoodleTokenVerdict } from "./moodle-api";
+import { onMoodleTokenVerdict } from "./moodle-api";
 import { MoodleLinkProvider, useMoodleLink } from "./moodle-link-context";
 import {
   clearMoodleSession,
   getMoodleSession,
   rememberMoodleWasLinked,
   saveMoodleSession,
+  type MoodleSession,
 } from "./moodle-storage";
 
+jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 jest.mock("./moodle-storage");
-jest.mock("./moodle-auth");
 jest.mock("./moodle-api", () => ({
   ...jest.requireActual("./moodle-api"),
-  getSiteInfo: jest.fn(),
   onMoodleTokenVerdict: jest.fn(),
 }));
 
 const mockGetSession = getMoodleSession as jest.Mock;
 const mockSave = saveMoodleSession as jest.Mock;
 const mockClear = clearMoodleSession as jest.Mock;
-const mockStart = startMoodleLogin as jest.Mock;
+const mockPush = router.push as jest.Mock;
 const mockOnVerdict = onMoodleTokenVerdict as jest.Mock;
+
+const SESSION: MoodleSession = { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 };
 
 function Probe(): JSX.Element {
   const link = useMoodleLink();
@@ -57,14 +59,10 @@ it("hydrates to linked when a session is stored", async () => {
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
 });
 
-it("link() saves the session on success", async () => {
+it("link() opens the in-app SSO WebView screen (no state change, no persistence yet)", async () => {
   mockGetSession.mockResolvedValueOnce(null);
-  mockStart.mockResolvedValueOnce({
-    status: "success",
-    session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 },
-  });
 
-  let linkFn: () => Promise<unknown> = async () => undefined;
+  let linkFn: () => void = () => undefined;
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
     linkFn = ctx.link;
@@ -77,28 +75,22 @@ it("link() saves the session on success", async () => {
   );
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
 
-  await act(async () => {
-    await linkFn();
-  });
+  // link() only navigates (router.push) — it triggers no React state update,
+  // so it is called directly rather than wrapped in act().
+  linkFn();
 
-  expect(mockSave).toHaveBeenCalledWith({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 });
-  expect(rememberMoodleWasLinked).toHaveBeenCalled();
-  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
-  void getSiteInfo;
+  expect(mockPush).toHaveBeenCalledWith("/moodle-webview");
+  expect(mockSave).not.toHaveBeenCalled();
+  expect(screen.getByTestId("status").props.children).toBe("unlinked");
 });
 
-it("link() treats a failed local save as not linked", async () => {
+it("finishLink() persists the session and flips to linked", async () => {
   mockGetSession.mockResolvedValueOnce(null);
-  mockStart.mockResolvedValueOnce({
-    status: "success",
-    session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 },
-  });
-  mockSave.mockRejectedValueOnce(new Error("secure store unavailable"));
 
-  let linkFn: () => Promise<{ status: string }> = async () => ({ status: "unlinked" });
+  let finishFn: (s: MoodleSession) => Promise<void> = async () => undefined;
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    linkFn = ctx.link;
+    finishFn = ctx.finishLink;
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -108,12 +100,40 @@ it("link() treats a failed local save as not linked", async () => {
   );
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
 
-  let result: { status: string } | undefined;
   await act(async () => {
-    result = await linkFn();
+    await finishFn(SESSION);
   });
 
-  expect(result?.status).toBe("failed");
+  expect(mockSave).toHaveBeenCalledWith(SESSION);
+  expect(rememberMoodleWasLinked).toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
+});
+
+it("finishLink() throws and stays unlinked when the local save fails", async () => {
+  mockGetSession.mockResolvedValueOnce(null);
+  mockSave.mockRejectedValueOnce(new Error("secure store unavailable"));
+
+  let finishFn: (s: MoodleSession) => Promise<void> = async () => undefined;
+  function Capture(): JSX.Element {
+    const ctx = useMoodleLink();
+    finishFn = ctx.finishLink;
+    return <Text testID="status">{ctx.status}</Text>;
+  }
+  const screen = await render(
+    <MoodleLinkProvider>
+      <Capture />
+    </MoodleLinkProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
+
+  let threw = false;
+  await act(async () => {
+    await finishFn(SESSION).catch(() => {
+      threw = true;
+    });
+  });
+
+  expect(threw).toBe(true);
   expect(rememberMoodleWasLinked).not.toHaveBeenCalled();
   expect(screen.getByTestId("status").props.children).toBe("unlinked");
 });

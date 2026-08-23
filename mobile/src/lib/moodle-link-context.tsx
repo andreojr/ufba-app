@@ -9,8 +9,9 @@ import {
   type PropsWithChildren,
 } from "react";
 
-import { startMoodleLogin, type MoodleLoginResult } from "./moodle-auth";
-import { getSiteInfo, onMoodleTokenVerdict } from "./moodle-api";
+import { router } from "expo-router";
+
+import { onMoodleTokenVerdict } from "./moodle-api";
 import {
   clearMoodleSession,
   getMoodleSession,
@@ -19,13 +20,29 @@ import {
   type MoodleSession,
 } from "./moodle-storage";
 
+export class MoodleSaveFailedError extends Error {
+  constructor() {
+    super("Não foi possível salvar a sessão do Moodle");
+    this.name = "MoodleSaveFailedError";
+  }
+}
+
 type MoodleLinkState =
   | { status: "loading" }
   | { status: "unlinked" }
   | { status: "linked"; session: MoodleSession; expired: boolean };
 
 type MoodleLinkContextValue = MoodleLinkState & {
-  link: () => Promise<MoodleLoginResult>;
+  /**
+   * Opens the Moodle SSO. It navigates to an in-app WebView screen rather than
+   * the system browser: the SSO redirect comes back on our own app scheme
+   * (`ufba-app://token=...`), and the system browser would let that deep link
+   * hit Expo Router (→ "Unmatched Route"). The WebView intercepts it instead.
+   * The screen calls `finishLink` once it captures and validates the token.
+   */
+  link: () => void;
+  /** Persists a validated session and flips state to linked. Throws MoodleSaveFailedError if the local save fails. */
+  finishLink: (session: MoodleSession) => Promise<void>;
   unlink: () => Promise<void>;
 };
 
@@ -55,26 +72,24 @@ export function MoodleLinkProvider({ children }: PropsWithChildren): JSX.Element
     });
   }, []);
 
-  const link = useCallback(async (): Promise<MoodleLoginResult> => {
-    const result = await startMoodleLogin((wstoken, siteUrl) =>
-      getSiteInfo({ wstoken, siteUrl, userId: 0 }).then((info) => info.userId),
-    );
-    if (result.status === "success") {
-      try {
-        await saveMoodleSession(result.session);
-      } catch (error) {
-        // Spec: falha ao salvar a sessão localmente após captura vira
-        // console.warn e o app trata como não vinculado — não deixamos um
-        // reject sem tratamento nem afirmamos um link que não foi persistido.
-        console.warn("Failed to save Moodle session locally", error);
-        return { status: "failed", reason: "Não foi possível salvar a sessão do Moodle" };
-      }
-      void rememberMoodleWasLinked().catch((error: unknown) => {
-        console.warn("Failed to record Moodle link", error);
-      });
-      setState({ status: "linked", session: result.session, expired: false });
+  const link = useCallback(() => {
+    router.push("/moodle-webview");
+  }, []);
+
+  const finishLink = useCallback(async (session: MoodleSession) => {
+    try {
+      await saveMoodleSession(session);
+    } catch (error) {
+      // Spec: falha ao salvar a sessão localmente após captura vira
+      // console.warn e o app trata como não vinculado — não afirmamos um link
+      // que não foi persistido. A tela WebView traduz isso num toast.
+      console.warn("Failed to save Moodle session locally", error);
+      throw new MoodleSaveFailedError();
     }
-    return result;
+    void rememberMoodleWasLinked().catch((error: unknown) => {
+      console.warn("Failed to record Moodle link", error);
+    });
+    setState({ status: "linked", session, expired: false });
   }, []);
 
   const unlink = useCallback(async () => {
@@ -83,8 +98,8 @@ export function MoodleLinkProvider({ children }: PropsWithChildren): JSX.Element
   }, []);
 
   const value = useMemo<MoodleLinkContextValue>(
-    () => ({ ...state, link, unlink }),
-    [state, link, unlink],
+    () => ({ ...state, link, finishLink, unlink }),
+    [state, link, finishLink, unlink],
   );
 
   return <MoodleLinkContext.Provider value={value}>{children}</MoodleLinkContext.Provider>;

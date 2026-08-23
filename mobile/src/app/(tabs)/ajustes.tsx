@@ -396,16 +396,15 @@ export default function AjustesTab(): JSX.Element {
     }
   }, [accessToken, auth, toast]);
 
-  const handleMoodlePress = async (): Promise<void> => {
+  const handleMoodlePress = (): void => {
     if (moodle.status === "linked") {
       setConfirmMoodleUnlink(true);
       return;
     }
     if (moodle.status === "unlinked") {
-      const result = await moodle.link();
-      if (result.status === "failed") {
-        toast.show(dangerToast({ label: "Não foi possível conectar ao Moodle. Tente novamente." }));
-      }
+      // Opens the in-app SSO WebView; success/failure feedback (and the state
+      // change) happen there via the link context, not here.
+      moodle.link();
     }
   };
 

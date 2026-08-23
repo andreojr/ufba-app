@@ -1,19 +1,20 @@
 import * as Crypto from "expo-crypto";
-import * as WebBrowser from "expo-web-browser";
 
-import { MOODLE_RETURN_SCHEME, parseReturnedToken, startMoodleLogin, verifyPassport } from "./moodle-auth";
+import {
+  buildMoodleLaunchUrl,
+  completeMoodleLogin,
+  isMoodleReturnUrl,
+  MOODLE_RETURN_SCHEME,
+  parseReturnedToken,
+  verifyPassport,
+} from "./moodle-auth";
 
 jest.mock("expo-crypto", () => ({
   CryptoDigestAlgorithm: { MD5: "MD5" },
   digestStringAsync: jest.fn(),
 }));
 
-jest.mock("expo-web-browser", () => ({
-  openAuthSessionAsync: jest.fn(),
-}));
-
 const mockCrypto = Crypto as jest.Mocked<typeof Crypto>;
-const mockBrowser = WebBrowser as jest.Mocked<typeof WebBrowser>;
 
 // Base64 helper for tests (Node has Buffer).
 const b64 = (s: string): string => Buffer.from(s, "utf-8").toString("base64");
@@ -47,7 +48,28 @@ describe("verifyPassport", () => {
   });
 });
 
-describe("startMoodleLogin", () => {
+describe("buildMoodleLaunchUrl", () => {
+  it("builds the mobile-app launch URL with the passport and our return scheme", () => {
+    const url = buildMoodleLaunchUrl("0.42");
+    expect(url).toContain("https://ava.ufba.br/admin/tool/mobile/launch.php");
+    expect(url).toContain("service=moodle_mobile_app");
+    expect(url).toContain("passport=0.42");
+    expect(url).toContain(`urlscheme=${MOODLE_RETURN_SCHEME}`);
+  });
+});
+
+describe("isMoodleReturnUrl", () => {
+  it("matches the app-scheme token redirect", () => {
+    expect(isMoodleReturnUrl(`${MOODLE_RETURN_SCHEME}://token=abc`)).toBe(true);
+  });
+
+  it("does not match the https launch/SSO pages", () => {
+    expect(isMoodleReturnUrl("https://ava.ufba.br/admin/tool/mobile/launch.php")).toBe(false);
+    expect(isMoodleReturnUrl("https://cafe.ufba.br/idp/profile/SAML2/Redirect/SSO")).toBe(false);
+  });
+});
+
+describe("completeMoodleLogin", () => {
   const resolveUserId = jest.fn<Promise<number>, [string, string]>();
 
   beforeEach(() => {
@@ -57,19 +79,13 @@ describe("startMoodleLogin", () => {
     mockCrypto.digestStringAsync.mockImplementation(async () => "sig");
   });
 
-  it("returns cancelled when the user closes the browser", async () => {
-    mockBrowser.openAuthSessionAsync.mockResolvedValueOnce({ type: "cancel" } as never);
-    await expect(startMoodleLogin(resolveUserId)).resolves.toEqual({ status: "cancelled" });
-  });
-
-  it("returns success with a session when the token is valid", async () => {
+  it("returns success with a session when the redirect token is valid", async () => {
     const token = Buffer.from("sig:::wstok:::priv", "utf-8").toString("base64");
-    mockBrowser.openAuthSessionAsync.mockResolvedValueOnce({
-      type: "success",
-      url: `${MOODLE_RETURN_SCHEME}://token=${token}`,
-    } as never);
-
-    const result = await startMoodleLogin(resolveUserId);
+    const result = await completeMoodleLogin(
+      `${MOODLE_RETURN_SCHEME}://token=${token}`,
+      "0.42",
+      resolveUserId,
+    );
     expect(result).toEqual({
       status: "success",
       session: {
@@ -79,17 +95,24 @@ describe("startMoodleLogin", () => {
         userId: 7,
       },
     });
+    expect(resolveUserId).toHaveBeenCalledWith("wstok", "https://ava.ufba.br");
+  });
+
+  it("fails when the redirect has no token param", async () => {
+    const result = await completeMoodleLogin(`${MOODLE_RETURN_SCHEME}://cancelled`, "0.42", resolveUserId);
+    expect(result.status).toBe("failed");
+    expect(resolveUserId).not.toHaveBeenCalled();
   });
 
   it("fails when the passport signature does not match", async () => {
     mockCrypto.digestStringAsync.mockResolvedValue("different");
     const token = Buffer.from("sig:::wstok", "utf-8").toString("base64");
-    mockBrowser.openAuthSessionAsync.mockResolvedValueOnce({
-      type: "success",
-      url: `${MOODLE_RETURN_SCHEME}://token=${token}`,
-    } as never);
-
-    const result = await startMoodleLogin(resolveUserId);
+    const result = await completeMoodleLogin(
+      `${MOODLE_RETURN_SCHEME}://token=${token}`,
+      "0.42",
+      resolveUserId,
+    );
     expect(result.status).toBe("failed");
+    expect(resolveUserId).not.toHaveBeenCalled();
   });
 });
