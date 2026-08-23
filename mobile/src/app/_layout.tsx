@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { configureGoogleSignin } from "@/lib/google-signin";
 import { MockAppStateProvider } from "@/lib/mock-app-state";
 import { SigaaLinkProvider, useSigaaLink } from "@/lib/sigaa-link-context";
+import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
 import { getThemePreference } from "@/lib/theme-preference";
 
 import "../global.css";
@@ -123,7 +124,9 @@ export default function RootLayout(): JSX.Element | null {
           <MockAppStateProvider>
             <AuthProvider>
               <SigaaLinkProvider>
-                <RootNavigator />
+                <SyncFreshnessProvider>
+                  <RootNavigator />
+                </SyncFreshnessProvider>
               </SigaaLinkProvider>
             </AuthProvider>
           </MockAppStateProvider>

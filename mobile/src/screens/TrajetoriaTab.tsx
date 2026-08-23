@@ -2,16 +2,15 @@ import { useRouter } from "expo-router";
 import { Button, Menu, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import Animated, { LinearTransition } from "react-native-reanimated";
 
 import { AppIcon } from "@/components/AppIcon";
-import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { describeApiError } from "@/lib/api-errors";
-import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { getTrajetoria } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { HISTORICO_STAGES } from "@/lib/download-progress";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
-import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import {
   agruparPorAno,
   agruparPorSemestre,
@@ -19,8 +18,8 @@ import {
   formatarNota,
   historicoDesatualizado,
   poolPlanejavel,
-  rotuloSituacao,
   statusComponente,
+  faixaComponente,
   zonasDePlanejamento,
   type AnoTrajetoria,
 } from "@/lib/trajetoria";
@@ -71,28 +70,6 @@ function rotuloPeriodo(emCurso: boolean, desatualizado: boolean): string {
   return desatualizado ? "Aguardando notas" : "Em curso";
 }
 
-/**
- * Sync failures need one message the shared helper cannot give. A transcript
- * the parser refuses — for breaking the document's own invariants — comes back
- * as a bare 500, indistinguishable from a server hiccup but deterministic:
- * "Tente novamente" would send the student round a loop that fails identically
- * every time. So anything other than the two statuses the shared helper names
- * gets copy that promises no retry and points at the one thing that still
- * works, the PDF download reachable from Perfil.
- *
- * Bad credentials, rate limits and a dead connection keep the shared wording —
- * those really are retryable, and they are the same failures everywhere else.
- */
-function descreverErroSync(error: unknown): string {
-  // A status at all means a response came back, which is the only case where
-  // the document itself can be what failed.
-  const status = error instanceof ApiError ? error.status : undefined;
-  if (status !== undefined && status !== 401 && status !== 429) {
-    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Perfil.";
-  }
-  return describeApiError(error);
-}
-
 /** The saved plan, in the shape the zones read. Unplaced items stay out of it. */
 function planoSalvo(plano: ItemPlano[]): Plano {
   return Object.fromEntries(
@@ -106,6 +83,9 @@ export default function TrajetoriaTab(): JSX.Element {
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const mutedColor = useThemeColor("muted");
+  // Shared with Início's freshness badge and Perfil's sync item — see
+  // sync-freshness-context's docstring.
+  const { setHistoricoFetchedAt } = useSyncFreshness();
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
   // Moves the student made in this session, on top of the plan the server sent.
@@ -113,8 +93,6 @@ export default function TrajetoriaTab(): JSX.Element {
   // refresh must not, since nothing about the plan changed. Only a re-sync
   // clears them, and there the server's plan is the authority.
   const [movimentos, setMovimentos] = useState<Plano>({});
-  const [sincronizando, setSincronizando] = useState(false);
-  const [erroSync, setErroSync] = useState<string | null>(null);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
 
   // No request of its own: the home screen writes this cache after every
@@ -124,25 +102,33 @@ export default function TrajetoriaTab(): JSX.Element {
     void getPeriodoCache().then((periodo) => setFimDoPeriodo(periodo?.fim ?? null));
   }, []);
 
-  const aplicar = useCallback((resposta: TrajetoriaResponse) => {
-    if (!("historico" in resposta)) {
-      setState({ status: "unsynced" });
-      return;
-    }
-    setState({
-      status: "ready",
-      historico: resposta.historico,
-      fetchedAt: new Date(resposta.fetchedAt),
-      plano: resposta.plano,
-      marcos: resposta.marcos,
-    });
-    // Fresh data on screen must not keep a stale failure under it contradicting
-    // what the student is now reading.
-    setErroSync(null);
-  }, []);
+  const aplicar = useCallback(
+    (resposta: TrajetoriaResponse) => {
+      if (!("historico" in resposta)) {
+        setState({ status: "unsynced" });
+        return;
+      }
+      const fetchedAt = new Date(resposta.fetchedAt);
+      setState({
+        status: "ready",
+        historico: resposta.historico,
+        fetchedAt,
+        plano: resposta.plano,
+        marcos: resposta.marcos,
+      });
+      setHistoricoFetchedAt(fetchedAt);
+      // A fresh transcript replaces the one the moves were made against, and
+      // the plan the server sent back is the authority — same reset the old
+      // in-screen re-sync used to do, now covering the only path left that can
+      // bring in a fresh transcript: reloading after a sync done in Perfil.
+      setMovimentos({});
+    },
+    [setHistoricoFetchedAt],
+  );
 
-  // Reading the stored trajectory needs no SIGAA credential — the JWT already
-  // scopes it to this student. Only the re-scrape below does.
+  // Reading the stored trajectory needs no SIGAA credential — sync itself
+  // now only happens from Perfil, which re-scrapes both the horário and the
+  // histórico in one press instead of each tab doing its own.
   const carregar = useCallback(
     async () => {
       if (!accessToken) {
@@ -159,57 +145,18 @@ export default function TrajetoriaTab(): JSX.Element {
     [accessToken, aplicar],
   );
 
+  // Depends on the link status only to re-read after the student links or
+  // unlinks — never to decide *whether* to read. The stored histórico lives in
+  // our own database and needs no SIGAA password to come back out.
   useEffect(() => {
-    if (sigaaLink.status === "linked" && accessToken) {
+    if (accessToken) {
       carregar();
-    } else if (sigaaLink.status === "unlinked") {
-      setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua trajetória." });
     }
   }, [sigaaLink.status, accessToken, carregar]);
-
-  const sincronizar = useCallback(async () => {
-    if (!accessToken) {
-      return;
-    }
-    const credentials = await getSigaaCredentials();
-    if (!credentials) {
-      // Reads as one sentence after the prefix the error line already carries.
-      setErroSync("Vincule sua conta do SIGAA primeiro.");
-      return;
-    }
-
-    setSincronizando(true);
-    setErroSync(null);
-    try {
-      aplicar(
-        await postTrajetoriaSync(accessToken, {
-          login: credentials.login,
-          senha: credentials.senha,
-        }),
-      );
-      // Only here: a re-sync replaces the transcript the moves were made
-      // against, and the plan the server sent back is the authority. A plain
-      // refresh must leave them be — see onRefresh.
-      setMovimentos({});
-    } catch (error) {
-      console.warn("Failed to sync trajetória", error);
-      // The state deliberately survives the failure: a student looking at last
-      // term's grades should keep seeing them when a re-sync fails.
-      setErroSync(descreverErroSync(error));
-    } finally {
-      setSincronizando(false);
-    }
-  }, [accessToken, aplicar]);
 
   function moverComponente(codigo: string, zona: string): void {
     setMovimentos((atual) => ({ ...atual, [codigo]: zona }));
   }
-
-  const erro = erroSync ? (
-    <Typography.Paragraph type="body-xs" className="text-danger">
-      Não deu para sincronizar seu histórico. {erroSync}
-    </Typography.Paragraph>
-  ) : null;
 
   return (
     <View className="flex-1 bg-background">
@@ -233,11 +180,10 @@ export default function TrajetoriaTab(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {state.message}
             </Typography.Paragraph>
-            {sigaaLink.status === "linked" ? (
-              <Button variant="outline" size="sm" onPress={() => carregar()}>
-                Tentar de novo
-              </Button>
-            ) : null}
+            {/* A plain re-read of our own database — offered linked or not. */}
+            <Button variant="outline" size="sm" onPress={() => carregar()}>
+              Tentar de novo
+            </Button>
           </View>
         ) : null}
 
@@ -245,54 +191,25 @@ export default function TrajetoriaTab(): JSX.Element {
           <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
             <Typography.Heading type="h6">Sua trajetória ainda não foi montada</Typography.Heading>
             <Typography.Paragraph type="body-sm" color="muted">
-              Vamos buscar seu histórico escolar no SIGAA e montar sua trajetória. Leva alguns
-              segundos.
+              {sigaaLink.status === "linked"
+                ? "Sincronize sua conta em Perfil para buscar seu histórico escolar no SIGAA e montar sua trajetória."
+                : "Vincule sua conta em Perfil para buscar seu histórico escolar no SIGAA e montar sua trajetória."}
             </Typography.Paragraph>
-
-            {/* Above the button, never below it: pressing sync is the moment the
-                student hands us a document carrying their CPF, RG and date of
-                birth, so both halves — what we keep and what we throw away —
-                have to be readable before the press. */}
-            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que fica guardado:{" "}
-                </Typography.Paragraph>
-                suas matérias, notas e carga horária — é o que monta esta tela.
-              </Typography.Paragraph>
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que não fica:{" "}
-                </Typography.Paragraph>
-                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
-                leitura.
-              </Typography.Paragraph>
-            </View>
-
-            <Button onPress={sincronizar} isDisabled={sincronizando}>
-              {sincronizando ? "Sincronizando…" : "Sincronizar histórico"}
-            </Button>
-
-            {/* The wait is ~40s of server-side scraping. A disabled button with a
-                changed label is not enough feedback for that long, and the
-                calibrated stage model for exactly this request already exists. */}
-            {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
-            {erro}
+            {/* Sync now happens in one place — Perfil syncs the whole profile
+                (horário + histórico) in a single press, including the
+                privacy disclosure that used to sit right above this button. */}
+            <Button onPress={() => router.push("/ajustes")}>Ir para Perfil</Button>
           </View>
         ) : null}
 
         {state.status === "ready" ? (
           <ReadyTrajetoria
             historico={state.historico}
-            fetchedAt={state.fetchedAt}
             fimDoPeriodo={fimDoPeriodo}
             plano={state.plano}
             marcos={state.marcos}
             movimentos={movimentos}
             onMover={moverComponente}
-            onSincronizar={sincronizar}
-            sincronizando={sincronizando}
-            erro={erro}
             mutedColor={mutedColor}
             onAbrirVizinhos={(codigo, nome) =>
               router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
@@ -306,28 +223,20 @@ export default function TrajetoriaTab(): JSX.Element {
 
 function ReadyTrajetoria({
   historico,
-  fetchedAt,
   fimDoPeriodo,
   plano,
   marcos,
   movimentos,
   onMover,
-  onSincronizar,
-  sincronizando,
-  erro,
   mutedColor,
   onAbrirVizinhos,
 }: {
   historico: Historico;
-  fetchedAt: Date;
   fimDoPeriodo: string | null;
   plano: ItemPlano[];
   marcos: MarcosSemestralizacao | null;
   movimentos: Plano;
   onMover: (codigo: string, zona: string) => void;
-  onSincronizar: () => void;
-  sincronizando: boolean;
-  erro: JSX.Element | null;
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
@@ -348,31 +257,17 @@ function ReadyTrajetoria({
 
   return (
     <>
-      <View className="gap-2">
-        <View className="flex-row items-center justify-between gap-3">
-          <Typography.Paragraph type="body-xs" color="muted" className="flex-1">
-            {desatualizado ? (
-              "O semestre acabou e seu histórico ainda tem matérias em curso — sincronize para ver as notas."
-            ) : (
-              <>
-                Sincronizado em{" "}
-                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                  {fetchedAt.toLocaleDateString("pt-BR")}
-                </Typography.Paragraph>
-              </>
-            )}
-          </Typography.Paragraph>
-          {sincronizando ? null : (
-            <Pressable onPress={onSincronizar} className="h-9 px-1 justify-center">
-              <Typography.Paragraph type="body-sm" weight="medium" className="text-accent">
-                Sincronizar
-              </Typography.Paragraph>
-            </Pressable>
-          )}
-        </View>
-        {sincronizando ? <DownloadProgressBar stages={HISTORICO_STAGES} /> : null}
-        {erro}
-      </View>
+      {/* The plain "sincronizado em" line is gone — that freshness now lives
+          on Início's badge, fed by every screen that reads the histórico
+          (see sync-freshness-context). Only the actionable nudge survives
+          here, since it's not about freshness but about a specific
+          missing-notas gap. */}
+      {desatualizado ? (
+        <Typography.Paragraph type="body-xs" color="muted">
+          O semestre acabou e seu histórico ainda tem matérias em curso — sincronize em Perfil para ver as
+          notas.
+        </Typography.Paragraph>
+      ) : null}
 
       <LinhaDoTempo
         anos={anos}
@@ -482,6 +377,12 @@ function ReadyTrajetoria({
  * The trajectory grid itself: one row per year, its periods side by side,
  * connected top to bottom by the accent dots and line down the left edge —
  * chronological order top to bottom, ending in the linha de chegada card.
+ *
+ * Each year collapses. A transcript four years in is a very long scroll, and
+ * the years the student is done with are the ones they least need open — so
+ * only the year holding the período em curso starts expanded and the rest sit
+ * folded behind their headers. Whether a year is open is session state, like
+ * the planner's `movimentos`: leaving the tab restores the default.
  */
 function LinhaDoTempo({
   anos,
@@ -495,12 +396,37 @@ function LinhaDoTempo({
   onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
+  const mutedColor = useThemeColor("muted");
+  // Only the year in progress — or, on a transcript with nothing enrolled, the
+  // last one on it, so the grid never opens with every year folded.
+  const [anosAbertos, setAnosAbertos] = useState<Set<string>>(() => {
+    const atual =
+      anos.find((anoBloco) => anoBloco.periodos.some((periodo) => periodo.emCurso)) ??
+      anos[anos.length - 1];
+    return new Set(atual ? [atual.ano] : []);
+  });
+
+  function alternarAno(ano: string): void {
+    setAnosAbertos((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(ano)) {
+        proximo.add(ano);
+      }
+      return proximo;
+    });
+  }
+
   return (
     <View>
       {anos.map((anoBloco) => {
         // A year only reads as done once every period on it is — one
         // "Em curso"/"Aguardando notas" left is still a year in progress.
         const anoConcluido = anoBloco.periodos.every((periodo) => !periodo.emCurso);
+        const aberto = anosAbertos.has(anoBloco.ano);
+        const materias = anoBloco.periodos.reduce(
+          (total, periodo) => total + periodo.componentes.length,
+          0,
+        );
         return (
         <View key={anoBloco.ano} className="flex-row gap-3">
           <View className="w-3 items-center">
@@ -509,14 +435,43 @@ function LinhaDoTempo({
             />
             <View className="flex-1 w-px bg-white/15" />
           </View>
-          <View className="flex-1 gap-2.5 pb-5">
+          <Animated.View layout={LinearTransition} className="flex-1 gap-2.5 pb-5">
             {/* Muted on purpose — it's here only to keep the grouping legible
                 (which periods belong to which ano), not to compete with the
                 período numbers below, which are the real headline of this
-                grid. */}
-            <Typography.Paragraph type="body-sm" color="muted" className="font-mono opacity-50">
-              {anoBloco.ano}
-            </Typography.Paragraph>
+                grid. The whole row is the toggle, not just the caret: at this
+                type size the caret alone would be a cruel tap target. */}
+            <Pressable
+              testID={`ano-${anoBloco.ano}`}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: aberto }}
+              accessibilityLabel={`${anoBloco.ano}, ${materias} ${
+                materias === 1 ? "matéria" : "matérias"
+              }`}
+              onPress={() => alternarAno(anoBloco.ano)}
+              className="flex-row items-center gap-2.5"
+            >
+              <Typography.Paragraph type="body-sm" color="muted" className="font-mono opacity-50">
+                {anoBloco.ano}
+              </Typography.Paragraph>
+              {/* Only while folded: open, the períodos right below already say
+                  it, and the pill would just be noise. Same count pill the
+                  planner's zone headers use. */}
+              {!aberto ? (
+                <View className="rounded-full bg-white/5 px-2 py-1">
+                  <Typography.Paragraph type="body-xs" color="muted">
+                    {`${materias} ${materias === 1 ? "matéria" : "matérias"}`}
+                  </Typography.Paragraph>
+                </View>
+              ) : null}
+              <View className="flex-1" />
+              <AppIcon
+                name={aberto ? "IconCaretDown" : "IconCaretRight"}
+                size={16}
+                color={mutedColor}
+              />
+            </Pressable>
+            {aberto ? (
             <View className="gap-3">
               {anoBloco.periodos.map((periodo) => (
                 <View key={periodo.semestre} className="gap-2">
@@ -547,6 +502,7 @@ function LinhaDoTempo({
                         key={`${componente.semestre}-${componente.codigo}`}
                         componente={componente}
                         marcos={marcos}
+                        mutedColor={mutedColor}
                         onAbrirVizinhos={onAbrirVizinhos}
                       />
                     ))}
@@ -554,7 +510,8 @@ function LinhaDoTempo({
                 </View>
               ))}
             </View>
-          </View>
+            ) : null}
+          </Animated.View>
         </View>
         );
       })}
@@ -573,26 +530,34 @@ function LinhaDoTempo({
 }
 
 /**
- * A matéria card in the grid: código + carga horária (in gray, unrelated to
- * density — just the raw number) up top, nome below, and at the bottom a
- * density meter for that carga horária beside the situação/status badges,
- * ending with the nota in the bottom-right corner. The nota is always shown
- * now — this card no longer alternates between grade and carga horária views,
- * that split lives in Insights instead.
+ * A matéria in the grid: código + carga horária (in gray, unrelated to density
+ * — just the raw number) up top, nome below, a density meter for that carga
+ * horária at the bottom-left and the nota in the bottom-right corner. The nota
+ * is always shown now — this no longer alternates between grade and carga
+ * horária views, that split lives in Insights instead.
+ *
+ * A deviating matéria gets a second, colored card sitting on top of it
+ * carrying its status (see faixaComponente). The two are joined the way the
+ * Insights charts join their breakdown: a hairline `gap-0.5` between them and
+ * the facing corners squared off to `rounded-md`, so they read as one object
+ * split in two rather than as two cards that happen to be adjacent. That is
+ * also what gives the status room to spell itself out — the badge pills this
+ * replaces had to share a ~140px line with the nota and could not.
  */
 function MateriaCard({
   componente,
   marcos,
+  mutedColor,
   onAbrirVizinhos,
 }: {
   componente: ComponenteCursado;
   marcos: MarcosSemestralizacao | null;
+  mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
 }): JSX.Element {
-  const rotulo = rotuloSituacao(componente.situacao);
   const nota = formatarNota(componente.nota);
-  const mutedColor = useThemeColor("muted");
   const status = statusComponente(componente.codigo, marcos);
+  const faixa = faixaComponente(componente.situacao, status);
   const densidade = densidadeCarga(componente.cargaHoraria);
   // Trancada, cancelada, etc.: no grade at all — the dashed border and faded
   // fill are what say "it's here, but it doesn't count" without needing
@@ -603,20 +568,78 @@ function MateriaCard({
     // Narrow enough to sit two (or more) per row in the período box's
     // flex-wrap above — `flexBasis`/`minWidth` together are what let it grow
     // past that floor when there's room, but never shrink below it.
-    <Pressable
-      testID={`materia-card-${componente.codigo}`}
-      onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
-      className={`rounded-2xl p-3 justify-between gap-1.5 ${
-        naoConta
-          ? "bg-surface-secondary/40 border border-dashed border-white/20 opacity-60"
-          : "bg-surface-secondary"
-      }`}
-      style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}
-    >
+    <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
+      {faixa ? (
+        <View
+          testID={`faixa-${componente.codigo}`}
+          className={`rounded-t-2xl rounded-b-md px-3 py-1.5 ${faixa.corFundo}`}
+        >
+          <Typography.Paragraph type="body-xs" className={faixa.corTexto}>
+            {faixa.rotulo}
+          </Typography.Paragraph>
+        </View>
+      ) : null}
+      <Pressable
+        testID={`materia-card-${componente.codigo}`}
+        onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
+        className={`flex-1 p-3 justify-between gap-1.5 ${
+          // Squaring off the top corners is the whole trick: the status card
+          // squares its bottom ones to match, and the pair reads as continuous.
+          faixa ? "rounded-t-md rounded-b-2xl" : "rounded-2xl"
+        } ${
+          naoConta
+            ? "bg-surface-secondary/40 border border-dashed border-white/20 opacity-60"
+            : "bg-surface-secondary"
+        }`}
+      >
+        {/* Its own group, separate from the densidade/nota row below: the row's
+            parent stretches every card in a flex-wrap line to match the
+            tallest one, and `justify-between` on that parent is what pins this
+            row to the bottom of that stretched height instead of leaving it
+            floating right under a short nome with dead space beneath it. */}
+        <View className="gap-0.5">
+          <View className="flex-row items-baseline gap-1.5">
+            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+              {componente.codigo}
+            </Typography.Paragraph>
+            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+              · {componente.cargaHoraria} h
+            </Typography.Paragraph>
+          </View>
+          <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+        </View>
+        <View className="flex-row items-end justify-between gap-1.5">
+          {/* A classification, not a completion percentage. This used to be an
+              8x4 colored pill, which failed twice over: too small to read, and
+              painted from the same verde/âmbar/vermelho ramp that gradeColor
+              spends on the nota sitting in the opposite corner of this very
+              card. The glyph carries the tier now (uma folha → uma bandeja
+              cheia) and the color ramp is free to mean only nota. Muted and
+              bottom-left: still a quiet cue, not another headline number. See
+              densidadeCarga for the cut points, and LegendaDensidade for the
+              line that teaches the scale. */}
+          <View testID={`densidade-${componente.codigo}`} accessibilityLabel={densidade.rotulo}>
+            <AppIcon name={densidade.icone} size={14} color={mutedColor} />
+          </View>
+          {/* Bottom-right, always: the nota. A trancada/cancelada has no nota
+                at all, and "—" in that slot reads as a real value gone missing
+                rather than a value that was never going to exist — better to
+                leave the corner blank. */}
+          {componente.nota !== null ? (
+            <Typography.Heading type="h6" className="font-mono" style={{ color: gradeColor(nota) }}>
+              {nota}
+            </Typography.Heading>
+          ) : null}
+        </View>
+      </Pressable>
       {/* A nota 10 gets its own sticker — a blue circle poking out past the
-          card's own top-right corner. Absolute + a negative offset is what
-          lets it bleed outside the card's bounds instead of being clipped to
-          it; nothing here sets `overflow-hidden`, so it's free to. */}
+          top-right corner. It hangs off this wrapper rather than off the
+          matéria card, because with a status card stacked above, the matéria
+          card's own top corner is no longer the top of the object; anchoring
+          there would drop the sticker into the middle of the seam. Absolute +
+          a negative offset is what lets it bleed outside the bounds instead of
+          being clipped; nothing here sets `overflow-hidden`, so it's free to.
+          Last child so it paints over whichever card it lands on. */}
       {componente.nota === 10 ? (
         <View
           className="absolute items-center justify-center rounded-full bg-blue-500 border-2 border-background"
@@ -625,66 +648,6 @@ function MateriaCard({
           <AppIcon name="IconStar" size={13} color="white" />
         </View>
       ) : null}
-      {/* Its own group, separate from the badge/nota row below: the row's
-          parent stretches every card in a flex-wrap line to match the
-          tallest one, and `justify-between` on that parent is what pins this
-          row to the bottom of that stretched height instead of leaving it
-          floating right under a short nome with dead space beneath it. */}
-      <View className="gap-0.5">
-        <View className="flex-row items-baseline gap-1.5">
-          <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-            {componente.codigo}
-          </Typography.Paragraph>
-          <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-            · {componente.cargaHoraria} h
-          </Typography.Paragraph>
-        </View>
-        <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
-      </View>
-      <View className="flex-row items-end justify-between">
-        <View className="items-start gap-1">
-          {rotulo ? (
-            <View className="rounded-full bg-white/5 px-2 py-1 flex-row items-center gap-1">
-              {componente.situacao === "TRANC" ? (
-                <AppIcon name="IconLockKey" size={11} color={mutedColor} />
-              ) : null}
-              <Typography.Paragraph type="body-xs" color="muted">
-                {rotulo}
-              </Typography.Paragraph>
-            </View>
-          ) : null}
-          {/* The active grade dropped this código: obsoleta with no known
-              replacement, or equivalente to the componente the grade names
-              instead — see statusComponente. */}
-          {status ? (
-            <View className="rounded-full bg-white/5 px-2 py-1">
-              <Typography.Paragraph type="body-xs" color="muted">
-                {status.tipo === "obsoleta" ? "Fora da grade atual" : `Equivale a ${status.equivalenteDe}`}
-              </Typography.Paragraph>
-            </View>
-          ) : null}
-          {/* A classification, not a completion percentage — the whole bar
-              is solid in whichever tier's color the carga horária falls
-              into, it never partially fills. Small and bottom-left,
-              justify-between with the nota rather than a full-width bar —
-              this is a quiet cue, not another headline number. See
-              densidadeCarga for the cut points. */}
-          <View
-            testID={`densidade-${componente.codigo}`}
-            className="h-1 w-2 rounded-full"
-            style={{ backgroundColor: densidade.cor }}
-          />
-        </View>
-        {/* Bottom-right, always: the nota. A trancada/cancelada has no nota
-              at all, and "—" in that slot reads as a real value gone missing
-              rather than a value that was never going to exist — better to
-              leave the corner blank. */}
-        {componente.nota !== null ? (
-          <Typography.Heading type="h6" className="font-mono" style={{ color: gradeColor(nota) }}>
-            {nota}
-          </Typography.Heading>
-        ) : null}
-      </View>
-    </Pressable>
+    </View>
   );
 }

@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TrajetoriaTab from "@/screens/TrajetoriaTab";
-import { ApiError, getTrajetoria, postTrajetoriaSync } from "@/lib/api";
+import { ApiError, getTrajetoria } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
-import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type {
   ComponenteCursado,
   ComponentePendente,
@@ -16,11 +16,13 @@ import type {
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
-jest.mock("@/lib/sigaa-storage");
+jest.mock("@/lib/sync-freshness-context", () => ({
+  ...jest.requireActual("@/lib/sync-freshness-context"),
+  useSyncFreshness: jest.fn(),
+}));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getTrajetoria: jest.fn(),
-  postTrajetoriaSync: jest.fn(),
 }));
 // Mocked rather than left to SecureStore: the term's end date is what decides
 // whether the staleness nudge fires, so every test has to state it.
@@ -38,6 +40,14 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockRouterPush }) })
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
+// The year blocks animate their collapse with Reanimated's layout transition.
+// A factory mock keeps the real module — which this project's
+// transformIgnorePatterns does not transform — from ever being loaded.
+jest.mock("react-native-reanimated", () => {
+  const { View } = jest.requireActual("react-native");
+  return { __esModule: true, default: { View }, LinearTransition: {} };
+});
 
 jest.mock("@expo/vector-icons", () => {
   const { Text } = jest.requireActual("react-native");
@@ -171,39 +181,58 @@ beforeEach(() => {
   jest.mocked(useSigaaLink).mockReturnValue({ status: "linked" } as ReturnType<
     typeof useSigaaLink
   >);
-  jest.mocked(getSigaaCredentials).mockResolvedValue({
-    login: "209900011",
-    senha: "segredo",
-    syncMode: "device",
-  });
   // No cached term by default, which keeps the staleness nudge quiet.
   jest.mocked(getPeriodoCache).mockResolvedValue(null);
+  jest.mocked(useSyncFreshness).mockReturnValue({
+    scheduleFetchedAt: null,
+    historicoFetchedAt: null,
+    setScheduleFetchedAt: jest.fn(),
+    setHistoricoFetchedAt: jest.fn(),
+  });
 });
 
 describe("Trajetória", () => {
-  it("offers to sync when the user has never synced", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+  it("still shows the stored trajectory after the account is unlinked", async () => {
+    jest.mocked(useSigaaLink).mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({}));
 
-    await render(<TrajetoriaTab />);
+    const { queryByText } = await render(<TrajetoriaTab />);
 
-    expect(await screen.findByText(/sincronizar histórico/i)).toBeTruthy();
-    // The mock data must be gone: no invented coefficient on an empty state.
-    expect(screen.queryByText("7,84")).toBeNull();
+    await waitFor(() =>
+      expect(queryByText("Vincule sua conta do SIGAA para ver sua trajetória.")).toBeNull(),
+    );
+    expect(jest.mocked(getTrajetoria)).toHaveBeenCalledWith("token");
   });
 
-  it("discloses what is kept and what is discarded before the first sync", async () => {
+  it("asks an unlinked user to link when there is nothing stored", async () => {
+    jest.mocked(useSigaaLink).mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
+    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
+
+    const { getByText } = await render(<TrajetoriaTab />);
+
+    await waitFor(() =>
+      expect(
+        getByText(
+          "Vincule sua conta em Perfil para buscar seu histórico escolar no SIGAA e montar sua trajetória.",
+        ),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("points to Perfil to sync when the user has never synced", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
 
     await render(<TrajetoriaTab />);
 
-    // Both halves, not just the reassuring one: grades ARE stored, and a
-    // disclosure that only said "nothing sensitive is kept" would be false by
-    // omission. This is the user-facing end of the same requirement Task 3
-    // asserts from the parser's end.
-    expect(await screen.findByText(/O que fica guardado/i)).toBeTruthy();
-    expect(screen.getByText(/matérias, notas e carga horária/i)).toBeTruthy();
-    expect(screen.getByText(/O que não fica/i)).toBeTruthy();
-    expect(screen.getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
+    expect(await screen.findByText(/ir para perfil/i)).toBeTruthy();
+    // The mock data must be gone: no invented coefficient on an empty state.
+    expect(screen.queryByText("7,84")).toBeNull();
   });
 
   it("distinguishes a failed grade from an identical passing one", async () => {
@@ -230,86 +259,90 @@ describe("Trajetória", () => {
     expect(screen.getByText("reprovado")).toBeTruthy();
   });
 
-  it("surfaces a sync failure without wiping what is already on screen", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest.mocked(postTrajetoriaSync).mockRejectedValue(new Error("SIGAA fora do ar"));
-    // The screen logs the failure on its way to the message; expected here.
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  it("hangs a colored status card off a matéria that deviates", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        cursados: [
+          {
+            semestre: "2024.2",
+            natureza: "OB",
+            codigo: "MATA97",
+            nome: "MATEMÁTICA DISCRETA II",
+            cargaHoraria: 60,
+            nota: null,
+            situacao: "TRANC",
+            docente: null,
+          },
+        ],
+      }),
+    );
 
     await render(<TrajetoriaTab />);
-    // Async act: the press starts a promise chain, and only this form flushes
-    // the state updates it lands on.
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
 
-    await waitFor(() => {
-      expect(screen.getByText(/não deu para sincronizar/i)).toBeTruthy();
-    });
-    // The disclosure and the button are still there: a failed sync explains
-    // itself, it does not blank the screen.
-    expect(screen.getByText(/O que fica guardado/i)).toBeTruthy();
-    consoleWarn.mockRestore();
+    const faixa = await screen.findByTestId("faixa-MATA97");
+    expect(faixa.props.className).toContain("bg-warning-soft");
+    // Squared off against the card below it, so the two read as continuous.
+    expect(faixa.props.className).toContain("rounded-b-md");
+    expect(screen.getByText("trancado")).toBeTruthy();
   });
 
-  it("does not tell the student to retry a failure that will fail identically", async () => {
-    // A transcript the parser refuses arrives as a bare 500. Retrying it loops,
-    // so the copy must not send the student round again.
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest
-      .mocked(postTrajetoriaSync)
-      .mockRejectedValue(new ApiError("Internal server error", 500));
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  it("leaves an aprovada as a single card — o cabeçalho do período já disse isso", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({
+        cursados: [
+          {
+            semestre: "2025.1",
+            natureza: "OB",
+            codigo: "MATA37",
+            nome: "INTRODUÇÃO À LÓGICA",
+            cargaHoraria: 60,
+            nota: 8,
+            situacao: "APR",
+            docente: null,
+          },
+        ],
+      }),
+    );
 
     await render(<TrajetoriaTab />);
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
 
-    expect(screen.getByText(/Pode ser um problema no documento/i)).toBeTruthy();
-    expect(screen.getByText(/baixar o PDF em Perfil/i)).toBeTruthy();
-    expect(screen.queryByText(/Tente novamente/i)).toBeNull();
-    // The raw backend message never reaches the student.
-    expect(screen.queryByText(/Internal server error/i)).toBeNull();
-    consoleWarn.mockRestore();
+    expect(await screen.findByText("MATA37")).toBeTruthy();
+    expect(screen.queryByTestId("faixa-MATA37")).toBeNull();
+    // With nothing hanging off it, the card keeps its corners all the way round.
+    expect(screen.getByTestId("materia-card-MATA37").props.className).toContain("rounded-2xl");
   });
 
-  it("keeps the shared wording for the failures a retry really does fix", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest.mocked(postTrajetoriaSync).mockRejectedValue(new ApiError("Unauthorized", 401));
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  it("names the replacement on an equivalente's status card, which now has room for it", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria(
+        {
+          cursados: [
+            {
+              semestre: "2025.1",
+              natureza: "OB",
+              codigo: "VELHA2",
+              nome: "MATÉRIA ANTIGA",
+              cargaHoraria: 60,
+              nota: 8,
+              situacao: "APR",
+              docente: null,
+            },
+          ],
+        },
+        {
+          marcos: [],
+          ritmo: null,
+          obsoletas: [],
+          equivalencias: [{ codigo: "VELHA2", equivalenteDe: "NOVA2" }],
+        },
+      ),
+    );
 
     await render(<TrajetoriaTab />);
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
 
-    expect(screen.getByText(/Credenciais inválidas/i)).toBeTruthy();
-    expect(screen.queryByText(/Pode ser um problema no documento/i)).toBeNull();
-    consoleWarn.mockRestore();
-  });
-
-  it("clears a past sync failure once a sync succeeds", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({ sincronizado: false });
-    jest.mocked(postTrajetoriaSync).mockRejectedValueOnce(new ApiError("Boom", 500));
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
-
-    await render(<TrajetoriaTab />);
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
-    expect(screen.getByText(/não deu para sincronizar/i)).toBeTruthy();
-
-    // A later sync repaints real data; a stale failure sitting under it would
-    // contradict what the student is now reading.
-    jest.mocked(postTrajetoriaSync).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
-    await act(async () => {
-      fireEvent.press(await screen.findByText(/sincronizar histórico/i));
-    });
-
-    expect(await screen.findByText("Em curso")).toBeTruthy();
-    expect(screen.queryByText(/não deu para sincronizar/i)).toBeNull();
-    consoleWarn.mockRestore();
+    const faixa = await screen.findByTestId("faixa-VELHA2");
+    expect(faixa.props.className).toContain("bg-success-soft");
+    expect(screen.getByText("equivale a NOVA2")).toBeTruthy();
   });
 
   it("warns that planner placements are not saved yet", async () => {
@@ -325,33 +358,6 @@ describe("Trajetória", () => {
 
     expect(await screen.findByText(/Ainda não salva/i)).toBeTruthy();
     expect(screen.getByText(/volta para onde estava/i)).toBeTruthy();
-  });
-
-  it("drops the moves after a re-sync, where the server's plan is the authority", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
-    );
-    jest.mocked(postTrajetoriaSync).mockResolvedValue(
-      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
-    );
-
-    await render(<TrajetoriaTab />);
-    expect(await screen.findByText("a cursar · 1")).toBeTruthy();
-
-    const opcoes = screen.getAllByText("2026.2");
-    await act(async () => {
-      fireEvent.press(opcoes[opcoes.length - 1]);
-    });
-    expect(screen.getByText("1 matéria")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(screen.getByText("Sincronizar"));
-    });
-
-    // Back in the pool: the re-scrape replaced the transcript the move was made
-    // against, and it came back with an empty plan.
-    expect(screen.getByText("a cursar · 1")).toBeTruthy();
-    expect(screen.queryByText("1 matéria")).toBeNull();
   });
 
   it("shows the error card with a retry that reloads when the fetch fails", async () => {
@@ -433,6 +439,61 @@ describe("Trajetória", () => {
     expect(screen.getByText("Tudo planejado.")).toBeTruthy();
   });
 
+  const LOGICA: ComponenteCursado = {
+    semestre: "2025.1",
+    natureza: "OB",
+    codigo: "MATA37",
+    nome: "INTRODUÇÃO À LÓGICA",
+    cargaHoraria: 60,
+    nota: 8,
+    situacao: "APR",
+    docente: null,
+  };
+
+  it("abre só o ano em curso e deixa os anteriores colapsados", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [LOGICA, MATRICULADO] }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    // O ano de 2026 tem o período em curso, então é o único aberto.
+    expect(await screen.findByText("MATA55")).toBeTruthy();
+    expect(screen.queryByText("MATA37")).toBeNull();
+    // Fechado, o ano ainda diz o que está escondendo.
+    expect(screen.getByText("1 matéria")).toBeTruthy();
+  });
+
+  it("expande um ano colapsado ao tocar no cabeçalho", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [LOGICA, MATRICULADO] }),
+    );
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA55");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ano-2025"));
+    });
+
+    expect(screen.getByText("MATA37")).toBeTruthy();
+  });
+
+  it("colapsa o ano aberto ao tocar no cabeçalho dele", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      trajetoria({ cursados: [LOGICA, MATRICULADO] }),
+    );
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA55");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ano-2026"));
+    });
+
+    expect(screen.queryByText("MATA55")).toBeNull();
+  });
+
   it("groups the periods by year", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       trajetoria({
@@ -486,7 +547,7 @@ describe("Trajetória", () => {
     expect(screen.queryByText(/↑|↓/)).toBeNull();
   });
 
-  it("colors the density bar differently for a light and a heavy matéria", async () => {
+  it("marks a light and a heavy matéria with their own density tier", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       trajetoria({
         cursados: [
@@ -516,9 +577,10 @@ describe("Trajetória", () => {
 
     await render(<TrajetoriaTab />);
 
-    const leve = await screen.findByTestId("densidade-MATA37");
-    const densa = await screen.findByTestId("densidade-MATB90");
-    expect(leve.props.style.backgroundColor).not.toBe(densa.props.style.backgroundColor);
+    // The tier is announced in words rather than left as a bare colored dot —
+    // a 34h matéria is "leve", a 120h one "muito densa".
+    expect(await screen.findByLabelText("Carga leve")).toBeTruthy();
+    expect(screen.getByLabelText("Carga muito densa")).toBeTruthy();
   });
 
   it("ends the trajectory with a linha de chegada card", async () => {
@@ -541,6 +603,5 @@ describe("Trajetória", () => {
 
     expect(await screen.findByText("Em curso")).toBeTruthy();
     expect(screen.queryByText(/O semestre acabou/i)).toBeNull();
-    expect(screen.getByText(/Sincronizado em/i)).toBeTruthy();
   });
 });

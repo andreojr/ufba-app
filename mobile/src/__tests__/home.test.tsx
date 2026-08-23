@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { savePeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 import HomeTab from "@/screens/HomeTab";
@@ -12,6 +13,10 @@ import HomeTab from "@/screens/HomeTab";
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
+jest.mock("@/lib/sync-freshness-context", () => ({
+  ...jest.requireActual("@/lib/sync-freshness-context"),
+  useSyncFreshness: jest.fn(),
+}));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getSchedule: jest.fn(),
@@ -148,23 +153,92 @@ describe("HomeTab", () => {
     } as any);
     mockedPostScheduleSync.mockClear();
     mockedSavePeriodoCache.mockClear();
+    jest.mocked(useSyncFreshness).mockReturnValue({
+      scheduleFetchedAt: null,
+      historicoFetchedAt: null,
+      setScheduleFetchedAt: jest.fn(),
+      setHistoricoFetchedAt: jest.fn(),
+    });
   });
 
   // The greeting/avatar/cog header moved out of HomeTab into the shared
   // TabsHeader (rendered once above the swipeable pager) — see
   // tabs-header.test.tsx for its coverage now.
 
-  it("shows a message asking to link the SIGAA account when unlinked", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+  it("still shows the stored week after the account is unlinked — the read needs no password", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
+    mockedGetSigaaCredentials.mockResolvedValue(null);
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+    const { getAllByText, queryByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    expect(queryByText("Vincule sua conta do SIGAA para ver sua semana.")).toBeNull();
+  });
+
+  it("invites an unlinked user to link only when there is nothing stored to show", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
+    mockedGetSigaaCredentials.mockResolvedValue(null);
+    mockedGetSchedule.mockResolvedValue({ sincronizado: false });
 
     const { getByText } = await render(<HomeTab />);
 
-    expect(getByText("Vincule sua conta do SIGAA para ver sua semana.")).toBeTruthy();
+    await waitFor(() => expect(getByText("Sua semana ainda não foi montada")).toBeTruthy());
+    expect(
+      getByText("Vincule sua conta em Perfil para buscar seu horário no SIGAA."),
+    ).toBeTruthy();
+  });
+
+  it("asks a linked user with nothing stored to sync instead of to link", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "device",
+      senhaDesatualizada: false,
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
+    mockedGetSigaaCredentials.mockResolvedValue(null);
+    mockedGetSchedule.mockResolvedValue({ sincronizado: false });
+
+    const { getByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getByText("Sua semana ainda não foi montada")).toBeTruthy());
+    expect(
+      getByText("Sincronize sua conta em Perfil para buscar seu horário no SIGAA."),
+    ).toBeTruthy();
+  });
+
+  it("offers a retry on a failed read even with no account linked", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
+    mockedGetSigaaCredentials.mockResolvedValue(null);
+    mockedGetSchedule.mockRejectedValue(new Error("network down"));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { getByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getByText("Tentar de novo")).toBeTruthy());
+    consoleWarn.mockRestore();
   });
 
   it("shows a loading state while fetching the schedule", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
-    mockedGetSigaaCredentials.mockReturnValue(new Promise(() => {})); // never resolves
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedGetSchedule.mockReturnValue(new Promise(() => {})); // never resolves
 
     const { getByText } = await render(<HomeTab />);
 
@@ -172,7 +246,7 @@ describe("HomeTab", () => {
   });
 
   it("renders the fetched schedule, including a course scheduled every weekday", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
@@ -187,6 +261,8 @@ describe("HomeTab", () => {
       mockedUseSigaaLink.mockReturnValue({
         status: "linked",
         syncMode: "device",
+        senhaDesatualizada: false,
+        jaVinculou: true,
         link: jest.fn(),
         unlink: jest.fn(),
       });
@@ -249,6 +325,8 @@ describe("HomeTab", () => {
       mockedUseSigaaLink.mockReturnValue({
         status: "linked",
         syncMode: "device",
+        senhaDesatualizada: false,
+        jaVinculou: true,
         link: jest.fn(),
         unlink: jest.fn(),
       });
@@ -306,7 +384,7 @@ describe("HomeTab", () => {
     // The reference lines moved to UFBA's slot-pair boundaries, but the labels
     // deliberately did not: "09" costs a fraction of the width of "08:50", and
     // a class's exact start and end are already on its own card below.
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
@@ -324,6 +402,8 @@ describe("HomeTab", () => {
       mockedUseSigaaLink.mockReturnValue({
         status: "linked",
         syncMode: "device",
+        senhaDesatualizada: false,
+        jaVinculou: true,
         link: jest.fn(),
         unlink: jest.fn(),
       });
@@ -408,7 +488,7 @@ describe("HomeTab", () => {
     it("caches the term it just fetched, since it is the only screen that asks for one", async () => {
       // Trajetória never calls /schedule, so this write is the sole source of
       // the end date its staleness nudge reads.
-      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
       mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
       mockedGetSchedule.mockResolvedValue(scheduleResponse());
 
@@ -419,7 +499,7 @@ describe("HomeTab", () => {
     });
 
     it("caches nothing when the backend could not read the term", async () => {
-      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
       mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
       mockedGetSchedule.mockResolvedValue(scheduleResponse(null));
 
@@ -431,7 +511,7 @@ describe("HomeTab", () => {
   });
 
   it("shows an error message with a retry button when the fetch fails", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
     mockedGetSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
@@ -446,6 +526,8 @@ describe("HomeTab", () => {
       mockedUseSigaaLink.mockReturnValue({
         status: "linked",
         syncMode: "device",
+        senhaDesatualizada: false,
+        jaVinculou: true,
         link: jest.fn(),
         unlink: jest.fn(),
       });

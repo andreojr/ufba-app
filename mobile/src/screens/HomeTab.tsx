@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -27,6 +28,7 @@ import {
 import { relativeFreshness } from "@/lib/relative-freshness";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 const EMPTY_WEEK: ScheduleBlock[][] = [[], [], [], [], []];
@@ -50,6 +52,8 @@ const TIME_GUTTER_WIDTH = 26;
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
+  /** Nothing has ever been stored for this student — nothing to show yet. */
+  | { status: "unsynced" }
   | {
       status: "ready";
       week: ScheduleBlock[][];
@@ -58,9 +62,15 @@ type LoadState =
     };
 
 export default function HomeTab(): JSX.Element {
+  const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  // Shared with Perfil's sync item — see sync-freshness-context's docstring.
+  // Início has no reason to know the histórico's own fetchedAt (it never
+  // fetches it), but folding it into the one freshness line here means a
+  // sync done from Perfil is reflected the moment the student swipes back.
+  const { scheduleFetchedAt, historicoFetchedAt, setScheduleFetchedAt } = useSyncFreshness();
 
   // One ticking clock for the whole screen. Read at render instead, every one of
   // these would be frozen at whatever the clock said when the screen mounted:
@@ -104,8 +114,9 @@ export default function HomeTab(): JSX.Element {
         periodoLetivo,
         loadedAt: fetchedAt,
       });
+      setScheduleFetchedAt(fetchedAt);
     },
-    [days]
+    [days, setScheduleFetchedAt]
   );
 
   // Re-scrapes the SIGAA site and persists the result — the only path that
@@ -141,18 +152,19 @@ export default function HomeTab(): JSX.Element {
       if (!accessToken) {
         return;
       }
-      const credentials = await getSigaaCredentials();
-      if (!credentials) {
-        setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua semana." });
-        return;
-      }
-
       if (!silent) {
         setState({ status: "loading" });
       }
       try {
+        // Read first, always: the cached schedule lives in our own database and
+        // needs no SIGAA password, so an unlinked student still gets their week.
         const cached = await getSchedule(accessToken);
         if (!("turmas" in cached)) {
+          const credentials = await getSigaaCredentials();
+          if (!credentials) {
+            setState({ status: "unsynced" });
+            return;
+          }
           await syncSchedule(credentials, silent);
           return;
         }
@@ -165,11 +177,11 @@ export default function HomeTab(): JSX.Element {
     [accessToken, applySchedule, syncSchedule]
   );
 
+  // Depends on the link status only to re-read after the student links (the
+  // first sync happens inside loadSchedule) — never to decide *whether* to read.
   useEffect(() => {
-    if (sigaaLink.status === "linked" && accessToken) {
+    if (accessToken) {
       loadSchedule();
-    } else if (sigaaLink.status === "unlinked") {
-      setState({ status: "error", message: "Vincule sua conta do SIGAA para ver sua semana." });
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
 
@@ -253,12 +265,18 @@ export default function HomeTab(): JSX.Element {
           <View className="flex-row items-center gap-1.5">
             <View
               className={`w-1.5 h-1.5 rounded-full ${
-                state.status === "error" ? "bg-danger" : "bg-success"
+                state.status === "error" || state.status === "unsynced" ? "bg-danger" : "bg-success"
               }`}
             />
             <Typography.Paragraph testID="schedule-freshness" type="body-xs" color="muted">
               {state.status === "ready"
-                ? `Atualizado ${relativeFreshness(state.loadedAt, now)}`
+                ? (() => {
+                    // Falls back to the schedule's own instant while the
+                    // histórico hasn't reported in yet this session — see
+                    // perfilFreshness's docstring.
+                    const freshness = perfilFreshness(scheduleFetchedAt, historicoFetchedAt) ?? state.loadedAt;
+                    return `Atualizado ${relativeFreshness(freshness, now)}`;
+                  })()
                 : state.status === "loading"
                   ? "Carregando…"
                   : "Sem dados"}
@@ -281,11 +299,25 @@ export default function HomeTab(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {state.message}
             </Typography.Paragraph>
-            {sigaaLink.status === "linked" && (
-              <Button variant="outline" size="sm" onPress={() => loadSchedule()}>
-                <Button.Label>Tentar de novo</Button.Label>
-              </Button>
-            )}
+            {/* Retrying is a plain re-read of our own database, so it is
+                offered whether or not the account is currently linked. */}
+            <Button variant="outline" size="sm" onPress={() => loadSchedule()}>
+              <Button.Label>Tentar de novo</Button.Label>
+            </Button>
+          </View>
+        )}
+
+        {state.status === "unsynced" && (
+          <View className="rounded-3xl bg-surface-secondary p-5 gap-3">
+            <Typography.Heading type="h6">Sua semana ainda não foi montada</Typography.Heading>
+            <Typography.Paragraph type="body-sm" color="muted">
+              {sigaaLink.status === "linked"
+                ? "Sincronize sua conta em Perfil para buscar seu horário no SIGAA."
+                : "Vincule sua conta em Perfil para buscar seu horário no SIGAA."}
+            </Typography.Paragraph>
+            <Button onPress={() => router.push("/ajustes")}>
+              <Button.Label>Ir para Perfil</Button.Label>
+            </Button>
           </View>
         )}
 
