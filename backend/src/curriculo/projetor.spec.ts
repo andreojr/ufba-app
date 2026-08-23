@@ -1,5 +1,5 @@
 import type { ItemFila } from './fila-de-pendentes';
-import { alocar } from './projetor';
+import { MAX_SEMESTRES_PROJETADOS, alocar } from './projetor';
 
 function item(codigo: string, extras: Partial<ItemFila> = {}): ItemFila {
   return {
@@ -9,6 +9,7 @@ function item(codigo: string, extras: Partial<ItemFila> = {}): ItemFila {
     periodo: 1,
     atrasada: false,
     preRequisito: null,
+    substituto: null,
     ...extras,
   };
 }
@@ -115,6 +116,53 @@ describe('alocar', () => {
     expect(semestres[0].semestre).toBe('2026.2');
     expect(semestres[0].componentes.map((c) => c.codigo)).toEqual(['A']);
     expect(semestres[0].componentes[0].manual).toBe(true);
+  });
+
+  it('para no teto duro de semestres em vez de projetar milhares deles', () => {
+    // O regex do DTO aceita "9999.2". Sem o teto duro, o laço andaria semestre
+    // a semestre até lá — quase 16 mil deles, cada um serializado no
+    // GET /trajetoria e desenhado pela tela que o aluno usaria para desfazer.
+    const fila = [item('A')];
+    const fixos = new Map([['A', '9999.2']]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 300);
+
+    expect(semestres).toHaveLength(MAX_SEMESTRES_PROJETADOS);
+    // E nada some: o que sobrou cai no último semestre projetado.
+    expect(semestres[semestres.length - 1].componentes.map((c) => c.codigo)).toEqual(['A']);
+  });
+
+  it('despeja no último semestre tudo que restou ao bater o teto duro', () => {
+    // Duas fixas distantes e uma pendente comum: as três precisam aparecer.
+    const fila = [item('A'), item('B'), item('C')];
+    const fixos = new Map([
+      ['A', '9999.1'],
+      ['B', '9999.2'],
+    ]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 300);
+
+    expect(semestres).toHaveLength(MAX_SEMESTRES_PROJETADOS);
+    const alocados = semestres.flatMap((s) => s.componentes.map((c) => c.codigo));
+    expect(alocados.sort()).toEqual(['A', 'B', 'C']);
+    expect(semestres[semestres.length - 1].componentes.map((c) => c.codigo).sort()).toEqual([
+      'A',
+      'B',
+    ]);
+  });
+
+  it('deixa a pendente equivalente satisfazer o pré-requisito escrito com o código novo', () => {
+    // VELHA2 é a pendente de grade antiga que a grade ativa chama de NOVA2.
+    // Cursá-la tem que liberar MATA55 no semestre seguinte, sem válvula.
+    const fila = [
+      item('VELHA2', { substituto: 'NOVA2', periodo: 1 }),
+      item('MATA55', { preRequisito: '(NOVA2)', periodo: 2 }),
+      item('OUTRA', { periodo: 3 }),
+    ];
+    const semestres = alocar(fila, SEM_FIXOS, new Set(), '2026.2', 120);
+
+    expect(semestres[0].componentes.map((c) => c.codigo)).toEqual(['VELHA2', 'OUTRA']);
+    expect(semestres[1].componentes.map((c) => c.codigo)).toEqual(['MATA55']);
+    expect(semestres[1].semestre).toBe('2027.1');
+    expect(semestres[1].componentes[0].preRequisitoNaoVerificado).toBe(false);
   });
 
   it('devolve lista vazia quando não há nada pendente', () => {

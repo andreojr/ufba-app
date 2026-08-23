@@ -64,7 +64,16 @@ describe('montarFila', () => {
       periodo: 4,
       atrasada: true,
       preRequisito: '(MATA01)',
+      // O projetor precisa disso para registrar NOVA2 como concluído ao
+      // alocar VELHA2 — senão nada que dependa de NOVA2 se libera.
+      substituto: 'NOVA2',
     });
+  });
+
+  it('não inventa substituto para quem está na grade ativa', () => {
+    const fila = montarFila([pendente('A')], [componente('A', 5)], [], 6);
+
+    expect(fila[0].substituto).toBeNull();
   });
 
   it('joga a obsoleta pura para o fim, sem período e sem atraso', () => {

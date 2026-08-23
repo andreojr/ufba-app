@@ -17,6 +17,13 @@ export interface ItemFila {
   atrasada: boolean;
   /** Texto cru da grade ativa, para o `avaliarPreRequisito`. */
   preRequisito: string | null;
+  /**
+   * O código da grade ativa que declara esta pendente como equivalente, ou
+   * null quando ela mesma está na grade. Cursar esta satisfaz um pré-requisito
+   * escrito com aquele — é a mesma regra que `codigosConcluidos` aplica ao
+   * histórico, aqui estendida ao que a projeção ainda vai concluir.
+   */
+  substituto: string | null;
 }
 
 /**
@@ -45,10 +52,15 @@ export function montarFila(
   const itens = pendentes
     .filter((p) => !p.matriculado && p.codigo !== CODIGO_ENADE)
     .map((pendente): ItemFila => {
-      const substituto = substitutoDe.get(pendente.codigo);
+      const naGradePeloProprioCodigo = porCodigo.get(pendente.codigo);
+      // Mesma precedência do `classificarComponente`: quem está na grade ativa
+      // é "atual" e não substitui ninguém, ainda que alguma equivalência cite
+      // o código.
+      const substituto = naGradePeloProprioCodigo
+        ? undefined
+        : substitutoDe.get(pendente.codigo);
       const naGrade =
-        porCodigo.get(pendente.codigo) ??
-        (substituto ? porCodigo.get(substituto) : undefined);
+        naGradePeloProprioCodigo ?? (substituto ? porCodigo.get(substituto) : undefined);
       const periodo = naGrade?.periodo ?? null;
       return {
         codigo: pendente.codigo,
@@ -57,6 +69,7 @@ export function montarFila(
         periodo,
         atrasada: periodo !== null && periodo < periodoLetivoAtual,
         preRequisito: naGrade?.preRequisito ?? null,
+        substituto: substituto ?? null,
       };
     });
 

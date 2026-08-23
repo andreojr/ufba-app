@@ -2,6 +2,19 @@ import { avaliarPreRequisito } from './avaliador-prerequisito';
 import type { ItemFila } from './fila-de-pendentes';
 import { compararSemestres, proximoSemestre } from './semestre';
 
+/**
+ * Teto duro de semestres projetados — trinta anos de graduação, muito além de
+ * qualquer prazo de jubilamento. Bater aqui já é sintoma de dado absurdo (um
+ * override apontando para "9999.2", por exemplo), não de aluno atrasado.
+ *
+ * É rede de segurança da função pura: `alocar` não pode ser levada a correr
+ * sem fim — nem a devolver dezenas de milhares de semestres — por chamador
+ * nenhum, hoje ou depois. Ao bater o teto, o que sobrou é despejado no último
+ * semestre em vez de descartado: uma projeção estranha ainda diz onde cada
+ * matéria está, uma projeção com matéria sumida mente.
+ */
+export const MAX_SEMESTRES_PROJETADOS = 60;
+
 export interface ComponenteProjetado {
   codigo: string;
   nome: string;
@@ -58,6 +71,11 @@ export function alocar(
   const pendentes = fila.filter((item) => !fixos.has(item.codigo));
   const fixadas = fila.filter((item) => fixos.has(item.codigo));
   const concluidos = new Set(aprovados);
+  // Fora do `ComponenteProjetado` de propósito: o substituto é insumo do
+  // cálculo, não campo do payload que a tela desenha.
+  const substitutoDe = new Map(
+    fila.flatMap((item) => (item.substituto ? [[item.codigo, item.substituto] as const] : [])),
+  );
   const semestres: SemestreProjetado[] = [];
 
   let semestre = primeiroSemestre;
@@ -109,8 +127,33 @@ export function alocar(
 
     for (const componente of componentes) {
       concluidos.add(componente.codigo);
+      // O código da grade ativa conta junto: uma pendente de grade antiga
+      // alocada aqui precisa satisfazer o pré-requisito escrito com o código
+      // novo, do mesmo jeito que satisfaria se já estivesse no histórico.
+      const substituto = substitutoDe.get(componente.codigo);
+      if (substituto) {
+        concluidos.add(substituto);
+      }
     }
     semestres.push({ semestre, componentes, horasOptativas: 0, horasComplementares: 0 });
+
+    // Ver `MAX_SEMESTRES_PROJETADOS`: o que sobrou cai neste último semestre,
+    // porque perder item é pior que uma projeção estranha.
+    if (semestres.length === MAX_SEMESTRES_PROJETADOS) {
+      for (const item of fixadas) {
+        componentes.push(projetar(item, { manual: true, naoVerificado: false }));
+      }
+      for (const item of pendentes) {
+        componentes.push(
+          projetar(item, {
+            manual: false,
+            naoVerificado: !avaliarPreRequisito(item.preRequisito, concluidos),
+          }),
+        );
+      }
+      break;
+    }
+
     semestre = proximoSemestre(semestre);
   }
 
