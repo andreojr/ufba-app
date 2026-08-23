@@ -7,6 +7,7 @@ import {
   postGoogleLogin,
   postScheduleSync,
   postSigaaLink,
+  putPlano,
 } from "../lib/api";
 
 describe("erasing server-side data", () => {
@@ -467,5 +468,34 @@ describe("postScheduleSync", () => {
 
     jest.advanceTimersByTime(45_000);
     await assertion;
+  });
+});
+
+describe("putPlano", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  it("putPlano manda os itens para /trajetoria/plano", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ sincronizado: false }),
+    }) as unknown as typeof fetch;
+
+    await putPlano("token", [{ codigo: "MATA55", nome: "SO", cargaHoraria: 68, semestre: "2027.1" }]);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/trajetoria/plano"),
+      expect.objectContaining({ method: "PUT" }),
+    );
   });
 });
