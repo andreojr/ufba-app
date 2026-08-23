@@ -1,5 +1,6 @@
 import { act, render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
+import { type JSX } from "react";
 
 import { startMoodleLogin } from "./moodle-auth";
 import { getSiteInfo, onMoodleTokenVerdict } from "./moodle-api";

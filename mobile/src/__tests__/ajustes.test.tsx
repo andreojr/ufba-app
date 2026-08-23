@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 import { useUniwind } from "uniwind";
@@ -75,7 +77,7 @@ jest.mock("react-native-safe-area-context", () => ({
 const mockToastShow = jest.fn();
 
 jest.mock("heroui-native", () => {
-  const React = jest.requireActual("react");
+  const React: typeof import("react") = jest.requireActual("react");
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
   const DialogOpenContext = React.createContext(false);
