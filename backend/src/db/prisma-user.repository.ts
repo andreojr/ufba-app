@@ -52,4 +52,11 @@ export class PrismaUserRepository implements UserRepository {
     }
     await this.prisma.user.update({ where: { id: userId }, data });
   }
+
+  async deleteAccount(userId: string): Promise<void> {
+    // Every per-user relation declares onDelete: Cascade, so the schema does
+    // the rest. The shared caches (docentes, cursos, estruturas, componentes)
+    // hold no user column and are untouched by design.
+    await this.prisma.user.delete({ where: { id: userId } });
+  }
 }

@@ -40,4 +40,13 @@ export interface UserRepository {
     userId: string,
     profile: SigaaProfileUpdate,
   ): Promise<void>;
+
+  /**
+   * Hard-deletes the account, cascading to every per-user table. Nothing of
+   * this student is left on the server afterwards — not even their email.
+   *
+   * No soft delete behind it: this is offered to the student as a guarantee,
+   * and a guarantee with a `deletedAt` column under it is not one.
+   */
+  deleteAccount(userId: string): Promise<void>;
 }

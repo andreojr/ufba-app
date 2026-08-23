@@ -21,6 +21,21 @@ describe('UsersController', () => {
     });
   });
 
+  it('erases the account, taking the user id from the JWT and never from the request', async () => {
+    const usersService = {
+      eraseAccount: jest.fn().mockResolvedValue(undefined),
+    };
+    const controller = new UsersController(usersService as any);
+
+    await controller.eraseAccount({
+      userId: 'user-uuid-1',
+      email: 'a@ufba.br',
+      name: 'A',
+    });
+
+    expect(usersService.eraseAccount).toHaveBeenCalledWith('user-uuid-1');
+  });
+
   it('GET me returns the current user record from UsersService', async () => {
     const me = {
       id: 'user-uuid-1',

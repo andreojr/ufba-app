@@ -19,6 +19,9 @@ function fakeUserRepository(userRecord: UserRecord) {
   return {
     upsertGoogleUser: jest.fn().mockResolvedValue(userRecord),
     updateAvatarUrl: jest.fn(),
+    findById: jest.fn(),
+    updateSigaaProfile: jest.fn(),
+    deleteAccount: jest.fn(),
   };
 }
 
@@ -35,6 +38,9 @@ describe('AuthService.loginWithGoogle', () => {
       email: 'aluno@ufba.br',
       name: 'Aluno Teste',
       avatarUrl: null,
+      matricula: null,
+      curso: null,
+      periodoIngresso: null,
     });
     const authService = new AuthService(
       googleTokenService as any,
@@ -62,6 +68,9 @@ describe('AuthService.loginWithGoogle', () => {
         email: 'aluno@ufba.br',
         name: 'Aluno Teste',
         avatarUrl: null,
+        matricula: null,
+        curso: null,
+        periodoIngresso: null,
       },
     });
   });
@@ -76,6 +85,9 @@ describe('AuthService.loginWithGoogle', () => {
       email: 'aluno@ufba.br',
       name: 'Aluno Teste',
       avatarUrl: null,
+      matricula: null,
+      curso: null,
+      periodoIngresso: null,
     });
     const authService = new AuthService(
       googleTokenService as any,
@@ -102,6 +114,9 @@ describe('AuthService.loginWithGoogle', () => {
       email: 'pessoa@gmail.com',
       name: 'Pessoa Qualquer',
       avatarUrl: null,
+      matricula: null,
+      curso: null,
+      periodoIngresso: null,
     });
     const authService = new AuthService(
       googleTokenService as any,

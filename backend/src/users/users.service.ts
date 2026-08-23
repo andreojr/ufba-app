@@ -37,4 +37,9 @@ export class UsersService {
 
     await this.userRepository.updateAvatarUrl(userId, avatarUrl);
   }
+
+  /** See UserRepository.deleteAccount — nothing of this student is left. */
+  async eraseAccount(userId: string): Promise<void> {
+    await this.userRepository.deleteAccount(userId);
+  }
 }

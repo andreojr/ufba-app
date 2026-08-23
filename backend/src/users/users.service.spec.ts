@@ -7,8 +7,20 @@ function fakeUserRepository() {
     updateAvatarUrl: jest.fn(),
     updateSigaaProfile: jest.fn(),
     findById: jest.fn(),
+    deleteAccount: jest.fn(),
   };
 }
+
+describe('UsersService erasure', () => {
+  it('erases the whole account', async () => {
+    const userRepository = fakeUserRepository();
+    const service = new UsersService(userRepository);
+
+    await service.eraseAccount('user-uuid-1');
+
+    expect(userRepository.deleteAccount).toHaveBeenCalledWith('user-uuid-1');
+  });
+});
 
 describe('UsersService.updateAvatar', () => {
   it('saves the avatar URL for the given user', async () => {
