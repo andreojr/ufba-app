@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SigaaCredentials, SigaaSession } from './session';
+import {
+  SigaaCredentialsRequiredError,
+  SigaaInvalidCredentialsError,
+  SigaaSessionExpiredError,
+  SigaaCredentials,
+  SigaaSession,
+} from './session';
+import { SigaaRateLimitedError } from './http-client';
 import { Turma } from './parsers/turma';
 import { parseAtestadoTurmas, PeriodoLetivo } from './parsers/atestado-turmas';
 import { DiscentePerfil, parseDiscentePerfil } from './parsers/discente-perfil';
@@ -93,13 +100,25 @@ export class SigaaEngineService {
       }
       return { turmas, perfil, periodoLetivo };
     } catch (error) {
+      // Erros de domínio do SIGAA já sabem o próprio status (401 de sessão
+      // expirada, 429 de rate limit) e o cliente já sabe reagir a cada um —
+      // embrulhar tudo em SigaaScheduleIndisponivelError (503) escondia um
+      // rate limit ou uma sessão expirada atrás de "SIGAA indisponível" e
+      // pulava o tratamento de credencial inválida do cliente.
+      if (
+        error instanceof SigaaScheduleIndisponivelError ||
+        error instanceof SigaaRateLimitedError ||
+        error instanceof SigaaSessionExpiredError ||
+        error instanceof SigaaInvalidCredentialsError ||
+        error instanceof SigaaCredentialsRequiredError
+      ) {
+        throw error;
+      }
       this.logger.warn(
         'Could not read the schedule off the atestado de matrícula',
         error instanceof Error ? error.stack : String(error),
       );
-      throw error instanceof SigaaScheduleIndisponivelError
-        ? error
-        : new SigaaScheduleIndisponivelError(error);
+      throw new SigaaScheduleIndisponivelError(error);
     }
   }
 

@@ -4,6 +4,7 @@ import {
   SigaaScheduleIndisponivelError,
 } from './sigaa-engine.service';
 import { SigaaInvalidCredentialsError, SigaaSession } from './session';
+import { SigaaRateLimitedError } from './http-client';
 
 const PORTAL_HTML = `
   <div id="agenda-docente">
@@ -197,6 +198,24 @@ describe('SigaaEngineService.fetchSchedule', () => {
       'Could not read the schedule off the atestado de matrícula',
       expect.any(String),
     );
+  });
+
+  it('propagates SigaaRateLimitedError raised during the atestado postback instead of masking it as SigaaScheduleIndisponivelError', async () => {
+    // Um 429 durante o postback do atestado é um erro de domínio do SIGAA já
+    // conhecido pelo cliente (TOO_MANY_REQUESTS) — embrulhá-lo em
+    // SigaaScheduleIndisponivelError (503) contaria a história errada:
+    // "SIGAA indisponível" em vez de "espera e tenta de novo".
+    const rateLimited = new SigaaRateLimitedError();
+    const session = scheduleSession({
+      postback: jest.fn().mockRejectedValue(rateLimited),
+    });
+    const service = new SigaaEngineService(
+      () => session as unknown as SigaaSession,
+    );
+
+    await expect(
+      service.fetchSchedule({ login: 'user', senha: 'pass' }),
+    ).rejects.toBe(rateLimited);
   });
 
   it('fails instead of falling back to the portal home when the atestado menu item is absent', async () => {
