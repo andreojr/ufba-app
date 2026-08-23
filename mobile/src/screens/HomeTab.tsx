@@ -5,12 +5,14 @@ import { Pressable, ScrollView, View } from "react-native";
 
 import { AppIcon } from "@/components/AppIcon";
 import { LocationBadge } from "@/components/LocationBadge";
+import { PontosAtencaoSection } from "@/components/PontosAtencaoSection";
 import { SemesterTrack } from "@/components/SemesterTrack";
 import { describeApiError } from "@/lib/api-errors";
-import { getSchedule, postScheduleSync } from "@/lib/api";
+import { getPontosAtencao, getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { savePeriodoCache } from "@/lib/periodo-cache";
 import { isWithinPeriodo } from "@/lib/periodo-letivo";
+import { dataIsoLocal, intercalarDia } from "@/lib/pontos-atencao";
 import {
   formatMinutes,
   formatMinutesUntil,
@@ -29,7 +31,7 @@ import { relativeFreshness } from "@/lib/relative-freshness";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
-import type { PeriodoLetivo, Turma } from "@/lib/types";
+import type { PeriodoLetivo, PontoAtencao, Turma } from "@/lib/types";
 
 const EMPTY_WEEK: ScheduleBlock[][] = [[], [], [], [], []];
 
@@ -177,16 +179,35 @@ export default function HomeTab(): JSX.Element {
     [accessToken, applySchedule, syncSchedule]
   );
 
+  const [pontos, setPontos] = useState<PontoAtencao[]>([]);
+
   // Depends on the link status only to re-read after the student links (the
   // first sync happens inside loadSchedule) — never to decide *whether* to read.
   useEffect(() => {
     if (accessToken) {
       loadSchedule();
+      // O horário é a razão principal da tela — uma falha aqui não pode
+      // derrubá-la, então o erro só é logado e a lista fica vazia.
+      getPontosAtencao(accessToken, { incluirVencidos: false })
+        .then(setPontos)
+        .catch((error: unknown) => {
+          console.warn("Failed to load pontos de atenção", error);
+        });
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
 
   const week = state.status === "ready" ? state.week : EMPTY_WEEK;
-  const daySchedule = week[selectedDay] ?? [];
+  const pontosDoDia = useMemo(
+    () =>
+      days[selectedDay]
+        ? pontos.filter((ponto) => ponto.data === dataIsoLocal(days[selectedDay].date))
+        : [],
+    [pontos, days, selectedDay]
+  );
+  const itensDoDia = useMemo(
+    () => intercalarDia(week[selectedDay] ?? [], pontosDoDia),
+    [week, selectedDay, pontosDoDia]
+  );
 
   // Distinguishes "this day has no classes" from "the term hasn't reached this
   // day yet" — the same masking that emptied the column, said out loud.
@@ -258,6 +279,8 @@ export default function HomeTab(): JSX.Element {
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
       >
+        <PontosAtencaoSection pontos={pontos} agora={now} />
+
         {/* Heading and freshness share one row — the semester moved out of this
             text and into the badge on the term track inside the grid card. */}
         <View className="flex-row items-baseline justify-between gap-3">
@@ -487,7 +510,7 @@ export default function HomeTab(): JSX.Element {
 
             <View className="gap-2.5">
               <Typography.Paragraph weight="medium">{days[selectedDay].full}</Typography.Paragraph>
-              {daySchedule.length === 0 ? (
+              {itensDoDia.length === 0 ? (
                 <View className="rounded-2xl bg-surface-secondary py-5 items-center">
                   <Typography.Paragraph type="body-sm" color="muted">
                     {selectedDayIsOutsidePeriodo
@@ -496,43 +519,76 @@ export default function HomeTab(): JSX.Element {
                   </Typography.Paragraph>
                 </View>
               ) : (
-                daySchedule.map((entry) => (
-                  <View
-                    key={entry.key}
-                    className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-start gap-3"
-                  >
+                itensDoDia.map((item) =>
+                  item.kind === "aula" ? (
                     <View
-                      className="w-1 self-stretch rounded-full"
-                      style={{
-                        backgroundColor: SCHEDULE_PALETTE[entry.colorIndex].bar,
-                        minHeight: 36,
-                      }}
-                    />
-                    <View className="w-14">
-                      <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
-                        {formatMinutes(entry.inicioMin)}
-                      </Typography.Paragraph>
-                      <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-                        {formatMinutes(entry.fimMin)}
-                      </Typography.Paragraph>
-                    </View>
-                    <View className="flex-1 gap-0.5">
-                      <Typography.Paragraph weight="medium">{entry.nome}</Typography.Paragraph>
-                      <View className="flex-row items-center gap-1.5">
-                        {entry.codigo && (
-                          <Typography.Paragraph type="body-xs" color="muted">
-                            {entry.codigo} ·
-                          </Typography.Paragraph>
-                        )}
-                        <LocationBadge
-                          predio={entry.predio}
-                          sala={entry.sala}
-                          localOriginal={entry.localOriginal}
-                        />
+                      key={item.aula.key}
+                      className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-start gap-3"
+                    >
+                      <View
+                        className="w-1 self-stretch rounded-full"
+                        style={{
+                          backgroundColor: SCHEDULE_PALETTE[item.aula.colorIndex].bar,
+                          minHeight: 36,
+                        }}
+                      />
+                      <View className="w-14">
+                        <Typography.Paragraph type="body-sm" weight="medium" className="font-mono">
+                          {formatMinutes(item.aula.inicioMin)}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                          {formatMinutes(item.aula.fimMin)}
+                        </Typography.Paragraph>
+                      </View>
+                      <View className="flex-1 gap-0.5">
+                        <Typography.Paragraph weight="medium">{item.aula.nome}</Typography.Paragraph>
+                        <View className="flex-row items-center gap-1.5">
+                          {item.aula.codigo && (
+                            <Typography.Paragraph type="body-xs" color="muted">
+                              {item.aula.codigo} ·
+                            </Typography.Paragraph>
+                          )}
+                          <LocationBadge
+                            predio={item.aula.predio}
+                            sala={item.aula.sala}
+                            localOriginal={item.aula.localOriginal}
+                          />
+                        </View>
                       </View>
                     </View>
-                  </View>
-                ))
+                  ) : (
+                    <View
+                      key={item.ponto.id}
+                      testID={`ponto-do-dia-${item.ponto.id}`}
+                      className="rounded-2xl bg-danger-soft border border-danger/30 p-3.5 flex-row items-start gap-3"
+                    >
+                      <View
+                        className="w-1 self-stretch rounded-full bg-danger"
+                        style={{ minHeight: 36 }}
+                      />
+                      <View className="w-14">
+                        <Typography.Paragraph
+                          type="body-sm"
+                          weight="medium"
+                          className="font-mono text-danger-soft-foreground"
+                        >
+                          {item.ponto.hora ?? "23:59"}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                          prazo
+                        </Typography.Paragraph>
+                      </View>
+                      <View className="flex-1 gap-0.5">
+                        <Typography.Paragraph weight="medium">
+                          {item.ponto.titulo}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                          {item.ponto.turmaCodigo ?? item.ponto.turmaNome}
+                        </Typography.Paragraph>
+                      </View>
+                    </View>
+                  )
+                )
               )}
             </View>
           </>
