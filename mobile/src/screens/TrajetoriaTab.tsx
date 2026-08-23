@@ -25,7 +25,6 @@ import type {
   ComponenteCursado,
   ComponenteProjetado,
   Historico,
-  ItemPlano,
   MarcosSemestralizacao,
   ProjecaoTrajetoria,
   TrajetoriaResponse,
@@ -40,7 +39,6 @@ type LoadState =
       status: "ready";
       historico: Historico;
       fetchedAt: Date;
-      plano: ItemPlano[];
       marcos: MarcosSemestralizacao | null;
       projecao: ProjecaoTrajetoria | null;
     };
@@ -94,7 +92,6 @@ export default function TrajetoriaTab(): JSX.Element {
         status: "ready",
         historico: resposta.historico,
         fetchedAt,
-        plano: resposta.plano,
         marcos: resposta.marcos,
         projecao: resposta.projecao,
       });
@@ -137,9 +134,13 @@ export default function TrajetoriaTab(): JSX.Element {
    * optimism — the response can reorder other semestres over a pré-requisito,
    * and a screen that corrects itself half a second later is worse than one
    * that waits.
+   *
+   * A null `semestre` is the undo: it drops the PlanoItem and hands the
+   * matéria back to automatic allocation. Same call, same reload — the only
+   * way out of a position that stopped making sense.
    */
   const moverComponente = useCallback(
-    async (componente: ComponenteProjetado, semestre: string) => {
+    async (componente: ComponenteProjetado, semestre: string | null) => {
       if (!accessToken) {
         return;
       }
@@ -243,7 +244,7 @@ function ReadyTrajetoria({
   erroAoMover: string | null;
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
-  onMover: (componente: ComponenteProjetado, semestre: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string | null) => void;
 }): JSX.Element {
   const periodos = agruparPorSemestre(historico.cursados);
   const anos = anosDaProjecao(periodos, projecao);
@@ -263,7 +264,11 @@ function ReadyTrajetoria({
         </Typography.Paragraph>
       ) : null}
 
-      {projecao && (projecao.atrasadas > 0 || projecao.alemDoPrazoMaximo) ? (
+      {/* The summary line is not conditional on being late anymore: a student
+          on track still deserves to read when they finish. Only the wording
+          changes — the atraso count when there is one, the plain forecast
+          otherwise. The prazo-máximo warning stays independent of both. */}
+      {projecao ? (
         <View className="gap-0.5">
           {projecao.atrasadas > 0 ? (
             <Typography.Paragraph type="body-sm" color="muted">
@@ -273,7 +278,15 @@ function ReadyTrajetoria({
                   : ""
               }.`}
             </Typography.Paragraph>
-          ) : null}
+          ) : (
+            <Typography.Paragraph type="body-sm" color="muted">
+              {`Neste ritmo você conclui em ${projecao.conclusaoProjetada}${
+                projecao.semestresAlemDoPrevisto > 0
+                  ? `, ${projecao.semestresAlemDoPrevisto} ${projecao.semestresAlemDoPrevisto === 1 ? "semestre" : "semestres"} além do previsto`
+                  : ""
+              }.`}
+            </Typography.Paragraph>
+          )}
           {projecao.alemDoPrazoMaximo ? (
             <Typography.Paragraph type="body-sm" color="muted">
               Nesse ritmo, a conclusão passa do prazo máximo do seu histórico.
@@ -299,6 +312,7 @@ function ReadyTrajetoria({
         desatualizado={desatualizado}
         marcos={marcos}
         semestresProjetados={projecao?.semestres.map((semestre) => semestre.semestre) ?? []}
+        conclusaoProjetada={projecao?.conclusaoProjetada ?? null}
         onAbrirVizinhos={onAbrirVizinhos}
         onMover={onMover}
       />
@@ -314,14 +328,15 @@ function ReadyTrajetoria({
  * Each year collapses. A transcript four years in is a very long scroll, and
  * the years the student is done with are the ones they least need open — so
  * only the year holding the período em curso starts expanded and the rest sit
- * folded behind their headers. Whether a year is open is session state, like
- * the planner's `movimentos`: leaving the tab restores the default.
+ * folded behind their headers. Whether a year is open is session state and
+ * nothing else: leaving the tab restores the default.
  */
 function LinhaDoTempo({
   anos,
   desatualizado,
   marcos,
   semestresProjetados,
+  conclusaoProjetada,
   onAbrirVizinhos,
   onMover,
 }: {
@@ -329,8 +344,9 @@ function LinhaDoTempo({
   desatualizado: boolean;
   marcos: MarcosSemestralizacao | null;
   semestresProjetados: string[];
+  conclusaoProjetada: string | null;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
-  onMover: (componente: ComponenteProjetado, semestre: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string | null) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
@@ -500,6 +516,20 @@ function LinhaDoTempo({
         <View className="flex-1 rounded-2xl bg-surface-secondary p-3.5 flex-row items-center gap-2.5">
           <AppIcon name="IconFlag" size={20} color={accentColor} />
           <Typography.Paragraph weight="medium">Linha de chegada</Typography.Paragraph>
+          <View className="flex-1" />
+          {/* The whole point of the projeção: this card used to be a plain
+              decoration at the end of the list. Now it names the semestre the
+              student finishes in — the one answer they came for, readable
+              without a single atrasada on the screen. */}
+          {conclusaoProjetada ? (
+            <Typography.Paragraph
+              testID="conclusao-projetada"
+              weight="medium"
+              className="font-mono text-accent"
+            >
+              {conclusaoProjetada}
+            </Typography.Paragraph>
+          ) : null}
         </View>
       </View>
     </View>
@@ -525,7 +555,7 @@ function CardProjetado({
   destinos: string[];
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
-  onMover: (componente: ComponenteProjetado, semestre: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string | null) => void;
 }): JSX.Element {
   return (
     <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
@@ -542,10 +572,15 @@ function CardProjetado({
           its own small icon button instead of sharing the card's Pressable:
           nesting Pressables gives React Native's responder system the two
           disjoint targets it needs, without one gesture swallowing the
-          other. Only shown when there is another projected semestre to move
-          it into. */}
+          other. Only shown when the menu would have something in it: another
+          projected semestre to move into, or the undo for a card the student
+          moved here themselves. */}
+      {/* Its own testID prefix, not `materia-card-`: a reprovada shows up
+          twice on this screen — once as the cursado card, once as the
+          projetada that has to be retaken — and one shared prefix made
+          `getByTestId("materia-card-<codigo>")` throw on the duplicate. */}
       <Pressable
-        testID={`materia-card-${componente.codigo}`}
+        testID={`card-projetado-${componente.codigo}`}
         onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
         className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
           componente.atrasada && componente.periodo !== null
@@ -563,7 +598,7 @@ function CardProjetado({
                 · {componente.cargaHoraria} h
               </Typography.Paragraph>
             </View>
-            {destinos.length > 0 ? (
+            {destinos.length > 0 || componente.manual ? (
               <Menu>
                 <Menu.Trigger asChild>
                   <Pressable
@@ -578,12 +613,33 @@ function CardProjetado({
                 <Menu.Portal>
                   <Menu.Overlay />
                   <Menu.Content presentation="popover" width={220}>
-                    <Menu.Label>Mover para</Menu.Label>
+                    {/* Only when there is somewhere to move to: with just
+                        "Tirar do plano" left, a "Mover para" header would
+                        title a list that isn't there. */}
+                    {destinos.length > 0 ? <Menu.Label>Mover para</Menu.Label> : null}
                     {destinos.map((destino) => (
-                      <Menu.Item key={destino} onPress={() => onMover(componente, destino)}>
+                      <Menu.Item
+                        key={destino}
+                        testID={`destino-${componente.codigo}-${destino}`}
+                        onPress={() => onMover(componente, destino)}
+                      >
                         <Menu.ItemTitle>{destino}</Menu.ItemTitle>
                       </Menu.Item>
                     ))}
+                    {/* The way back. Without it a moved matéria stays `manual`
+                        forever, holding a place the plan may have outgrown —
+                        and the student has no way to hand it back to the
+                        projector. Only offered for what the student actually
+                        moved: there is nothing to undo on a card the plan
+                        never touched. */}
+                    {componente.manual ? (
+                      <Menu.Item
+                        testID={`tirar-do-plano-${componente.codigo}`}
+                        onPress={() => onMover(componente, null)}
+                      >
+                        <Menu.ItemTitle>Tirar do plano</Menu.ItemTitle>
+                      </Menu.Item>
+                    ) : null}
                   </Menu.Content>
                 </Menu.Portal>
               </Menu>
