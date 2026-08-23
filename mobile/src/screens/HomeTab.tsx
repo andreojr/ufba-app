@@ -6,6 +6,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { AppIcon } from "@/components/AppIcon";
 import { LocationBadge } from "@/components/LocationBadge";
 import { SemesterTrack } from "@/components/SemesterTrack";
+import { UpdateCard } from "@/components/UpdateCard";
 import { describeApiError } from "@/lib/api-errors";
 import { getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -261,6 +262,7 @@ export default function HomeTab(): JSX.Element {
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
       >
+        <UpdateCard />
         {/* Heading and freshness share one row — the semester moved out of this
             text and into the badge on the term track inside the grid card. */}
         <View className="flex-row items-baseline justify-between gap-3">

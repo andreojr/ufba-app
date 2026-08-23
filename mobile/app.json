@@ -18,7 +18,9 @@
         "backgroundColor": "#FFFFFF"
       },
       "backgroundColor": "#FFFFFF",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 1,
+      "permissions": ["REQUEST_INSTALL_PACKAGES"]
     },
     "plugins": [
       "expo-router",
