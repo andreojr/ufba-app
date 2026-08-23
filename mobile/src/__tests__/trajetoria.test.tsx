@@ -73,11 +73,16 @@ jest.mock("heroui-native", () => {
     setOpen: (_open: boolean) => {},
   });
 
+  // Declared as named, capitalised functions and only then hung on `Menu`:
+  // an anonymous arrow assigned to `Menu.Trigger` is not a component name any
+  // linter can see, so every `useContext` in one reads as a hook called
+  // outside a component (react-hooks/rules-of-hooks) and every one of them
+  // trips react/display-name.
   function Menu({ children }: any) {
     const [open, setOpen] = useState(false);
     return <MenuContext.Provider value={{ open, setOpen }}>{children}</MenuContext.Provider>;
   }
-  Menu.Trigger = ({ children, asChild }: any) => {
+  function MenuTrigger({ children, asChild }: any) {
     const ctx = useContext(MenuContext);
     const toggle = () => ctx.setOpen(!ctx.open);
     if (asChild) {
@@ -90,18 +95,22 @@ jest.mock("heroui-native", () => {
       });
     }
     return <TouchableOpacity onPress={toggle}>{children}</TouchableOpacity>;
-  };
-  Menu.Portal = ({ children }: any) => {
+  }
+  function MenuPortal({ children }: any) {
     const ctx = useContext(MenuContext);
     return ctx.open ? <View>{children}</View> : null;
-  };
-  Menu.Overlay = () => {
+  }
+  function MenuOverlay() {
     const ctx = useContext(MenuContext);
     return <TouchableOpacity onPress={() => ctx.setOpen(false)} />;
-  };
-  Menu.Content = ({ children }: any) => <View>{children}</View>;
-  Menu.Label = ({ children }: any) => <Text>{children}</Text>;
-  Menu.Item = ({ children, onPress }: any) => {
+  }
+  function MenuContent({ children }: any) {
+    return <View>{children}</View>;
+  }
+  function MenuLabel({ children }: any) {
+    return <Text>{children}</Text>;
+  }
+  function MenuItem({ children, onPress }: any) {
     const ctx = useContext(MenuContext);
     return (
       <TouchableOpacity
@@ -113,8 +122,17 @@ jest.mock("heroui-native", () => {
         {children}
       </TouchableOpacity>
     );
-  };
-  Menu.ItemTitle = ({ children }: any) => <Text>{children}</Text>;
+  }
+  function MenuItemTitle({ children }: any) {
+    return <Text>{children}</Text>;
+  }
+  Menu.Trigger = MenuTrigger;
+  Menu.Portal = MenuPortal;
+  Menu.Overlay = MenuOverlay;
+  Menu.Content = MenuContent;
+  Menu.Label = MenuLabel;
+  Menu.Item = MenuItem;
+  Menu.ItemTitle = MenuItemTitle;
 
   // A minimal stand-in for the real compound component: just enough context
   // to let a Trigger press flip which Content is shown, which is all the
