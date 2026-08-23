@@ -71,7 +71,9 @@ function serializar(visao: PontoAtencaoVisao): PontoAtencaoResponse {
 }
 
 // Não há ValidationPipe global (ver main.ts) — sem isso, os decorators do DTO
-// seriam decorativos, igual ao DocentesController resolveu no mesmo caso.
+// seriam decorativos. DocentesController é o precedente para aplicar o pipe
+// por controller; não remova esta linha como "limpeza", ela é o que valida e
+// faz whitelist do body — o comportamento está fixado em ponto-atencao.dto.spec.ts.
 @Controller('pontos-atencao')
 @UseGuards(JwtAuthGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
