@@ -103,9 +103,27 @@ function ultimoSemestreCursado(historico: Historico): string | null {
   return semestres[semestres.length - 1] ?? null;
 }
 
-/** O semestre em que a projeção começa: o seguinte ao último do histórico. */
+/**
+ * O semestre da data de emissão do histórico: janeiro a junho é ".1", julho a
+ * dezembro é ".2". `emitidoEm` é uma data ISO ("AAAA-MM-DD"), e é dado de
+ * entrada — nada aqui olha o relógio.
+ */
+function semestreDaEmissao(emitidoEm: string): string {
+  const [ano, mes] = emitidoEm.split('-');
+  return `${ano}.${Number(mes) <= 6 ? 1 : 2}`;
+}
+
+/**
+ * O semestre em que a projeção começa: o seguinte ao último do histórico.
+ *
+ * Sem nenhum cursado não há "seguinte", e cair no `prazoConclusaoPadrao`
+ * jogaria a projeção inteira para o fim do curso — o calouro veria a primeira
+ * matéria em 2030.2. Nesse caso vale o semestre da emissão do histórico, e não
+ * o seguinte a ele: nada foi cursado ainda, então o semestre corrente é
+ * justamente onde a projeção começa.
+ */
 function primeiroSemestreFuturo(ultimoCursado: string | null, historico: Historico): string {
-  return ultimoCursado ? proximoSemestre(ultimoCursado) : historico.prazoConclusaoPadrao;
+  return ultimoCursado ? proximoSemestre(ultimoCursado) : semestreDaEmissao(historico.emitidoEm);
 }
 
 /**
@@ -151,8 +169,25 @@ export function montarProjecao(
     marcos.equivalencias,
     historico.periodoLetivoAtual,
   );
+  // Uma posição além do jubilamento é grampeada no prazo máximo: planejar
+  // depois dele não quer dizer nada, e o regex do DTO aceita qualquer ano de
+  // quatro dígitos — um "9999.2" gravado no plano faria a projeção crescer
+  // por milhares de semestres e travar a própria tela que desfaria o
+  // movimento. O grampo de baixo (posição vencida cai no primeiro semestre)
+  // já vem do `<=` em `alocar`.
   const fixos = new Map(
-    overrides.flatMap((item) => (item.semestre ? [[item.codigo, item.semestre] as const] : [])),
+    overrides.flatMap((item) =>
+      item.semestre
+        ? [
+            [
+              item.codigo,
+              compararSemestres(item.semestre, historico.prazoConclusaoMaximo) > 0
+                ? historico.prazoConclusaoMaximo
+                : item.semestre,
+            ] as const,
+          ]
+        : [],
+    ),
   );
   const ultimoCursado = ultimoSemestreCursado(historico);
   const primeiro = primeiroSemestreFuturo(ultimoCursado, historico);

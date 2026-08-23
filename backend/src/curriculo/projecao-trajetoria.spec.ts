@@ -154,6 +154,61 @@ describe('montarProjecao', () => {
     expect(projecao.semestres[0].semestre).toBe('2026.2');
   });
 
+  it('começa no semestre da emissão do histórico quando não há nada cursado', () => {
+    // Sem cursados não existe "o seguinte ao último": cair no prazo de
+    // conclusão jogaria a primeira matéria do calouro para 2030.2.
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1)]),
+      historico({
+        emitidoEm: '2026-03-10',
+        prazoConclusaoPadrao: '2030.2',
+        prazoConclusaoMaximo: '2034.2',
+        cursados: [],
+        pendentesObrigatorios: [{ codigo: 'B', nome: 'B', cargaHoraria: 60, matriculado: false }],
+      }),
+      SEM_MARCOS,
+      [],
+    );
+
+    expect(projecao.semestres[0].semestre).toBe('2026.1');
+  });
+
+  it('põe o segundo período no ".2" da emissão', () => {
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1)]),
+      historico({
+        emitidoEm: '2026-07-01',
+        cursados: [],
+        pendentesObrigatorios: [{ codigo: 'B', nome: 'B', cargaHoraria: 60, matriculado: false }],
+      }),
+      SEM_MARCOS,
+      [],
+    );
+
+    expect(projecao.semestres[0].semestre).toBe('2026.2');
+  });
+
+  it('grampeia no prazo máximo a posição fixa que passa dele', () => {
+    // O regex do DTO aceita "9999.2", e planejar depois do jubilamento não
+    // quer dizer nada — sem o grampo a projeção cresceria por milhares de
+    // semestres a partir de um PUT válido.
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1)]),
+      historico({
+        prazoConclusaoMaximo: '2029.2',
+        pendentesObrigatorios: [{ codigo: 'B', nome: 'B', cargaHoraria: 60, matriculado: false }],
+      }),
+      SEM_MARCOS,
+      [{ codigo: 'B', nome: 'B', cargaHoraria: 60, semestre: '9999.2' }],
+    );
+
+    expect(projecao.conclusaoProjetada).toBe('2029.2');
+    const ultimo = projecao.semestres[projecao.semestres.length - 1];
+    expect(ultimo.semestre).toBe('2029.2');
+    expect(ultimo.componentes.map((c) => c.codigo)).toEqual(['B']);
+    expect(ultimo.componentes[0].manual).toBe(true);
+  });
+
   it('conta as atrasadas e projeta a conclusão no último semestre', () => {
     const projecao = montarProjecao(
       estrutura([componente('B', 1, 120), componente('C', 2, 120)]),
