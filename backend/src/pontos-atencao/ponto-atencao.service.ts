@@ -73,11 +73,13 @@ export class PontoAtencaoService {
     userId: string,
     id: string,
   ): Promise<PontoAtencaoVisao> {
+    // A fronteira de matrícula mora na query (igual ao `listar`): `buscar` já
+    // filtra por turma do usuário, então um ponto de turma alheia chega aqui
+    // como null, não como um item para barrar depois.
     const linha = await this.repository.buscar(id, userId);
     if (!linha) {
       throw new NotFoundException('Ponto de atenção não encontrado.');
     }
-    await this.exigirMatricula(userId, linha.turmaId);
     return this.visao(linha, userId);
   }
 

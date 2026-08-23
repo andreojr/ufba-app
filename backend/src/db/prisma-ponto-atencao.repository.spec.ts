@@ -39,6 +39,24 @@ describe('PrismaPontoAtencaoRepository', () => {
     expect(linha.turmaCodigo).toBe('ENGG64');
   });
 
+  it('escopa buscar() pela matrícula do usuário, igual a listar()', async () => {
+    const findFirst = jest.fn(() => Promise.resolve(null));
+    const prisma = {
+      pontoAtencao: { findFirst },
+    } as unknown as PrismaService;
+
+    await new PrismaPontoAtencaoRepository(prisma).buscar('ponto-1', 'user-1');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'ponto-1',
+        turma: { matriculas: { some: { userId: 'user-1' } } },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.anything() is untyped by design
+      include: expect.anything(),
+    });
+  });
+
   it('só apaga os votos quando mandado zerar', async () => {
     const tx = {
       pontoAtencao: { update: jest.fn(async () => undefined) },

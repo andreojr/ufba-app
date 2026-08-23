@@ -74,8 +74,11 @@ export class PrismaPontoAtencaoRepository implements PontoAtencaoRepository {
   }
 
   async buscar(id: string, userId: string): Promise<PontoAtencaoLinha | null> {
-    const registro = await this.prisma.pontoAtencao.findUnique({
-      where: { id },
+    // Mesmo escopo de matrícula do `listar`: um ponto de turma alheia não
+    // existe para quem pergunta, então vira 404 e não 403 — sem isso, dava
+    // para distinguir "existe em turma de outro" de "não existe" de fora.
+    const registro = await this.prisma.pontoAtencao.findFirst({
+      where: { id, turma: { matriculas: { some: { userId } } } },
       include: INCLUDE,
     });
     return registro ? paraLinha(registro, userId) : null;

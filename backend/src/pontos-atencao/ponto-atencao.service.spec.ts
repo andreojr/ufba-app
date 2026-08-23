@@ -68,20 +68,35 @@ describe('PontoAtencaoService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('permite edição por qualquer matriculado quando o item está contestado', async () => {
+  it('permite edição por qualquer matriculado quando o item está contestado, e transfere a responsabilidade para quem corrigiu', async () => {
     const repo = repositorioFalso({
       buscar: jest.fn(() =>
-        Promise.resolve(linha({ confirmacoes: 0, contestacoes: 3 })),
+        Promise.resolve(
+          linha({ responsavelId: 'user-2', confirmacoes: 0, contestacoes: 3 }),
+        ),
       ),
     });
 
     await new PontoAtencaoService(repo).atualizar('user-1', 'ponto-1', DADOS);
 
+    // O terceiro argumento é o novo responsável: quem corrigiu ('user-1'),
+    // não quem segurava o item antes ('user-2').
     // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
-    expect(repo.atualizar).toHaveBeenCalled();
+    expect(repo.atualizar).toHaveBeenCalledWith(
+      'ponto-1',
+      {
+        tipo: 'PROVA',
+        titulo: 'Avaliação I',
+        data: new Date('2026-09-22T00:00:00Z'),
+        hora: '16:40',
+        observacao: null,
+      },
+      'user-1',
+      false,
+    );
   });
 
-  it('permite edição quando o item ficou sem responsável', async () => {
+  it('permite edição quando o item ficou sem responsável, e atribui a responsabilidade a quem corrigiu', async () => {
     const repo = repositorioFalso({
       buscar: jest.fn(() =>
         Promise.resolve(linha({ responsavelId: null, responsavelNome: null })),
@@ -90,8 +105,21 @@ describe('PontoAtencaoService', () => {
 
     await new PontoAtencaoService(repo).atualizar('user-1', 'ponto-1', DADOS);
 
+    // O item estava órfão (responsavelId: null); o terceiro argumento
+    // confirma que quem corrigiu ('user-1') vira o novo responsável.
     // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
-    expect(repo.atualizar).toHaveBeenCalled();
+    expect(repo.atualizar).toHaveBeenCalledWith(
+      'ponto-1',
+      {
+        tipo: 'PROVA',
+        titulo: 'Avaliação I',
+        data: new Date('2026-09-22T00:00:00Z'),
+        hora: '16:40',
+        observacao: null,
+      },
+      'user-1',
+      false,
+    );
   });
 
   it('zera os votos e transfere a responsabilidade quando a data muda', async () => {
@@ -144,6 +172,65 @@ describe('PontoAtencaoService', () => {
     await expect(
       new PontoAtencaoService(repo).apagar('user-1', 'ponto-1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('lista repassando userId e incluirVencidos sem alterar, mapeando cada linha para a visão', async () => {
+    const linhas = [
+      linha({ id: 'ponto-1', responsavelId: 'user-1' }),
+      linha({ id: 'ponto-2', responsavelId: 'user-2', contestacoes: 3 }),
+    ];
+    const repo = repositorioFalso({
+      listar: jest.fn(() => Promise.resolve(linhas)),
+    });
+
+    const visoes = await new PontoAtencaoService(repo).listar('user-1', true);
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+    expect(repo.listar).toHaveBeenCalledWith('user-1', true);
+    expect(visoes).toHaveLength(2);
+    expect(visoes[0]).toMatchObject({
+      id: 'ponto-1',
+      estado: 'NORMAL',
+      podeEditar: true,
+      podeApagar: true,
+    });
+    expect(visoes[1]).toMatchObject({
+      id: 'ponto-2',
+      estado: 'CONTESTADO',
+      podeEditar: true,
+      podeApagar: false,
+    });
+  });
+
+  it('recusa votar em item de turma na qual o usuário não está matriculado', async () => {
+    const repo = repositorioFalso({
+      buscar: jest.fn(() => Promise.resolve(null)),
+    });
+
+    await expect(
+      new PontoAtencaoService(repo).votar('user-1', 'ponto-1', 'CONTESTA'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+    expect(repo.votar).not.toHaveBeenCalled();
+  });
+
+  it('permite votar a um matriculado que não é o responsável, sem exigir podeEditar', async () => {
+    const repo = repositorioFalso();
+
+    await new PontoAtencaoService(repo).votar('user-1', 'ponto-1', 'CONTESTA');
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+    expect(repo.votar).toHaveBeenCalledWith('ponto-1', 'user-1', 'CONTESTA');
+  });
+
+  it('remove o voto do usuário', async () => {
+    const repo = repositorioFalso();
+
+    await new PontoAtencaoService(repo).removerVoto('user-1', 'ponto-1');
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+    expect(repo.removerVoto).toHaveBeenCalledWith('ponto-1', 'user-1');
   });
 
   it('responde 404 para item que não existe', async () => {
