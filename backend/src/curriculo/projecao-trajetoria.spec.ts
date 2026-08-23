@@ -131,6 +131,15 @@ describe('derramarHorasGenericas', () => {
     ];
     expect(derramarHorasGenericas(semestres, 0, 0, 120, '2026.2')).toEqual(semestres);
   });
+
+  it('despeja tudo num semestre vazio quando o teto é degenerado (zero)', () => {
+    const semestres = derramarHorasGenericas([], 120, 60, 0, '2026.2');
+
+    const totalOptativas = semestres.reduce((soma, s) => soma + s.horasOptativas, 0);
+    const totalComplementares = semestres.reduce((soma, s) => soma + s.horasComplementares, 0);
+    expect(totalOptativas).toBe(120);
+    expect(totalComplementares).toBe(60);
+  });
 });
 
 describe('montarProjecao', () => {
@@ -266,6 +275,13 @@ describe('montarProjecao', () => {
     );
     expect(alocado?.semestre).toBe('2027.2');
     expect(alocado?.componentes[0].manual).toBe(true);
+  });
+
+  it('quem não tem nada pendente conclui no último semestre cursado, não no seguinte', () => {
+    const projecao = montarProjecao(estrutura([]), historico(), SEM_MARCOS, []);
+
+    expect(projecao.semestres).toEqual([]);
+    expect(projecao.conclusaoProjetada).toBe('2026.1');
   });
 
   it('ignora override sem semestre — é o pool, não uma posição', () => {

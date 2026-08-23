@@ -57,6 +57,21 @@ export function derramarHorasGenericas(
     const ocupado = atual.componentes.reduce((soma, c) => soma + c.cargaHoraria, 0);
     let folga = Math.max(0, teto - ocupado);
 
+    // Teto degenerado (ver `tetoDeCarga`): zero não é um limite real, é
+    // ausência de dado. Num semestre vazio (nenhuma obrigatória alocada) ele
+    // deixaria a folga sempre zero e o laço giraria para sempre — aqui não
+    // há limite para respeitar, então despeja tudo que sobra de uma vez. Um
+    // semestre lotado de obrigatórias (`ocupado > 0`) não entra aqui: essa
+    // folga zero é real e cai no caso de abrir o próximo semestre, abaixo.
+    if (folga === 0 && ocupado === 0) {
+      atual.horasOptativas += optativas;
+      atual.horasComplementares += complementares;
+      optativas = 0;
+      complementares = 0;
+      indice += 1;
+      continue;
+    }
+
     const deOptativa = Math.min(folga, optativas);
     atual.horasOptativas += deOptativa;
     optativas -= deOptativa;
@@ -82,11 +97,15 @@ export function derramarHorasGenericas(
   return resultado;
 }
 
-/** O semestre em que a projeção começa: o seguinte ao último do histórico. */
-function primeiroSemestreFuturo(historico: Historico): string {
+/** O último semestre do histórico, ou null para quem não tem nenhum cursado. */
+function ultimoSemestreCursado(historico: Historico): string | null {
   const semestres = historico.cursados.map((c) => c.semestre).sort(compararSemestres);
-  const ultimo = semestres[semestres.length - 1];
-  return ultimo ? proximoSemestre(ultimo) : historico.prazoConclusaoPadrao;
+  return semestres[semestres.length - 1] ?? null;
+}
+
+/** O semestre em que a projeção começa: o seguinte ao último do histórico. */
+function primeiroSemestreFuturo(ultimoCursado: string | null, historico: Historico): string {
+  return ultimoCursado ? proximoSemestre(ultimoCursado) : historico.prazoConclusaoPadrao;
 }
 
 /**
@@ -135,7 +154,8 @@ export function montarProjecao(
   const fixos = new Map(
     overrides.flatMap((item) => (item.semestre ? [[item.codigo, item.semestre] as const] : [])),
   );
-  const primeiro = primeiroSemestreFuturo(historico);
+  const ultimoCursado = ultimoSemestreCursado(historico);
+  const primeiro = primeiroSemestreFuturo(ultimoCursado, historico);
 
   const alocados = alocar(fila, fixos, codigosConcluidos(historico, marcos), primeiro, teto);
   const semestres = derramarHorasGenericas(
@@ -146,7 +166,11 @@ export function montarProjecao(
     primeiro,
   );
 
-  const conclusaoProjetada = semestres[semestres.length - 1]?.semestre ?? primeiro;
+  // Sem nada pendente (fila e horas genéricas vazias), `semestres` sai vazio:
+  // quem terminou tudo concluiu no último semestre que cursou, não no
+  // seguinte — `primeiro` já é futuro por construção e reportaria uma
+  // conclusão que nunca aconteceu.
+  const conclusaoProjetada = semestres[semestres.length - 1]?.semestre ?? ultimoCursado ?? primeiro;
 
   return {
     semestres,
