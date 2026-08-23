@@ -5,6 +5,7 @@ import { DocentesModule } from './docentes/docentes.module';
 import { SigaaEngineModule } from './sigaa-engine/sigaa-engine.module';
 import { UsersModule } from './users/users.module';
 import { CurriculoModule } from './curriculo/curriculo.module';
+import { PontosAtencaoModule } from './pontos-atencao/pontos-atencao.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CurriculoModule } from './curriculo/curriculo.module';
     DocentesModule,
     UsersModule,
     CurriculoModule,
+    PontosAtencaoModule,
   ],
   controllers: [],
   providers: [],
