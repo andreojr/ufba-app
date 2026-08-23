@@ -61,6 +61,11 @@ function formatarDataParaMascara(dataIso: string): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+/** HH:MM com hora 00-23 e minuto 00-59 — o que o backend de fato aceita. A
+ * máscara sozinha deixa passar "1" (400 opaco no envio) e "99:99" (aceito e
+ * gravado, ordenando pro fim do dia). */
+const HORA_VALIDA = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export interface PontoAtencaoFormValorInicial {
   tipo: TipoPonto;
   titulo: string;
@@ -109,28 +114,36 @@ export function PontoAtencaoForm({
   const [turmaSelecionada, setTurmaSelecionada] = useState<string | undefined>(undefined);
   const [erroTitulo, setErroTitulo] = useState(false);
   const [erroData, setErroData] = useState(false);
+  const [erroHora, setErroHora] = useState(false);
   const [erroTurma, setErroTurma] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [accentForeground, mutedColor] = useThemeColor(["accent-foreground", "muted"]);
 
   const turmaEscolhida = turmaId ?? turmaSelecionada;
+  // A regra de "não pode ser no passado" é só de criação: a lista mostra
+  // vencidos de propósito, e um item CONTESTADO costuma estar contestado
+  // exatamente porque a data já passou — bloquear a edição desses seria um
+  // beco sem saída, inclusive pra corrigir um erro de digitação no título.
+  const criando = valorInicial === undefined;
 
   async function salvar(): Promise<void> {
     const tituloLimpo = titulo.trim();
     const dataIso = converterDataParaIso(dataTexto);
     const hoje = dataIsoLocal(new Date());
     const tituloValido = tituloLimpo.length > 0;
-    const dataValida = dataIso !== null && dataIso >= hoje;
+    const dataValida = dataIso !== null && (!criando || dataIso >= hoje);
+    const horaValida = horaTexto.length === 0 || HORA_VALIDA.test(horaTexto);
 
     const turmaValida = turmaEscolhida !== undefined;
 
     setErroTitulo(!tituloValido);
     setErroData(!dataValida);
+    setErroHora(!horaValida);
     setErroTurma(!turmaValida);
     setErroEnvio(null);
 
-    if (!tituloValido || !dataValida || !turmaValida || !turmaEscolhida || !dataIso) {
+    if (!tituloValido || !dataValida || !horaValida || !turmaValida || !turmaEscolhida || !dataIso) {
       return;
     }
 
@@ -242,11 +255,15 @@ export function PontoAtencaoForm({
             onChangeText={(texto) => setDataTexto(maskData(texto))}
           />
           {erroData ? (
-            <FieldError testID="erro-data">Informe uma data válida, não anterior a hoje</FieldError>
+            <FieldError testID="erro-data">
+              {criando
+                ? "Informe uma data válida, não anterior a hoje"
+                : "Informe uma data válida"}
+            </FieldError>
           ) : null}
         </TextField>
 
-        <TextField className="w-24">
+        <TextField isInvalid={erroHora} className="w-24">
           <Label>Hora</Label>
           <Input
             testID="campo-hora"
@@ -256,6 +273,7 @@ export function PontoAtencaoForm({
             value={horaTexto}
             onChangeText={(texto) => setHoraTexto(maskHora(texto))}
           />
+          {erroHora ? <FieldError testID="erro-hora">Informe uma hora válida</FieldError> : null}
         </TextField>
       </View>
 
