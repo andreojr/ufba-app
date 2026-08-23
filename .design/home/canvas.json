@@ -1,0 +1,69 @@
+{
+  "artboards": [
+    {
+      "file": "Atual.dc.html",
+      "title": "Home atual",
+      "x": 0,
+      "y": 0,
+      "w": 393,
+      "h": 1010
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "D · Síntese (B + C)",
+      "x": 470,
+      "y": 0,
+      "w": 393,
+      "h": 1500
+    },
+    {
+      "file": "OpcaoB.dc.html",
+      "title": "B · Contagem regressiva",
+      "x": 940,
+      "y": 0,
+      "w": 393,
+      "h": 1110
+    },
+    {
+      "file": "OpcaoC.dc.html",
+      "title": "C · Semana integrada",
+      "x": 1410,
+      "y": 0,
+      "w": 393,
+      "h": 1350
+    }
+  ],
+  "annotations": [
+    {
+      "id": "nota-atual",
+      "x": 0,
+      "y": -190,
+      "w": 393,
+      "text": "REFERÊNCIA — a home de hoje, recriada a partir do código (HomeTab.tsx + tokens do heroui-native).\n\nHierarquia atual: saudação → próxima aula → período → grade da semana → lista do dia. Tudo é retrospectivo ou imediato; nada responde \"o que vence?\"."
+    },
+    {
+      "id": "nota-a",
+      "x": 470,
+      "y": -190,
+      "w": 393,
+      "text": "D · SÍNTESE — a direção escolhida, misturando B e C.\n\nDe B: a contagem regressiva. O prazo mais próximo é um card herói no TOPO da home, com \"Depois disso\" listando os próximos em ordem.\n\nDe C: prazo e aula juntos nos blocos do dia — a entrega de quinta aparece na lista cronológica, antes das duas aulas daquele dia.\n\nO que ficou de fora de propósito: a grade semanal NÃO marca prazos. Ela segue exatamente como é hoje. Daqui pra baixo a home inteira é a de hoje, sem alteração — próxima aula, período letivo, grade de 15h e lista do dia.\n\nO artboard mostra QUINTA selecionada para a lista misturada aparecer; o card de próxima aula e o ponto de \"hoje\" continuam em segunda, como no app."
+    },
+    {
+      "id": "nota-b",
+      "x": 940,
+      "y": -190,
+      "w": 393,
+      "text": "B · CONTAGEM REGRESSIVA\n\nUm card herói para o prazo mais próximo, lista compacta para o resto, próxima aula reduzida a uma faixa, e a grade de 15h vira uma semana compacta (só os códigos por dia, sem eixo de horas).\n\nA favor: é a única em que o prazo domina de verdade; a semana compacta economiza ~180px e cabe tudo numa tela.\n\nContra: perde a leitura de \"quando no dia\" que a grade dá — quem usa o app para achar buraco entre aulas sente falta."
+    },
+    {
+      "id": "nota-c",
+      "x": 1410,
+      "y": -190,
+      "w": 393,
+      "text": "C · SEMANA INTEGRADA\n\nNenhuma seção nova: os prazos entram numa faixa alinhada às colunas da grade e na lista do dia, em ordem cronológica junto das aulas. O que cai fora da semana vira \"Mais adiante\".\n\nA favor: prazo e aula ficam no mesmo eixo de tempo — o aluno vê que a entrega de quinta cai no mesmo dia de duas aulas.\n\nContra: um prazo a 29 dias fica escondido atrás de \"Mais adiante\"; a urgência de longo prazo perde peso.\n\nO artboard mostra QUINTA selecionada de propósito, para a lista misturada aparecer — a saudação, o card de próxima aula e o ponto de \"hoje\" continuam em segunda, como no app."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
