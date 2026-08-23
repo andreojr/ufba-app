@@ -232,8 +232,10 @@ describe('SigaaEngineService.fetchSchedule', () => {
     ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
   });
 
-  it('falha em vez de cair no portal quando o atestado não rende turmas', async () => {
-    // Sessão que responde a home normalmente, mas devolve um atestado vazio.
+  it('resolve com turmas vazias quando o atestado lê normalmente mas não lista turma nenhuma', async () => {
+    // Zero turmas não é falha de sincronização: o aluno pode legitimamente
+    // não estar matriculado em nada no período. Quem decide o que fazer com
+    // isso (inclusive preservar um horário em cache) é o ScheduleService.
     const session = scheduleSession({
       postback: jest.fn().mockResolvedValue('<html><body></body></html>'),
     });
@@ -241,9 +243,13 @@ describe('SigaaEngineService.fetchSchedule', () => {
       () => session as unknown as SigaaSession,
     );
 
-    await expect(
-      service.fetchSchedule({ login: 'user', senha: 'pass' }),
-    ).rejects.toBeInstanceOf(SigaaScheduleIndisponivelError);
+    const { turmas, periodoLetivo } = await service.fetchSchedule({
+      login: 'user',
+      senha: 'pass',
+    });
+
+    expect(turmas).toEqual([]);
+    expect(periodoLetivo).toBeNull();
   });
 
   it('propagates SigaaInvalidCredentialsError without attempting to fetch the portal', async () => {

@@ -56,10 +56,12 @@ export class SigaaEngineService {
    * where the postback fields come from — so the student's identity box
    * (#agenda-docente) comes along for free, nullable fields and all.
    *
-   * A ausência de código ou número em qualquer turma — inclusive um atestado
-   * que não rende turma nenhuma — vira `SigaaScheduleIndisponivelError`: sem
-   * os dois não há como ligar o aluno a uma turma compartilhada (ver o
-   * comentário da classe).
+   * Uma turma sem código ou sem número vira `SigaaScheduleIndisponivelError`
+   * (ver o comentário da classe) — mas um atestado que lê normalmente e
+   * lista zero turmas não é esse caso: o aluno pode legitimamente não estar
+   * matriculado em nada no período, e quem decide o que fazer com isso
+   * (inclusive preservar um horário em cache) é o `ScheduleService`, como já
+   * fazia antes desta task.
    */
   async fetchSchedule(credentials: SigaaCredentials): Promise<{
     turmas: Turma[];
@@ -83,11 +85,10 @@ export class SigaaEngineService {
       const { turmas, periodoLetivo } = parseAtestadoTurmas(atestadoHtml);
       // Código e número são a identidade compartilhada da turma. Sem eles o
       // horário até renderizaria, mas não se conectaria a turma nenhuma — é
-      // o mesmo motivo pelo qual a home do portal deixou de valer.
-      if (
-        turmas.length === 0 ||
-        turmas.some((turma) => !turma.codigo || !turma.numero)
-      ) {
+      // o mesmo motivo pelo qual a home do portal deixou de valer. Zero
+      // turmas não entra aqui: um atestado lido com sucesso que lista uma
+      // grade vazia é uma resposta válida, não uma falha de sincronização.
+      if (turmas.some((turma) => !turma.codigo || !turma.numero)) {
         throw new SigaaScheduleIndisponivelError();
       }
       return { turmas, perfil, periodoLetivo };
