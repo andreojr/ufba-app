@@ -33,6 +33,21 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+jest.mock("expo-router", () => {
+  const react = jest.requireActual("react");
+  return {
+    ...jest.requireActual("expo-router"),
+    // useFocusEffect real exige um NavigationContainer, que estes testes não
+    // montam — roda o callback na montagem, real o bastante pro fluxo normal.
+    useFocusEffect: jest.fn((callback: () => void) => {
+      react.useEffect(() => {
+        const limpeza = callback();
+        return typeof limpeza === "function" ? limpeza : undefined;
+      }, []);
+    }),
+  };
+});
+
 jest.mock("heroui-native", () => {
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 

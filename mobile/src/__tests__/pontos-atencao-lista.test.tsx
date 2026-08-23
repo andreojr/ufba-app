@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { useFocusEffect } from "expo-router";
 
 import { deleteVotoPontoAtencao, getPontosAtencao, putVotoPontoAtencao } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -15,9 +16,22 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const mockPush = jest.fn();
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ back: jest.fn(), push: mockPush }),
-}));
+jest.mock("expo-router", () => {
+  const react = jest.requireActual("react");
+  return {
+    useRouter: () => ({ back: jest.fn(), push: mockPush }),
+    // Roda o callback assim que a tela "ganha foco" (aqui, na montagem) —
+    // real o bastante pra cobrir o fluxo normal. Os testes de refoco chamam
+    // o callback capturado pelo mock diretamente para simular uma nova
+    // passagem por foco sem precisar de um NavigationContainer de verdade.
+    useFocusEffect: jest.fn((callback: () => void) => {
+      react.useEffect(() => {
+        const limpeza = callback();
+        return typeof limpeza === "function" ? limpeza : undefined;
+      }, []);
+    }),
+  };
+});
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -48,6 +62,7 @@ jest.mock("heroui-native", () => {
 });
 
 const mockedUseAuth = jest.mocked(useAuth);
+const mockedUseFocusEffect = jest.mocked(useFocusEffect);
 const mockedGetPontosAtencao = jest.mocked(getPontosAtencao);
 const mockedPutVoto = jest.mocked(putVotoPontoAtencao);
 const mockedDeleteVoto = jest.mocked(deleteVotoPontoAtencao);
@@ -155,6 +170,22 @@ describe("PontosAtencaoScreen (lista completa)", () => {
     await waitFor(() => expect(getByTestId("ponto-p1")).toBeTruthy());
     expect(queryByTestId("confirmar-p1")).toBeNull();
     expect(queryByTestId("contestar-p1")).toBeNull();
+  });
+
+  it("refaz a busca quando a tela volta ao foco", async () => {
+    await renderLista({ pontos: [pontoFalso({ id: "p1" })] });
+    mockedGetPontosAtencao.mockClear();
+
+    // Simula um novo foco (voltar do cadastro/edição/exclusão) invocando o
+    // callback que a tela registrou via useFocusEffect, sem precisar de um
+    // NavigationContainer de verdade.
+    const ultimaChamada =
+      mockedUseFocusEffect.mock.calls[mockedUseFocusEffect.mock.calls.length - 1];
+    await act(async () => {
+      ultimaChamada[0]();
+    });
+
+    await waitFor(() => expect(mockedGetPontosAtencao).toHaveBeenCalledTimes(1));
   });
 
   it("navega para a tela de edição ao tocar em Corrigir", async () => {

@@ -1,7 +1,8 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon, type AppIconName } from "@/components/AppIcon";
@@ -185,6 +186,7 @@ function Secao({ titulo, itens, children }: { titulo: string; itens: PontoAtenca
 
 export default function PontosAtencaoScreen(): JSX.Element {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const auth = useAuth();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
@@ -213,24 +215,37 @@ export default function PontosAtencaoScreen(): JSX.Element {
     }
   }, [accessToken]);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  // useFocusEffect substitui o useEffect de montagem — ele já dispara no
+  // primeiro foco, e também recarrega toda vez que a tela volta ao foco.
+  // Criar, editar, apagar e corrigir todos voltam via router.back() para
+  // esta tela, que já estava montada e carregada uma vez — sem isto, o item
+  // criado/editado não aparece e o apagado continua na lista até sair e
+  // reentrar na tela.
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar]),
+  );
 
   async function votar(ponto: PontoAtencao, valor: ValorVoto): Promise<void> {
     if (!accessToken) return;
-    // Tocar no botão que já é o meu voto desfaz o voto — repetir o PUT
-    // recriaria o mesmo voto, então a ação certa é o DELETE.
-    const atualizado =
-      ponto.meuVoto === valor
-        ? await deleteVotoPontoAtencao(accessToken, ponto.id)
-        : await putVotoPontoAtencao(accessToken, ponto.id, valor);
-    if (!ativoRef.current) return;
-    setEstado((atual) =>
-      atual.status === "ready"
-        ? { status: "ready", pontos: atual.pontos.map((p) => (p.id === atualizado.id ? atualizado : p)) }
-        : atual,
-    );
+    try {
+      // Tocar no botão que já é o meu voto desfaz o voto — repetir o PUT
+      // recriaria o mesmo voto, então a ação certa é o DELETE.
+      const atualizado =
+        ponto.meuVoto === valor
+          ? await deleteVotoPontoAtencao(accessToken, ponto.id)
+          : await putVotoPontoAtencao(accessToken, ponto.id, valor);
+      if (!ativoRef.current) return;
+      setEstado((atual) =>
+        atual.status === "ready"
+          ? { status: "ready", pontos: atual.pontos.map((p) => (p.id === atualizado.id ? atualizado : p)) }
+          : atual,
+      );
+    } catch (error) {
+      if (!ativoRef.current) return;
+      setEstado({ status: "erro", mensagem: describeApiError(error) });
+    }
   }
 
   function corrigir(ponto: PontoAtencao): void {
@@ -318,6 +333,16 @@ export default function PontosAtencaoScreen(): JSX.Element {
           );
         })()
       )}
+
+      {/* Rodapé fixo, fora da área rolável — mesmo padrão de documentos.tsx e
+          arvore-dependencias.tsx: sem isto o único jeito de sair desta tela
+          era o gesto de voltar da plataforma, já que o stack raiz roda com
+          headerShown: false. */}
+      <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
+        <Button variant="danger-soft" onPress={() => router.back()}>
+          Fechar
+        </Button>
+      </View>
     </View>
   );
 }

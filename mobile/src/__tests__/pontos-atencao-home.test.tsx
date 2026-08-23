@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { useFocusEffect } from "expo-router";
 
 import { getPontosAtencao, getSchedule } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -31,6 +32,23 @@ jest.mock("@/lib/periodo-cache", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
+jest.mock("expo-router", () => {
+  const react = jest.requireActual("react");
+  return {
+    ...jest.requireActual("expo-router"),
+    // useFocusEffect real exige um NavigationContainer, que estes testes não
+    // montam. Roda o callback na montagem (real o bastante pro fluxo normal)
+    // e expõe um jest.fn() pra os testes de refoco chamarem o callback de
+    // novo, simulando a tela voltando ao foco sem navegação de verdade.
+    useFocusEffect: jest.fn((callback: () => void) => {
+      react.useEffect(() => {
+        const limpeza = callback();
+        return typeof limpeza === "function" ? limpeza : undefined;
+      }, []);
+    }),
+  };
+});
 
 jest.mock("heroui-native", () => {
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
@@ -84,6 +102,7 @@ jest.mock("react-native-svg", () => {
 });
 
 const mockedUseAuth = jest.mocked(useAuth);
+const mockedUseFocusEffect = jest.mocked(useFocusEffect);
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
 const mockedGetSchedule = jest.mocked(getSchedule);
@@ -263,5 +282,25 @@ describe("PontosAtencaoSection na home", () => {
     const corEsperada = SCHEDULE_PALETTE[0].bar;
     const bolinha = getByTestId("pontos-atencao-hero-cor");
     expect(bolinha.props.style).toEqual(expect.objectContaining({ backgroundColor: corEsperada }));
+  });
+
+  it("refaz a busca dos pontos quando a Home volta ao foco, sem refazer o horário", async () => {
+    await renderHome({ pontos: [pontoFalso({ id: "p1" })] });
+    mockedGetPontosAtencao.mockClear();
+    mockedGetSchedule.mockClear();
+
+    // Simula um novo foco (voltar do cadastro/edição/exclusão/correção de um
+    // ponto de atenção) invocando o callback capturado pelo mock de
+    // useFocusEffect, sem precisar de um NavigationContainer de verdade.
+    const ultimaChamada =
+      mockedUseFocusEffect.mock.calls[mockedUseFocusEffect.mock.calls.length - 1];
+    await act(async () => {
+      ultimaChamada[0]();
+    });
+
+    await waitFor(() => expect(mockedGetPontosAtencao).toHaveBeenCalledTimes(1));
+    // O horário é caro (pode disparar sync de verdade no SIGAA) e não muda
+    // com essas ações — só os pontos devem recarregar a cada foco.
+    expect(mockedGetSchedule).not.toHaveBeenCalled();
   });
 });

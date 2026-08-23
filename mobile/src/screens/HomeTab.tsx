@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -181,20 +181,40 @@ export default function HomeTab(): JSX.Element {
 
   const [pontos, setPontos] = useState<PontoAtencao[]>([]);
 
+  // Isolado do horário de propósito: o horário é caro (pode disparar um sync
+  // de verdade no SIGAA) e não muda com criar/editar/apagar/corrigir um
+  // ponto de atenção, então refazê-lo a cada foco desta tela seria
+  // desperdício. Só os pontos precisam recarregar.
+  const carregarPontos = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      // O horário é a razão principal da tela — uma falha aqui não pode
+      // derrubá-la, então o erro só é logado e a lista fica vazia.
+      const carregados = await getPontosAtencao(accessToken, { incluirVencidos: false });
+      setPontos(carregados);
+    } catch (error) {
+      console.warn("Failed to load pontos de atenção", error);
+    }
+  }, [accessToken]);
+
   // Depends on the link status only to re-read after the student links (the
   // first sync happens inside loadSchedule) — never to decide *whether* to read.
   useEffect(() => {
     if (accessToken) {
       loadSchedule();
-      // O horário é a razão principal da tela — uma falha aqui não pode
-      // derrubá-la, então o erro só é logado e a lista fica vazia.
-      getPontosAtencao(accessToken, { incluirVencidos: false })
-        .then(setPontos)
-        .catch((error: unknown) => {
-          console.warn("Failed to load pontos de atenção", error);
-        });
+      void carregarPontos();
     }
-  }, [sigaaLink.status, accessToken, loadSchedule]);
+  }, [sigaaLink.status, accessToken, loadSchedule, carregarPontos]);
+
+  // Criar, editar, apagar e corrigir um ponto de atenção acontecem em telas
+  // empilhadas por cima desta, que volta via router.back() para uma Home já
+  // montada — sem isto, o item criado/editado/corrigido não aparece e o
+  // apagado continua no card até a tela ser desmontada e remontada.
+  useFocusEffect(
+    useCallback(() => {
+      void carregarPontos();
+    }, [carregarPontos]),
+  );
 
   const week = state.status === "ready" ? state.week : EMPTY_WEEK;
   // Mesma chave que buildWeekSchedule usa para numerar as cores da grade
