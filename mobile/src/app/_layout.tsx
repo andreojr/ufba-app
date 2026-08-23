@@ -63,6 +63,9 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
           <Stack.Screen name="documentos" />
           <Stack.Screen name="arvore-dependencias" />
+          <Stack.Screen name="pontos-atencao" />
+          <Stack.Screen name="ponto-de-atencao/novo" />
+          <Stack.Screen name="ponto-de-atencao/[id]" />
           <Stack.Screen
             name="sigaa-webview"
             options={{
