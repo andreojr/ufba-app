@@ -67,6 +67,7 @@ espaço, um de cada vez, sem virar frente de trabalho paralela.
 ## 1. Página própria por matéria — 🎯 foco do ciclo (C)
 - Baseado na investigação em [TURMA_VIRTUAL_INVESTIGATION.md](TURMA_VIRTUAL_INVESTIGATION.md).
 - Cada matéria ganha sua própria tela (hoje só existe a visão agregada).
+- Herda a entidade `Turma` global já construída pelo item 13.
 
 ## 2. Persistência estruturada dos dados do SIGAA ✅ feito
 - Hoje os dados são baixados do SIGAA a cada abertura do app — trocar por persistência real no banco.
@@ -135,10 +136,9 @@ espaço, um de cada vez, sem virar frente de trabalho paralela.
 - O que foi removido foi a métrica que cada card de matéria mostrava em Trajetória: CR com todas as matérias − CR sem a matéria X = impacto daquela matéria no CR (seta ↑/↓ + número), do item 4 original.
 - Trazer essa percepção de volta, mas na tab CR de Insights — precisa de um recurso visual próprio pra "o quanto cada semestre/matéria pesou no CR" (não é mais um selo por card, já que os cards de matéria não vivem mais nessa página). Formato ainda em aberto — discutir opções antes de implementar.
 
-## 13. Pontos de atenção: provas e trabalhos — 🎯 foco do ciclo (B)
-- Baseado na investigação em [TURMA_VIRTUAL_INVESTIGATION.md](TURMA_VIRTUAL_INVESTIGATION.md); antes existia só como sub-item da Fase 1 dela, sem entrada própria no roadmap.
-- Superfície agregada com o que tem data marcada e ainda não passou: **Avaliações** (`/sigaa/ava/DataAvaliacao/listar.jsf`) e, quando houver fixture real, **Tarefas**.
-- Corta transversalmente as matérias — não é a página de uma disciplina (isso é o item 1), é "o que vence primeiro", independente de turma.
-- Dado disponível hoje: a varredura de 19/08 achou avaliação marcada em 5 das 6 turmas (21/10, 06/10, 22/09, 02/12), contra uma única notícia no semestre inteiro. É a parte da Turma Virtual que já tem conteúdo antes do semestre andar.
-- Depende do mesmo acesso à Turma Virtual do item 1 — daí os dois estarem no mesmo ciclo.
-- Sem push nesta etapa: mostra os prazos quando o app abre. O aviso ativo é o item 11.
+## 13. Pontos de atenção: provas e trabalhos — 🎯 foco do ciclo (B) ✅ feito
+- A spec descarta a Turma Virtual como origem de prazos na v1: o preenchimento varia de professor para professor (varredura de 19/08 achou avaliações em 5 das 6 turmas), e um prazo errado importado é pior que nenhum — o aluno confia nele. A v1 deixa o cadastro com os próprios alunos.
+- Pontos de atenção criados por aluno, visíveis para toda a turma. Cada colega pode confirmar ou contestar a data; passado o limiar de contestações (`contesta >= 3` **e** `contesta > confirma`), o item é rebaixado da home e fica destravado para correção por qualquer matriculado.
+- **Arquiteturalmente:** `Turma` virou entidade global com tabela de junção `Matricula`, em vez de `CachedTurma` por aluno. O atestado de matrícula é agora a única origem do horário — o fallback para a home do portal foi retirado, já que só o atestado traz o código e número de turma que a identificam para toda a UFBA.
+- Push silencioso fica fora (item 11): a feature mostra os prazos quando o app abre.
+- Spec completa em [docs/superpowers/specs/2026-08-23-pontos-de-atencao-design.md](docs/superpowers/specs/2026-08-23-pontos-de-atencao-design.md).
