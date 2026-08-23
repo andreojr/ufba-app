@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { Button, Chip, ListGroup, Typography, useThemeColor } from "heroui-native";
-import { useEffect, useState, type JSX } from "react";
+import { useState, type JSX } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -82,28 +82,28 @@ export default function DocumentosScreen(): JSX.Element {
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const insets = useSafeAreaInsets();
 
-  const [states, setStates] = useState<Record<DocumentKey, DocState>>({
-    atestado: { status: "idle" },
-    historico: { status: "idle" },
+  // Inicializador preguiçoso, não um efeito de montagem: o que já está salvo
+  // no aparelho é legível de forma síncrona, então o estado pode NASCER certo.
+  // Semear isso num useEffect custava um render a mais e um piscar de "idle"
+  // sobre documentos que já estavam ali.
+  const [states, setStates] = useState<Record<DocumentKey, DocState>>(() => {
+    const inicial: Record<DocumentKey, DocState> = {
+      atestado: { status: "idle" },
+      historico: { status: "idle" },
+    };
+    for (const key of DOCUMENT_KEYS) {
+      const saved = getSavedSigaaDocument(key);
+      if (saved) {
+        inicial[key] = { status: "done", document: saved };
+      }
+    }
+    return inicial;
   });
   const [accentForeground, successSoftForeground, mutedColor] = useThemeColor([
     "accent-foreground",
     "success-soft-foreground",
     "muted",
   ]);
-
-  useEffect(() => {
-    setStates((prev) => {
-      const next = { ...prev };
-      for (const key of DOCUMENT_KEYS) {
-        const saved = getSavedSigaaDocument(key);
-        if (saved) {
-          next[key] = { status: "done", document: saved };
-        }
-      }
-      return next;
-    });
-  }, []);
 
   async function download(key: DocumentKey): Promise<void> {
     // Whatever is already on the device rides along through this download, so

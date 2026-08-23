@@ -1,7 +1,7 @@
 import { act, render, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { Text } from "react-native";
-import { type JSX } from "react";
+import { useEffect, type JSX } from "react";
 
 import { onMoodleTokenVerdict } from "./moodle-api";
 import { MoodleLinkProvider, useMoodleLink } from "./moodle-link-context";
@@ -62,10 +62,15 @@ it("hydrates to linked when a session is stored", async () => {
 it("link() opens the in-app SSO WebView screen (no state change, no persistence yet)", async () => {
   mockGetSession.mockResolvedValueOnce(null);
 
-  let linkFn: () => void = () => undefined;
+  // A captura acontece em efeito, não no corpo do componente: escrever para
+  // fora durante o render é impuro, e é o que a regra pega — em variável solta
+  // ou em propriedade de objeto, tanto faz. Efeito é onde efeito colateral pode.
+  const capturado: { link?: () => void } = {};
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    linkFn = ctx.link;
+    useEffect(() => {
+      capturado.link = ctx.link;
+    });
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -77,7 +82,7 @@ it("link() opens the in-app SSO WebView screen (no state change, no persistence 
 
   // link() only navigates (router.push) — it triggers no React state update,
   // so it is called directly rather than wrapped in act().
-  linkFn();
+  capturado.link?.();
 
   expect(mockPush).toHaveBeenCalledWith("/moodle-webview");
   expect(mockSave).not.toHaveBeenCalled();
@@ -87,10 +92,15 @@ it("link() opens the in-app SSO WebView screen (no state change, no persistence 
 it("finishLink() persists the session and flips to linked", async () => {
   mockGetSession.mockResolvedValueOnce(null);
 
-  let finishFn: (s: MoodleSession) => Promise<void> = async () => undefined;
+  // A captura acontece em efeito, não no corpo do componente: escrever para
+  // fora durante o render é impuro, e é o que a regra pega — em variável solta
+  // ou em propriedade de objeto, tanto faz. Efeito é onde efeito colateral pode.
+  const capturado: { finish?: (s: MoodleSession) => Promise<void> } = {};
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    finishFn = ctx.finishLink;
+    useEffect(() => {
+      capturado.finish = ctx.finishLink;
+    });
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -101,7 +111,7 @@ it("finishLink() persists the session and flips to linked", async () => {
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
 
   await act(async () => {
-    await finishFn(SESSION);
+    await capturado.finish?.(SESSION);
   });
 
   expect(mockSave).toHaveBeenCalledWith(SESSION);
@@ -113,10 +123,15 @@ it("finishLink() throws and stays unlinked when the local save fails", async () 
   mockGetSession.mockResolvedValueOnce(null);
   mockSave.mockRejectedValueOnce(new Error("secure store unavailable"));
 
-  let finishFn: (s: MoodleSession) => Promise<void> = async () => undefined;
+  // A captura acontece em efeito, não no corpo do componente: escrever para
+  // fora durante o render é impuro, e é o que a regra pega — em variável solta
+  // ou em propriedade de objeto, tanto faz. Efeito é onde efeito colateral pode.
+  const capturado: { finish?: (s: MoodleSession) => Promise<void> } = {};
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    finishFn = ctx.finishLink;
+    useEffect(() => {
+      capturado.finish = ctx.finishLink;
+    });
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -128,7 +143,7 @@ it("finishLink() throws and stays unlinked when the local save fails", async () 
 
   let threw = false;
   await act(async () => {
-    await finishFn(SESSION).catch(() => {
+    await capturado.finish?.(SESSION).catch(() => {
       threw = true;
     });
   });
@@ -141,10 +156,15 @@ it("finishLink() throws and stays unlinked when the local save fails", async () 
 it("unlink() clears the stored session and reports unlinked", async () => {
   mockGetSession.mockResolvedValueOnce({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 });
 
-  let unlinkFn: () => Promise<void> = async () => undefined;
+  // A captura acontece em efeito, não no corpo do componente: escrever para
+  // fora durante o render é impuro, e é o que a regra pega — em variável solta
+  // ou em propriedade de objeto, tanto faz. Efeito é onde efeito colateral pode.
+  const capturado: { unlink?: () => Promise<void> } = {};
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    unlinkFn = ctx.unlink;
+    useEffect(() => {
+      capturado.unlink = ctx.unlink;
+    });
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -155,7 +175,7 @@ it("unlink() clears the stored session and reports unlinked", async () => {
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
 
   await act(async () => {
-    await unlinkFn();
+    await capturado.unlink?.();
   });
 
   expect(mockClear).toHaveBeenCalled();
@@ -171,10 +191,15 @@ it("flips expired to true when the token verdict listener reports expired", asyn
     return jest.fn();
   });
 
-  let latestExpired: boolean | undefined;
+  // A captura acontece em efeito, não no corpo do componente: escrever para
+  // fora durante o render é impuro, e é o que a regra pega — em variável solta
+  // ou em propriedade de objeto, tanto faz. Efeito é onde efeito colateral pode.
+  const capturado: { expired?: boolean } = {};
   function Capture(): JSX.Element {
     const ctx = useMoodleLink();
-    if (ctx.status === "linked") latestExpired = ctx.expired;
+    useEffect(() => {
+      if (ctx.status === "linked") capturado.expired = ctx.expired;
+    });
     return <Text testID="status">{ctx.status}</Text>;
   }
   const screen = await render(
@@ -183,11 +208,11 @@ it("flips expired to true when the token verdict listener reports expired", asyn
     </MoodleLinkProvider>,
   );
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
-  expect(latestExpired).toBe(false);
+  expect(capturado.expired).toBe(false);
 
   await act(async () => {
     verdictListener("expired");
   });
 
-  expect(latestExpired).toBe(true);
+  expect(capturado.expired).toBe(true);
 });

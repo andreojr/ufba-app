@@ -60,6 +60,15 @@ export function AnimatedPageTitle({
     if (pageKey === rendered.key) {
       // Same page — just its own content changed (e.g. the greeting's clock
       // tick). Swap it in directly, no transition.
+      //
+      // A regra abaixo previne renders em cascata por setState no corpo de um
+      // efeito. Aqui a troca de estado É a transição: precisa acontecer no
+      // mesmo instante em que `withTiming` começa, senão o título entra sem o
+      // outgoing correspondente. Separar as duas para agradar o analisador
+      // reintroduziria o acoplamento que o comentário no topo descreve — e este
+      // arquivo tem um crash de runtime documentado no histórico. O custo real
+      // da regra aqui é um render a mais por troca de página.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRendered({ key: pageKey, title, previousTitle: null });
       return;
     }

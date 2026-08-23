@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { Spinner, Typography, useThemeColor, useToast } from "heroui-native";
-import { useCallback, useMemo, useRef, type JSX } from "react";
+import { useCallback, useMemo, useRef, useState, type JSX } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
@@ -38,8 +38,12 @@ export default function MoodleWebViewScreen(): JSX.Element {
 
   // One passport per screen instance; it must be the same value used to build
   // the launch URL and to verify the returned signature.
-  const passportRef = useRef(newMoodlePassport());
-  const launchUrl = useMemo(() => buildMoodleLaunchUrl(passportRef.current), []);
+  // Lazy state, não `useRef(newMoodlePassport())`: o ref precisaria ser lido
+  // durante o render para montar a URL, e um passaporte é exatamente o tipo de
+  // valor que não pode ser recriado a cada render. O inicializador preguiçoso
+  // roda uma vez e devolve um valor estável, sem leitura de ref no render.
+  const [passport] = useState(newMoodlePassport);
+  const launchUrl = useMemo(() => buildMoodleLaunchUrl(passport), [passport]);
   // The redirect can fire more than once; only act on the first.
   const handledRef = useRef(false);
 
@@ -52,7 +56,7 @@ export default function MoodleWebViewScreen(): JSX.Element {
       if (handledRef.current) return;
       handledRef.current = true;
 
-      const result = await completeMoodleLogin(url, passportRef.current, (wstoken, siteUrl) =>
+      const result = await completeMoodleLogin(url, passport, (wstoken, siteUrl) =>
         getSiteInfo({ wstoken, siteUrl, userId: 0 }).then((info) => info.userId),
       );
 
@@ -68,7 +72,7 @@ export default function MoodleWebViewScreen(): JSX.Element {
 
       router.back();
     },
-    [finishLink, showFailure, router],
+    [finishLink, showFailure, router, passport],
   );
 
   const handleClose = useCallback(() => {

@@ -112,6 +112,10 @@ export default function ProfessoresScreen(): JSX.Element {
   }, [accessToken]);
 
   useEffect(() => {
+    // O analisador não enxerga através da fronteira assíncrona: `carregar` só
+    // chama setState depois de um await, então nada atualiza no mesmo tick deste
+    // efeito e a cascata que a regra previne não existe aqui.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void carregar();
   }, [carregar]);
 

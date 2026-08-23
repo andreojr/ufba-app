@@ -120,6 +120,14 @@ export default function InsightsTab(): JSX.Element {
   const barChartArea = useAnimatedRef<View>();
   const pesoArea = useAnimatedRef<View>();
 
+  /*
+   * Reanimated: escrever em `.value` é a ÚNICA forma de mover um shared value,
+   * e o React Compiler não modela esse tipo — para ele, toda escrita abaixo é
+   * mutação proibida. Não é: acontecem na UI thread, dentro de worklets de
+   * gesto, e não tocam estado do React. Desligado no gesto inteiro em vez de
+   * linha a linha, porque são todas a mesma escrita.
+   */
+  /* eslint-disable react-hooks/immutability */
   const swipeInsight = useMemo(
     () =>
       Gesture.Pan()
@@ -165,6 +173,7 @@ export default function InsightsTab(): JSX.Element {
       aplicarSwipe,
     ],
   );
+  /* eslint-enable react-hooks/immutability */
 
   // The tab pager's own left/right swipe (see TabsPager) must lose to this
   // one whenever the drag starts over the CR/Carga-Horária card below —
@@ -230,6 +239,9 @@ export default function InsightsTab(): JSX.Element {
   // our own database and needs no SIGAA password to come back out.
   useEffect(() => {
     if (accessToken) {
+      // Assíncrono: o setState de `carregar` acontece depois de um await, nunca no tick
+      // deste efeito, então não há a cascata de renders que a regra previne.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       carregar();
     }
   }, [sigaaLink.status, accessToken, carregar]);

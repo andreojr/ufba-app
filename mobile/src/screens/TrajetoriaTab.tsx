@@ -150,6 +150,9 @@ export default function TrajetoriaTab(): JSX.Element {
   // our own database and needs no SIGAA password to come back out.
   useEffect(() => {
     if (accessToken) {
+      // Assíncrono: o setState de `carregar` acontece depois de um await, nunca no tick
+      // deste efeito, então não há a cascata de renders que a regra previne.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       carregar();
     }
   }, [sigaaLink.status, accessToken, carregar]);

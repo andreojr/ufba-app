@@ -64,6 +64,14 @@ export default function TabsPager(): JSX.Element {
   // setActivePage) means GestureDetector tears down and rebuilds the native
   // handler each time, instead of reusing one stable instance. A few swipes
   // in, that repeated rebuild is what surfaced as a `WorkletsError` crash.
+  /*
+   * Reanimated: escrever em `.value` é a ÚNICA forma de mover um shared value,
+   * e o React Compiler não modela esse tipo — para ele, toda escrita abaixo é
+   * mutação proibida. Não é: acontecem na UI thread, dentro de worklets de
+   * gesto, e não tocam estado do React. Desligado no gesto inteiro em vez de
+   * linha a linha, porque são todas a mesma escrita.
+   */
+  /* eslint-disable react-hooks/immutability */
   const swipePagina = useMemo(
     () =>
       Gesture.Pan()
@@ -106,9 +114,13 @@ export default function TabsPager(): JSX.Element {
         }),
     [blockingGestures, blockingAreas, paginaAtual, arrasto],
   );
+  /* eslint-enable react-hooks/immutability */
 
   const onSelectPage = useCallback(
     (page: number) => {
+      // Mesmo caso do gesto acima: `.value` é a interface do shared value, e a
+      // escrita roda no toque, não no render.
+      // eslint-disable-next-line react-hooks/immutability
       paginaAtual.value = withTiming(page, { duration: 220 });
       setActivePage(page);
     },

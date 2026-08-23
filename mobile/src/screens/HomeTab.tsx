@@ -181,6 +181,9 @@ export default function HomeTab(): JSX.Element {
   // first sync happens inside loadSchedule) — never to decide *whether* to read.
   useEffect(() => {
     if (accessToken) {
+      // Assíncrono: o setState de `loadSchedule` acontece depois de um await, nunca no tick
+      // deste efeito, então não há a cascata de renders que a regra previne.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadSchedule();
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
