@@ -48,7 +48,7 @@ describe("useOpenSigaa", () => {
   });
 
   it("opens the SIGAA WebView with the session cookie once linked", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
     mockedPostSigaaSession.mockResolvedValue({
       sessionCookie: "JSESSIONID=abc123.sigaapl06",
@@ -70,7 +70,7 @@ describe("useOpenSigaa", () => {
   });
 
   it("sends the user to link-account instead of opening SIGAA when unlinked", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
 
     const { result } = await renderHook(() => useOpenSigaa());
     await act(async () => {
@@ -82,7 +82,7 @@ describe("useOpenSigaa", () => {
   });
 
   it("shows a toast when opening SIGAA fails", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "wrong", syncMode: "device" });
     mockedPostSigaaSession.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 

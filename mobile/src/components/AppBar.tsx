@@ -25,6 +25,11 @@ type AppBarProps = {
    * directly — for pushed detail screens (e.g. a professor's profile) that have
    * no tab-root avatar/settings trailing content of their own. */
   onClose?: () => void;
+  /** Shows a leading back arrow instead of the close (X) — for a pushed screen
+   * that's a plain "go back" (e.g. Perfil), not a modal-like flow with
+   * something to explicitly dismiss. Takes over from `onClose` when both are
+   * given, though a screen should only ever pass one. */
+  onBack?: () => void;
 };
 
 /** Screen header used across the internal (post-login) screens, matching the design's AppBar. */
@@ -34,6 +39,7 @@ export function AppBar({
   initials,
   avatarUrl,
   onClose,
+  onBack,
 }: AppBarProps): JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -46,10 +52,14 @@ export function AppBar({
       style={{ paddingTop: insets.top + 14 }}
     >
       <View className="flex-1 flex-row items-center gap-3">
-        {onClose ? (
+        {onBack ? (
           // `self-start`, not the row's own `items-center`: a long title can
-          // wrap to two lines, and the close button should sit level with
-          // the first line, not drift to the vertical middle of both.
+          // wrap to two lines, and the back arrow should sit level with the
+          // first line, not drift to the vertical middle of both.
+          <Pressable testID="app-bar-back" onPress={onBack} hitSlop={12} className="self-start">
+            <AppIcon name="IconCaretLeft" size={22} color={mutedColor} />
+          </Pressable>
+        ) : onClose ? (
           <Pressable testID="app-bar-close" onPress={onClose} hitSlop={12} className="self-start">
             <AppIcon name="IconX" size={22} color={dangerColor} />
           </Pressable>

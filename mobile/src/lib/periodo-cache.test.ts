@@ -1,6 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 
-import { getPeriodoCache, savePeriodoCache } from "./periodo-cache";
+import { clearPeriodoCache, getPeriodoCache, savePeriodoCache } from "./periodo-cache";
 
 jest.mock("expo-secure-store");
 
@@ -57,5 +57,11 @@ describe("periodo-cache", () => {
     jest.mocked(SecureStore.getItemAsync).mockRejectedValue(new Error("Keystore decryption failed"));
 
     await expect(getPeriodoCache()).resolves.toBeNull();
+  });
+
+  it("clears the cached term", async () => {
+    await clearPeriodoCache();
+
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.periodo");
   });
 });

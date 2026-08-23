@@ -1,11 +1,185 @@
 import {
   ApiError,
+  deleteAccount,
   getSchedule,
   getSigaaLink,
+  onSigaaCredentialsVerdict,
   postGoogleLogin,
   postScheduleSync,
   postSigaaLink,
 } from "../lib/api";
+
+describe("erasing server-side data", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Both endpoints answer 204 with no body at all — nothing to parse. */
+  function noContent() {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => {
+        throw new Error("204 has no body to parse");
+      },
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("DELETEs the whole account", async () => {
+    const fetchMock = noContent();
+
+    await deleteAccount("access-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/users/me",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("surfaces a failed erasure instead of pretending the data is gone", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ message: "boom" }),
+    }) as unknown as typeof fetch;
+
+    await expect(deleteAccount("access-token")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("SIGAA credential verdicts", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  it("carries the backend's error code on the thrown ApiError", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        message: "SIGAA rejected the provided credentials",
+        code: "SIGAA_INVALID_CREDENTIALS",
+      }),
+    }) as unknown as typeof fetch;
+
+    const error: unknown = await postScheduleSync("token", {
+      login: "1",
+      senha: "velha",
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("SIGAA_INVALID_CREDENTIALS");
+  });
+
+  it("says nothing when the rejected password was one the user just typed, not the stored one", async () => {
+    const listener = jest.fn();
+    const unsubscribe = onSigaaCredentialsVerdict(listener);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ message: "nope", code: "SIGAA_INVALID_CREDENTIALS" }),
+    }) as unknown as typeof fetch;
+
+    await postSigaaLink("token", { login: "1", senha: "digitada-errado" }, false).catch(
+      () => undefined,
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("reports 'rejected' once for a tagged 401, wherever in the app the call came from", async () => {
+    const listener = jest.fn();
+    const unsubscribe = onSigaaCredentialsVerdict(listener);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ message: "nope", code: "SIGAA_INVALID_CREDENTIALS" }),
+    }) as unknown as typeof fetch;
+
+    await postScheduleSync("token", { login: "1", senha: "velha" }).catch(() => undefined);
+
+    expect(listener).toHaveBeenCalledWith("rejected");
+    unsubscribe();
+  });
+
+  it("stays quiet on an untagged 401, so our own expired token never reads as a changed SIGAA password", async () => {
+    const listener = jest.fn();
+    const unsubscribe = onSigaaCredentialsVerdict(listener);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ message: "Unauthorized" }),
+    }) as unknown as typeof fetch;
+
+    await postScheduleSync("token", { login: "1", senha: "certa" }).catch(() => undefined);
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("reports 'accepted' when a call that carries the SIGAA password succeeds", async () => {
+    const listener = jest.fn();
+    const unsubscribe = onSigaaCredentialsVerdict(listener);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ turmas: [], periodoLetivo: null }),
+    }) as unknown as typeof fetch;
+
+    await postScheduleSync("token", { login: "1", senha: "certa" });
+
+    expect(listener).toHaveBeenCalledWith("accepted");
+    unsubscribe();
+  });
+
+  it("says nothing about the SIGAA password on calls that never send it", async () => {
+    const listener = jest.fn();
+    const unsubscribe = onSigaaCredentialsVerdict(listener);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ turmas: [] }),
+    }) as unknown as typeof fetch;
+
+    await getSchedule("token");
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it("stops calling a listener once it unsubscribes", async () => {
+    const listener = jest.fn();
+    onSigaaCredentialsVerdict(listener)();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ turmas: [] }),
+    }) as unknown as typeof fetch;
+
+    await postScheduleSync("token", { login: "1", senha: "certa" });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
 
 describe("postGoogleLogin", () => {
   const originalFetch = global.fetch;

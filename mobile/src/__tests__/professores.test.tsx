@@ -1,18 +1,21 @@
-import { act, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import ProfessoresScreen from "@/screens/ProfessoresScreen";
+import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DocenteResumo, Turma } from "@/lib/types";
 
 jest.mock("@/lib/auth-context");
+jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getSchedule: jest.fn(),
   postDocentesSemestre: jest.fn(),
 }));
 
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
+const mockPush = jest.fn();
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -52,6 +55,7 @@ jest.mock("heroui-native", () => {
 const mockedPost = postDocentesSemestre as jest.MockedFunction<typeof postDocentesSemestre>;
 const mockedSchedule = getSchedule as jest.MockedFunction<typeof getSchedule>;
 const mockedAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockedUseSigaaLink = jest.mocked(useSigaaLink);
 
 function resumo(nome: string, perfil: DocenteResumo["perfil"]): DocenteResumo {
   return { nomeOriginal: nome, componentes: [{ codigo: "MATA65", nome: "CG" }], perfil };
@@ -73,6 +77,12 @@ describe("Professores screen", () => {
     jest.clearAllMocks();
     // useAuth's real shape has more on it; the screen only reads accessToken.
     mockedAuth.mockReturnValue({ accessToken: "token" } as ReturnType<typeof useAuth>);
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "device",
+      senhaDesatualizada: false,
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
     mockedSchedule.mockResolvedValue({
       turmas: [
         turma("MATA65", "CG", "FULANO DE TAL"),
@@ -214,16 +224,54 @@ describe("Professores screen", () => {
 
   // The backend's schedule is a cached read that can legitimately be empty
   // before the student has ever synced — a different state from "no turmas".
-  it("points the user at Início when the schedule was never synced", async () => {
+  // The orphan states follow the same card the other three tabs use: a
+  // heading, one muted line that adapts to whether an account is linked, and a
+  // button that actually takes the student to the fix.
+  it("offers a way to Perfil, not just an instruction, when nothing was ever synced", async () => {
     mockedSchedule.mockResolvedValue({ sincronizado: false });
+
     await render(<ProfessoresScreen />);
-    expect(await screen.findByText(/sincronizar sua grade/i)).toBeTruthy();
+
+    expect(await screen.findByText("Sua lista de professores ainda não foi montada")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Sincronize sua conta em Perfil para buscar seu horário no SIGAA e ver seus professores.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Ir para Perfil")).toBeTruthy();
     expect(mockedPost).not.toHaveBeenCalled();
   });
 
-  it("offers a retry when the request fails", async () => {
+  it("asks an unlinked student to link, not to sync something they cannot sync", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+    } as ReturnType<typeof useSigaaLink>);
+    mockedSchedule.mockResolvedValue({ sincronizado: false });
+
+    await render(<ProfessoresScreen />);
+
+    expect(
+      await screen.findByText(
+        "Vincule sua conta em Perfil para buscar seu horário no SIGAA e ver seus professores.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("takes the student to Perfil when the button is pressed", async () => {
+    mockedSchedule.mockResolvedValue({ sincronizado: false });
+
+    await render(<ProfessoresScreen />);
+    await act(async () => {
+      fireEvent.press(await screen.findByText("Ir para Perfil"));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith("/ajustes");
+  });
+
+  it("offers a retry when the request fails, worded as the other tabs word it", async () => {
     mockedPost.mockRejectedValue(new Error("boom"));
     await render(<ProfessoresScreen />);
-    expect(await screen.findByText(/tentar novamente/i)).toBeTruthy();
+    expect(await screen.findByText("Tentar de novo")).toBeTruthy();
   });
 });

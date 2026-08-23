@@ -8,8 +8,10 @@ import LinkAccountScreen from "@/app/link-account";
 jest.mock("@/lib/sigaa-link-context");
 
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
+const mockCanGoBack = jest.fn(() => false);
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ replace: mockReplace, back: mockBack, canGoBack: mockCanGoBack }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -22,7 +24,7 @@ jest.mock("uniwind", () => ({
 
 jest.mock("@expo/vector-icons", () => {
   const { Text } = jest.requireActual("react-native");
-  return { Ionicons: () => <Text /> };
+  return { Ionicons: ({ name }: { name: string }) => <Text>{`icon:${name}`}</Text> };
 });
 
 const mockToastShow = jest.fn();
@@ -103,7 +105,8 @@ describe("LinkAccountScreen", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", link, unlink });
+    mockCanGoBack.mockReturnValue(false);
+    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link, unlink });
   });
 
   it("submits the unmasked CPF digits with syncMode device by default", async () => {
@@ -120,15 +123,19 @@ describe("LinkAccountScreen", () => {
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)");
   });
 
-  it("submits the mode chosen in the selector", async () => {
+  it("still submits device when editing a link that had been saved as cloud", async () => {
     link.mockResolvedValue(undefined);
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "cloud",
+      senhaDesatualizada: false,
+      jaVinculou: true,
+      link,
+      unlink,
+    });
     const { getByTestId, getByPlaceholderText } = await render(<LinkAccountScreen />);
 
     await fillForm(getByPlaceholderText, VALID_CPF, "segredo");
-    await act(async () => {
-      fireEvent.press(getByTestId("sync-option-device"));
-    });
-
     await act(async () => {
       fireEvent.press(getByTestId("link-submit-button"));
     });
@@ -136,17 +143,74 @@ describe("LinkAccountScreen", () => {
     expect(link).toHaveBeenCalledWith(VALID_CPF_DIGITS, "segredo", "device");
   });
 
-  it("falls back to device when editing a link saved in a mode the selector no longer offers", async () => {
-    link.mockResolvedValue(undefined);
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "cloud", link, unlink });
-    const { getByTestId, getByPlaceholderText } = await render(<LinkAccountScreen />);
+  it("tells the user plainly which password to type", async () => {
+    const { getByText } = await render(<LinkAccountScreen />);
 
-    await fillForm(getByPlaceholderText, VALID_CPF, "segredo");
-    await act(async () => {
-      fireEvent.press(getByTestId("link-submit-button"));
+    expect(getByText("É a mesma senha que você digita no site da faculdade")).toBeTruthy();
+  });
+
+  it("confirms the link is healthy when the stored password still works", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "device",
+      senhaDesatualizada: false,
+      jaVinculou: true,
+      link,
+      unlink,
     });
 
-    expect(link).toHaveBeenCalledWith(VALID_CPF_DIGITS, "segredo", "device");
+    const { getByText, queryByTestId } = await render(<LinkAccountScreen />);
+
+    expect(getByText("Conta vinculada")).toBeTruthy();
+    expect(queryByTestId("senha-desatualizada-aviso")).toBeNull();
+  });
+
+  it("explains what happened when SIGAA has already rejected the stored password", async () => {
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "device",
+      senhaDesatualizada: true,
+      jaVinculou: true,
+      link,
+      unlink,
+    });
+
+    const { getByTestId, getByText, queryByText } = await render(<LinkAccountScreen />);
+
+    expect(getByTestId("senha-desatualizada-aviso")).toBeTruthy();
+    expect(getByText("Sua senha do SIGAA mudou")).toBeTruthy();
+    expect(queryByText("Conta vinculada")).toBeNull();
+  });
+
+  it("promises the password never leaves the phone, with no place-to-store choice", async () => {
+    const { getByTestId, queryByTestId, getByText } = await render(<LinkAccountScreen />);
+
+    expect(getByTestId("password-stays-on-device")).toBeTruthy();
+    expect(getByText("Sua senha nunca sai deste celular")).toBeTruthy();
+    expect(
+      getByText(
+        "Se você mudar de ideia, apaga tudo o que está no nosso servidor com um toque, em Perfil.",
+      ),
+    ).toBeTruthy();
+    expect(queryByTestId("sync-option-device")).toBeNull();
+    expect(queryByTestId("sync-option-cloud")).toBeNull();
+  });
+
+  it("shows a back arrow that pops the screen when it was pushed (e.g. from Perfil)", async () => {
+    mockCanGoBack.mockReturnValue(true);
+    const { getByTestId } = await render(<LinkAccountScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("app-bar-back"));
+    });
+
+    expect(mockBack).toHaveBeenCalled();
+  });
+
+  it("hides the back arrow when the screen is the root of the stack (first login)", async () => {
+    const { queryByTestId } = await render(<LinkAccountScreen />);
+
+    expect(queryByTestId("app-bar-back")).toBeNull();
   });
 
   it("shows 'Credenciais inválidas' when the backend responds 401", async () => {
@@ -162,6 +226,23 @@ describe("LinkAccountScreen", () => {
     await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
     expect(await lastDangerToastText()).toBe("Credenciais inválidas");
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("calls a mistyped password exactly that, not a password that changed", async () => {
+    // Same tagged 401 that tells the rest of the app "the stored password went
+    // stale" — but here the user typed it seconds ago, so "atualize em Perfil"
+    // would be advice to fix the very form they are looking at.
+    link.mockRejectedValue(new ApiError("nope", 401, "SIGAA_INVALID_CREDENTIALS"));
+    const { getByTestId, getByPlaceholderText } = await render(<LinkAccountScreen />);
+
+    await fillForm(getByPlaceholderText, VALID_CPF, "errada");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("link-submit-button"));
+    });
+
+    await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+    expect(await lastDangerToastText()).toBe("Credenciais inválidas");
   });
 
   it("shows a rate-limit toast when the backend responds 429", async () => {
@@ -223,7 +304,14 @@ describe("LinkAccountScreen", () => {
 
   it("calls unlink when the user presses Desvincular conta", async () => {
     unlink.mockResolvedValue(undefined);
-    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", link, unlink });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "linked",
+      syncMode: "device",
+      senhaDesatualizada: false,
+      jaVinculou: true,
+      link,
+      unlink,
+    });
     const { getByTestId } = await render(<LinkAccountScreen />);
 
     await act(async () => {

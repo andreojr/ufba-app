@@ -12,11 +12,55 @@ import type {
 
 export class ApiError extends Error {
   status?: number;
+  /** The backend's machine-readable tag for this failure, when it sent one. */
+  code?: string;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
+}
+
+/** The tag the backend puts on the one 401 that means "SIGAA said no to this password". */
+const SIGAA_INVALID_CREDENTIALS_CODE = "SIGAA_INVALID_CREDENTIALS";
+
+/** What the last call that carried the SIGAA password learned about it. */
+export type SigaaCredentialsVerdict = "accepted" | "rejected";
+
+type VerdictListener = (verdict: SigaaCredentialsVerdict) => void;
+
+const verdictListeners = new Set<VerdictListener>();
+
+/**
+ * Subscribes to what the API layer learns about the stored SIGAA password.
+ *
+ * Every screen that touches SIGAA — Início, Trajetória, Insights, Professores,
+ * documentos, o sync do Perfil, "Abrir o SIGAA" — can hit a rejected password,
+ * and each one already shows its own message. Rather than teach all of them to
+ * also mark the credential stale (and remember to teach the next one), the
+ * request layer reports the verdict once, here, and SigaaLinkProvider listens.
+ *
+ * Returns the unsubscribe function.
+ */
+export function onSigaaCredentialsVerdict(listener: VerdictListener): () => void {
+  verdictListeners.add(listener);
+  return () => {
+    verdictListeners.delete(listener);
+  };
+}
+
+function reportVerdict(verdict: SigaaCredentialsVerdict): void {
+  for (const listener of verdictListeners) {
+    listener(verdict);
+  }
+}
+
+/** Reads the error `code` off a failed response body, if the backend sent one. */
+function readErrorCode(body: unknown): string | undefined {
+  return body && typeof body === "object" && "code" in body
+    ? String((body as { code: unknown }).code)
+    : undefined;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -30,11 +74,18 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const SIGAA_DOCUMENT_TIMEOUT_MS = 45_000;
 
 interface RequestOptions {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE";
   body?: unknown;
   accessToken?: string;
   /** Overrides the default timeout; the SIGAA scrape endpoints need far longer. */
   timeoutMs?: number;
+  /**
+   * True when the body carries the *stored* SIGAA password, so the outcome is a
+   * verdict on it. Deliberately false for POST /sigaa/link: the password there
+   * is a candidate the user just typed, and a typo in it says nothing about the
+   * credential already saved on the device.
+   */
+  carriesStoredSigaaPassword?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
@@ -75,7 +126,21 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
       (body && typeof body === "object" && "message" in body
         ? String((body as { message: unknown }).message)
         : undefined) ?? `Request to ${path} failed with status ${response.status}`;
-    throw new ApiError(message, response.status);
+    const code = readErrorCode(body);
+    if (code === SIGAA_INVALID_CREDENTIALS_CODE && options.carriesStoredSigaaPassword) {
+      reportVerdict("rejected");
+    }
+    throw new ApiError(message, response.status, code);
+  }
+
+  if (options.carriesStoredSigaaPassword) {
+    reportVerdict("accepted");
+  }
+
+  // 204 has no body — calling .json() on it throws. The erasure endpoints
+  // answer this way: success is the absence of anything to say.
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -126,6 +191,7 @@ export async function postScheduleSync(
     accessToken,
     body: credentials,
     timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
+    carriesStoredSigaaPassword: true,
   });
 }
 
@@ -143,6 +209,7 @@ export async function postSigaaSession(
     method: "POST",
     accessToken,
     body: credentials,
+    carriesStoredSigaaPassword: true,
   });
 }
 
@@ -162,6 +229,34 @@ export async function postAvatar(accessToken: string, avatarUrl: string): Promis
     accessToken,
     body: { avatarUrl },
   });
+}
+
+/**
+ * Hard-deletes the account and, by cascade, every trace of this student on the
+ * server. There is no partial variant on purpose: coming back costs one Google
+ * sign-in, so a half-erasure would add a choice without adding any safety.
+ */
+export async function deleteAccount(accessToken: string): Promise<void> {
+  await request<void>("/users/me", { method: "DELETE", accessToken });
+}
+
+/**
+ * The document endpoints answer with bytes/HTML, so they build their fetch by
+ * hand instead of going through `request()` — which means they'd otherwise miss
+ * the JSON error body, and with it the tag that says the password was rejected.
+ */
+async function failedDocumentResponse(response: Response, path: string): Promise<ApiError> {
+  // These endpoints answer with bytes or HTML, so an error body being JSON is a
+  // convention, not a guarantee — and `json` may not even exist on whatever the
+  // platform's fetch handed back. Either way, no tag: just a plain failure.
+  const body: unknown = await Promise.resolve()
+    .then(() => response.json())
+    .catch(() => null);
+  const code = readErrorCode(body);
+  if (code === SIGAA_INVALID_CREDENTIALS_CODE) {
+    reportVerdict("rejected");
+  }
+  return new ApiError(`Request to ${path} failed with status ${response.status}`, response.status, code);
 }
 
 /**
@@ -201,8 +296,9 @@ export async function postSigaaHistorico(
   );
 
   if (!response.ok) {
-    throw new ApiError(`Request to /sigaa/historico failed with status ${response.status}`, response.status);
+    throw await failedDocumentResponse(response, "/sigaa/historico");
   }
+  reportVerdict("accepted");
 
   const t1 = Date.now();
   const buffer = await response.arrayBuffer();
@@ -253,8 +349,9 @@ export async function postSigaaAtestado(
   }
 
   if (!response.ok) {
-    throw new ApiError(`Request to /sigaa/atestado failed with status ${response.status}`, response.status);
+    throw await failedDocumentResponse(response, "/sigaa/atestado");
   }
+  reportVerdict("accepted");
 
   const html = await response.text();
   if (html.length === 0) {

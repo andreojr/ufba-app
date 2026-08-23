@@ -23,6 +23,12 @@ export interface SigaaCredentials {
   login: string;
   senha: string;
   syncMode: SyncMode;
+  /**
+   * True once SIGAA rejected this password — the student changed it there and
+   * hasn't updated it here yet. Optional (not just `false`) because credentials
+   * stored by older app versions won't carry the key at all.
+   */
+  senhaDesatualizada?: boolean;
 }
 
 /**

@@ -19,16 +19,25 @@ import { useCSSVariable } from "uniwind";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
-import { isSyncModeSelectable, SyncModeSelector } from "@/components/SyncModeSelector";
 import { describeApiError } from "@/lib/api-errors";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { dangerToast } from "@/lib/toast-helpers";
-import type { SyncMode } from "@/lib/types";
 
 // "000.000.000-00" — the longest a masked CPF can ever get, used as the
 // Input's native maxLength so the 12th digit never flashes on screen before
 // formatCpf() truncates it on the next render.
 const CPF_MASKED_MAX_LENGTH = 14;
+
+// Escrito para quem não entende de tecnologia: sem jargão, cada frase
+// explicando uma dúvida concreta que a pessoa tem antes de digitar a senha.
+const PASSWORD_PRIVACY_POINTS = [
+  "Ela fica guardada só aqui, no cofre protegido do seu celular. É o mesmo lugar onde o aparelho guarda as suas outras senhas.",
+  "Ninguém que trabalha no aplicativo consegue ver a sua senha. Ela não é enviada para nenhum servidor, nem fica salva na internet.",
+  "Quem entra no sistema da faculdade é sempre o seu celular. O aplicativo só recebe o resultado: suas notas, matérias e documentos.",
+  "Isso vale até para as atualizações automáticas: o aplicativo dá um toque no seu celular, e é ele que vai buscar as novidades.",
+  "Se você desinstalar o aplicativo, a senha vai embora junto com ele.",
+  "Se você mudar de ideia, apaga tudo o que está no nosso servidor com um toque, em Perfil.",
+];
 
 function formatCpf(raw: string): string {
   const digits = raw.replace(/\D/g, "").slice(0, 11);
@@ -44,28 +53,23 @@ export default function LinkAccountScreen(): JSX.Element {
   const sigaaLink = useSigaaLink();
   const { toast } = useToast();
   const isLinked = sigaaLink.status === "linked";
+  const senhaDesatualizada = sigaaLink.status === "linked" && sigaaLink.senhaDesatualizada;
   const [cpf, setCpf] = useState("");
   const [senha, setSenha] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  // Um vínculo antigo pode ter sido salvo num modo que hoje está indisponível —
-  // nesse caso a edição volta para o único modo que o seletor deixa escolher.
-  const [syncMode, setSyncMode] = useState<SyncMode>(
-    sigaaLink.status === "linked" && isSyncModeSelectable(sigaaLink.syncMode) ? sigaaLink.syncMode : "device"
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [accentSoftForeground, successSoftForeground, dangerForeground] = useThemeColor([
-    "accent-soft-foreground",
-    "success-soft-foreground",
-    "danger-foreground",
-  ]);
+  const [accentSoftForeground, successSoftForeground, dangerSoftForeground, dangerForeground] =
+    useThemeColor([
+      "accent-soft-foreground",
+      "success-soft-foreground",
+      "danger-soft-foreground",
+      "danger-foreground",
+    ]);
   const insets = useSafeAreaInsets();
   // Not a HeroUI semantic token (useThemeColor only knows its fixed list), so this
   // one's read straight off the CSS custom property registered in global.css.
   const accentShadeRaw = useCSSVariable("--color-accent-shade");
   const accentShade = typeof accentShadeRaw === "string" ? accentShadeRaw : undefined;
-
-  const linkedMeta =
-    syncMode === "cloud" ? "Vinculado · sincronizado na nuvem" : "Vinculado · somente neste aparelho";
 
   const cpfDigits = cpf.replace(/\D/g, "");
   const isCpfComplete = cpfDigits.length === 11;
@@ -81,13 +85,17 @@ export default function LinkAccountScreen(): JSX.Element {
     try {
       // SIGAA at UFBA authenticates by CPF — this IS the `login` value the
       // backend's SigaaLinkDto expects, sent unformatted (digits only).
-      await sigaaLink.link(cpfDigits, senha, syncMode);
+      // Sempre "device": a senha nunca é guardada na nuvem — quando o app
+      // precisa buscar algo em segundo plano, o backend só dá um toque neste
+      // celular, e é ele que faz a requisição ao SIGAA com a senha local.
+      await sigaaLink.link(cpfDigits, senha, "device");
       router.replace("/(tabs)");
     } catch (error) {
       console.warn("SIGAA link failed", error);
       toast.show(
         dangerToast({
-          label: describeApiError(error),
+          // The password came from the field right above this toast.
+          label: describeApiError(error, { passwordJustTyped: true }),
           icon: <AppIcon name="IconErrorCircle" size={20} color={dangerForeground} />,
         })
       );
@@ -102,27 +110,49 @@ export default function LinkAccountScreen(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Conta Acadêmica" />
+      {/* Chegando pelo Perfil (ou por qualquer tela que empilhou esta), a seta
+          devolve o usuário de onde ele veio. No primeiro acesso a tela é a raiz
+          da pilha — não há para onde voltar, e a seta não aparece. */}
+      <AppBar
+        title="Conta Acadêmica"
+        onBack={router.canGoBack?.() ? () => router.back() : undefined}
+      />
       <ScrollView
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pt-2 pb-4"
         showsVerticalScrollIndicator={false}
       >
-        {isLinked ? (
+        {senhaDesatualizada ? (
+          // O usuário chega aqui pelo X vermelho no Perfil, ou depois de um
+          // toast de "Credenciais inválidas" — em nenhum dos dois casos ele
+          // sabe necessariamente *por que*. Esta é a explicação.
+          <View
+            testID="senha-desatualizada-aviso"
+            className="flex-row items-center gap-3 rounded-3xl bg-danger-soft px-4 py-3.5"
+          >
+            <AppIcon name="IconErrorCircle" size={24} color={dangerSoftForeground} />
+            <View className="flex-1 gap-0.5">
+              <Typography.Paragraph weight="medium">Sua senha do SIGAA mudou</Typography.Paragraph>
+              <Typography.Paragraph type="body-xs" color="muted">
+                Digite a senha nova para o aplicativo voltar a buscar suas informações.
+              </Typography.Paragraph>
+            </View>
+          </View>
+        ) : isLinked ? (
           <View className="flex-row items-center gap-3 rounded-3xl bg-success-soft px-4 py-3.5">
             <AppIcon name="IconCheckCircle" size={24} color={successSoftForeground} />
             <View className="flex-1 gap-0.5">
               <Typography.Paragraph weight="medium">Conta vinculada</Typography.Paragraph>
               <Typography.Paragraph type="body-xs" color="muted">
-                {linkedMeta}
+                A senha fica guardada só neste aparelho
               </Typography.Paragraph>
             </View>
           </View>
         ) : null}
 
         <Typography.Paragraph color="muted">
-          Entre com os mesmos dados que você usa no sistema da faculdade. O Gradline usa isso só
-          para buscar suas informações.
+          Entre com os mesmos dados que você usa no sistema da faculdade. O aplicativo usa isso
+          só para buscar suas informações.
         </Typography.Paragraph>
 
         <TextField isRequired isInvalid={isCpfInvalid}>
@@ -149,7 +179,7 @@ export default function LinkAccountScreen(): JSX.Element {
                 onChangeText={setSenha}
               />
             </View>
-            <Description>A senha continua a mesma do sistema da faculdade</Description>
+            <Description>É a mesma senha que você digita no site da faculdade</Description>
           </TextField>
           <Pressable
             className="flex-row items-center gap-1.5 self-start"
@@ -162,7 +192,22 @@ export default function LinkAccountScreen(): JSX.Element {
           </Pressable>
         </View>
 
-        <SyncModeSelector value={syncMode} onChange={setSyncMode} />
+        <View testID="password-stays-on-device" className="gap-3 rounded-3xl bg-success-soft p-4">
+          <View className="flex-row items-center gap-2.5">
+            <AppIcon name="IconLockKey" size={24} color={successSoftForeground} />
+            <Typography.Paragraph weight="medium" className="flex-1">
+              Sua senha nunca sai deste celular
+            </Typography.Paragraph>
+          </View>
+          {PASSWORD_PRIVACY_POINTS.map((point) => (
+            <View key={point} className="flex-row gap-2.5">
+              <AppIcon name="IconCheck" size={16} color={successSoftForeground} />
+              <Typography.Paragraph type="body-xs" className="flex-1">
+                {point}
+              </Typography.Paragraph>
+            </View>
+          ))}
+        </View>
       </ScrollView>
 
       <View

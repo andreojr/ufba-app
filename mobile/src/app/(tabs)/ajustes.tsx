@@ -1,5 +1,16 @@
 import { useRouter } from "expo-router";
-import { Avatar, Button, Chip, ListGroup, Spinner, Tabs, Typography, useThemeColor, useToast } from "heroui-native";
+import {
+  Avatar,
+  Button,
+  Chip,
+  Dialog,
+  ListGroup,
+  Spinner,
+  Tabs,
+  Typography,
+  useThemeColor,
+  useToast,
+} from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SvgUri } from "react-native-svg";
@@ -10,15 +21,30 @@ import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { ClassroomIcon } from "@/components/ClassroomIcon";
 import { MoodleIcon } from "@/components/MoodleIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
-import { getSchedule, postScheduleSync } from "@/lib/api";
+import {
+  ApiError,
+  deleteAccount,
+  getSchedule,
+  getTrajetoria,
+  postScheduleSync,
+  postTrajetoriaSync,
+} from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
+import { DownloadProgressBar } from "@/components/DownloadProgressBar";
 import { buildAvatarUrl } from "@/lib/dicebear";
+import { HISTORICO_STAGES } from "@/lib/download-progress";
 import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
-import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
+import { clearPeriodoCache } from "@/lib/periodo-cache";
+import {
+  clearSigaaCredentials,
+  forgetSigaaWasLinked,
+  getSigaaCredentials,
+} from "@/lib/sigaa-storage";
 import { saveThemePreference, type ThemePreference } from "@/lib/theme-preference";
 import { dangerToast } from "@/lib/toast-helpers";
 import { getInitials } from "@/lib/user-name";
@@ -33,6 +59,7 @@ const AVATAR_SIZE_LG_PX = 64;
 const AVATAR_SHOWCASE_SEEDS = ["gradline-vitrine-1", "gradline-vitrine-2", "gradline-vitrine-3"];
 const AVATAR_SHOWCASE_SIZE_PX = 36;
 const AVATAR_SHOWCASE_OVERLAP_PX = 14;
+
 
 function AcademicRow({
   icon,
@@ -69,25 +96,64 @@ function AcademicRow({
   );
 }
 
+/**
+ * Histórico sync failures need one message the shared helper cannot give —
+ * moved here from Trajetória's old in-screen re-sync (see the roadmap note in
+ * its history for the full rationale). A transcript the parser refuses — for
+ * breaking the document's own invariants — comes back as a bare 500,
+ * indistinguishable from a server hiccup but deterministic: "tente
+ * novamente" would send the student round a loop that fails identically
+ * every time. So anything other than the two statuses the shared helper
+ * names gets copy that promises no retry and points at the one thing that
+ * still works, the PDF download reachable from Meus documentos.
+ *
+ * Bad credentials, rate limits and a dead connection keep the shared
+ * wording — those really are retryable, and they are the same failures the
+ * horário sync can hit too.
+ */
+function descreverErroHistorico(error: unknown): string {
+  const status = error instanceof ApiError ? error.status : undefined;
+  if (status !== undefined && status !== 401 && status !== 429) {
+    return "Pode ser um problema no documento. Você ainda pode baixar o PDF em Meus documentos.";
+  }
+  return describeApiError(error);
+}
+
 export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
-  const [mutedColor, segmentForegroundColor] = useThemeColor(["muted", "segment-foreground"]);
+  const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
+    "muted",
+    "segment-foreground",
+    "success",
+    "danger",
+  ]);
   const { toast } = useToast();
   const { theme, hasAdaptiveThemes } = useUniwind();
   const themePreference: ThemePreference = hasAdaptiveThemes ? "system" : (theme as ThemePreference);
   const [isExportingCalendar, setIsExportingCalendar] = useState(false);
-  const [isSyncingSchedule, setIsSyncingSchedule] = useState(false);
-  // Seeded from the cache on mount so the sync item can say how old its data
-  // is without forcing a live SIGAA scrape just to render the screen.
-  const [scheduleFetchedAt, setScheduleFetchedAt] = useState<Date | null>(null);
+  const [isSyncingPerfil, setIsSyncingPerfil] = useState(false);
+  const [isConfirmandoExclusao, setIsConfirmandoExclusao] = useState(false);
+  const [isApagando, setIsApagando] = useState(false);
+  // Shared with Início's freshness badge and with Insights/Trajetória, which
+  // write into the same two timestamps whenever they read the histórico —
+  // this screen is a pushed Stack route, not one of the four tabs that stay
+  // mounted (see TabsPager's docstring), so local state here would reset
+  // every time the student navigates back to it. Two separate timestamps —
+  // the sync button below re-scrapes both the horário and the histórico in
+  // one press (see handleSyncPerfil), but they remain two independent
+  // documents on the SIGAA side with their own ages.
+  const { scheduleFetchedAt, historicoFetchedAt, setScheduleFetchedAt, setHistoricoFetchedAt } =
+    useSyncFreshness();
 
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const isSigaaLinked = sigaaLink.status === "linked";
 
+  // Cache reads, both of them: they hit our own database, never SIGAA, so
+  // unlinking must not blank out the freshness lines.
   useEffect(() => {
-    if (!isSigaaLinked || !accessToken) {
+    if (!accessToken) {
       return;
     }
     getSchedule(accessToken)
@@ -99,7 +165,22 @@ export default function AjustesTab(): JSX.Element {
       .catch((error: unknown) => {
         console.warn("Failed to read the cached schedule", error);
       });
-  }, [isSigaaLinked, accessToken]);
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+    getTrajetoria(accessToken)
+      .then((response) => {
+        if ("historico" in response) {
+          setHistoricoFetchedAt(new Date(response.fetchedAt));
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("Failed to read the cached trajetória", error);
+      });
+  }, [accessToken]);
 
   // Reads the cache first — this is the one place that must never bypass it
   // for a routine export — and falls back to a live sync only the first time,
@@ -130,7 +211,7 @@ export default function AjustesTab(): JSX.Element {
   }, [accessToken]);
 
   const handleExportCalendar = useCallback(async () => {
-    if (!isSigaaLinked || !accessToken) {
+    if (!accessToken) {
       return;
     }
 
@@ -138,7 +219,15 @@ export default function AjustesTab(): JSX.Element {
     try {
       const schedule = await readOrSyncSchedule();
       if (!schedule) {
-        toast.show(dangerToast({ label: "Vincule sua conta do SIGAA para exportar." }));
+        // No cache to export from. Which fix to point at depends on why:
+        // an unlinked student has to link first, a linked one just never synced.
+        toast.show(
+          dangerToast({
+            label: isSigaaLinked
+              ? "Sincronize seu horário em Perfil antes de exportar."
+              : "Vincule sua conta do SIGAA para exportar.",
+          }),
+        );
         return;
       }
       if (!schedule.periodoLetivo) {
@@ -165,14 +254,18 @@ export default function AjustesTab(): JSX.Element {
     }
   }, [isSigaaLinked, accessToken, readOrSyncSchedule, toast]);
 
-  // Unconditional live scrape — the explicit "sincronizar agora" gesture, same
-  // convention as Trajetória's sync button.
-  const handleSyncSchedule = useCallback(async () => {
+  // The one explicit "sincronizar agora" gesture left in the app — Insights
+  // and Trajetória used to each carry their own, but re-scraping the same
+  // histórico from three different screens was the same action three times
+  // over. This re-scrapes both documents (horário, histórico) in one press;
+  // either can fail without the other since they're independent SIGAA
+  // requests, so both run and each is reported on its own terms.
+  const handleSyncPerfil = useCallback(async () => {
     if (!isSigaaLinked || !accessToken) {
       return;
     }
 
-    setIsSyncingSchedule(true);
+    setIsSyncingPerfil(true);
     try {
       const credentials = await getSigaaCredentials();
       if (!credentials) {
@@ -180,20 +273,45 @@ export default function AjustesTab(): JSX.Element {
         return;
       }
 
-      const response = await postScheduleSync(accessToken, {
-        login: credentials.login,
-        senha: credentials.senha,
-      });
-      if (!("turmas" in response)) {
-        throw new Error("O SIGAA não retornou nenhuma turma.");
+      const credenciaisSigaa = { login: credentials.login, senha: credentials.senha };
+      const [horario, historico] = await Promise.allSettled([
+        postScheduleSync(accessToken, credenciaisSigaa),
+        postTrajetoriaSync(accessToken, credenciaisSigaa),
+      ]);
+
+      const horarioOk = horario.status === "fulfilled" && "turmas" in horario.value;
+      const historicoOk = historico.status === "fulfilled" && "historico" in historico.value;
+      if (horario.status === "fulfilled" && "turmas" in horario.value) {
+        setScheduleFetchedAt(new Date(horario.value.fetchedAt));
       }
-      setScheduleFetchedAt(new Date(response.fetchedAt));
-      toast.show({ variant: "success", label: "Horário sincronizado com o SIGAA." });
+      if (historico.status === "fulfilled" && "historico" in historico.value) {
+        setHistoricoFetchedAt(new Date(historico.value.fetchedAt));
+      }
+
+      if (horarioOk && historicoOk) {
+        toast.show({ variant: "success", label: "Dados sincronizados com o SIGAA." });
+      } else if (horarioOk) {
+        // The histórico is the one with a document to parse — its own failure
+        // copy names that instead of promising a retry that won't help.
+        const motivo = historico.status === "rejected" ? descreverErroHistorico(historico.reason) : undefined;
+        toast.show(
+          dangerToast({
+            label: `Horário sincronizado, mas o histórico não pôde ser atualizado.${motivo ? ` ${motivo}` : ""}`,
+          }),
+        );
+      } else if (historicoOk) {
+        toast.show(dangerToast({ label: "Histórico sincronizado, mas o horário não pôde ser atualizado." }));
+      } else if (historico.status === "rejected") {
+        toast.show(dangerToast({ label: descreverErroHistorico(historico.reason) }));
+      } else {
+        const falha = horario.status === "rejected" ? horario.reason : undefined;
+        toast.show(dangerToast({ label: describeApiError(falha) }));
+      }
     } catch (error) {
-      console.warn("Failed to sync the SIGAA schedule", error);
+      console.warn("Failed to sync the SIGAA profile", error);
       toast.show(dangerToast({ label: describeApiError(error) }));
     } finally {
-      setIsSyncingSchedule(false);
+      setIsSyncingPerfil(false);
     }
   }, [isSigaaLinked, accessToken, toast]);
 
@@ -223,16 +341,68 @@ export default function AjustesTab(): JSX.Element {
     });
   }, []);
 
+  // Três estados, e a diferença entre eles é para ser lembrada de longe: um
+  // check verde quando está tudo certo, um X vermelho quando o app não
+  // consegue entrar no SIGAA — ou porque a senha mudou lá, ou porque não há
+  // vínculo nenhum. A senha nunca vai para a nuvem em nenhum deles: quem fala
+  // com o SIGAA é sempre este aparelho.
+  const vinculoOk = sigaaLink.status === "linked" && !sigaaLink.senhaDesatualizada;
   const linkedMeta =
-    sigaaLink.status === "linked"
-      ? sigaaLink.syncMode === "cloud"
-        ? "Vinculado · sincronizado na nuvem"
-        : "Vinculado · somente neste aparelho"
-      : "Não vinculado";
+    sigaaLink.status !== "linked"
+      ? "Não vinculado"
+      : sigaaLink.senhaDesatualizada
+        ? "Senha desatualizada · toque para atualizar"
+        : "Vinculado · senha só neste aparelho";
+
+  /**
+   * Hard deletion, no soft delete anywhere behind it — the point is being able
+   * to promise the data is actually gone. Both variants share this handler
+   * because the only difference is which endpoint runs and what has to be
+   * cleaned up on the device afterwards.
+   */
+  /**
+   * Hard deletion of the whole account, no soft delete anywhere behind it —
+   * the point is being able to promise the data is actually gone. Coming back
+   * costs one Google sign-in, which is why there is no gentler variant: a
+   * partial erasure would add a choice without adding any safety.
+   */
+  const handleApagar = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    setIsApagando(true);
+    try {
+      await deleteAccount(accessToken);
+      await clearSigaaCredentials();
+      // The account is gone server-side, so this device must forget it ever
+      // linked — otherwise the next sign-in is "unlinked but already
+      // onboarded": empty tabs with no prompt to link. See sigaa-storage.
+      await forgetSigaaWasLinked();
+      await clearPeriodoCache();
+      setIsConfirmandoExclusao(false);
+      await auth.signOut();
+    } catch (error) {
+      // Nothing local is cleared and no one is signed out on failure: saying
+      // "apagado" when the server still has the data would be the one lie
+      // this feature cannot afford.
+      console.warn("Failed to erase the account", error);
+      toast.show(dangerToast({ label: describeApiError(error) }));
+    } finally {
+      setIsApagando(false);
+    }
+  }, [accessToken, auth, toast]);
+
+  const perfilFetchedAt = perfilFreshness(scheduleFetchedAt, historicoFetchedAt);
+  // The same consent moment Trajetória used to show right above its own
+  // first-sync button: pressing sync now always fetches the histórico too
+  // (see handleSyncPerfil), so the disclosure belongs here, and only until
+  // the histórico's been fetched at least once.
+  const mostrarAvisoPrivacidade = isSigaaLinked && historicoFetchedAt === null;
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Perfil" />
+      <AppBar title="Perfil" onBack={() => router.back()} />
       <ScrollView
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
@@ -380,6 +550,29 @@ export default function AjustesTab(): JSX.Element {
           <Typography.Paragraph type="body-xs" color="muted">
             Minha conta
           </Typography.Paragraph>
+          {/* Above the sync item, never below it: pressing sync is the moment
+              the student hands us a document carrying their CPF, RG and date
+              of birth, so both halves — what we keep and what we throw away
+              — have to be readable before the press. Moved here from
+              Trajetória's old first-sync screen since this is now the one
+              place that fetches the histórico. */}
+          {mostrarAvisoPrivacidade ? (
+            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que fica guardado:{" "}
+                </Typography.Paragraph>
+                suas matérias, notas e carga horária.
+              </Typography.Paragraph>
+              <Typography.Paragraph type="body-xs" color="muted">
+                <Typography.Paragraph type="body-xs" weight="medium">
+                  O que não fica:{" "}
+                </Typography.Paragraph>
+                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
+                leitura.
+              </Typography.Paragraph>
+            </View>
+          ) : null}
           <ListGroup>
             <ListGroup.Item onPress={() => router.push("/link-account")}>
               <ListGroup.ItemPrefix>
@@ -387,7 +580,19 @@ export default function AjustesTab(): JSX.Element {
               </ListGroup.ItemPrefix>
               <ListGroup.ItemContent>
                 <ListGroup.ItemTitle>Conta acadêmica</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>{linkedMeta}</ListGroup.ItemDescription>
+                <View className="flex-row items-center gap-1.5">
+                  <AppIcon
+                    name={vinculoOk ? "IconCheckCircle" : "IconErrorCircle"}
+                    size={14}
+                    color={vinculoOk ? successColor : dangerColor}
+                  />
+                  <ListGroup.ItemDescription
+                    testID={vinculoOk ? "vinculo-status-ok" : "vinculo-status-alerta"}
+                    className={vinculoOk ? "text-success" : "text-danger"}
+                  >
+                    {linkedMeta}
+                  </ListGroup.ItemDescription>
+                </View>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix />
             </ListGroup.Item>
@@ -403,6 +608,122 @@ export default function AjustesTab(): JSX.Element {
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix />
+            </ListGroup.Item>
+            <View className="h-px bg-white/10 mx-4" />
+            <ListGroup.Item
+              testID="sync-profile-item"
+              disabled={!isSigaaLinked || isSyncingPerfil}
+              // Dimmed only for the unavailable case, matching the "Em breve"
+              // integrations below — a sync already in flight has its own
+              // spinner and progress bar saying so, and fading it then would
+              // read as "broken" rather than "busy".
+              className={!isSigaaLinked ? "opacity-50" : undefined}
+              onPress={handleSyncPerfil}
+            >
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconArrowsClockwise" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Sincronizar dados com o SIGAA</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {!isSigaaLinked
+                    ? "Vincule sua conta do SIGAA para sincronizar"
+                    : perfilFetchedAt
+                      ? `Dados sincronizados ${relativeFreshness(perfilFetchedAt, new Date())}`
+                      : "Nunca sincronizado"}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>{isSyncingPerfil ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+            </ListGroup.Item>
+            <View className="h-px bg-white/10 mx-4" />
+            <ListGroup.Item
+              testID="apagar-dados-item"
+              disabled={isApagando}
+              onPress={() => setIsConfirmandoExclusao(true)}
+            >
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconTrash" size={22} color={dangerColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Apagar todos os meus dados</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  Inclusive a conta. Sem volta e sem cópia guardada.
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>{isApagando ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+            </ListGroup.Item>
+          </ListGroup>
+        </View>
+
+        {/* The row is the only way in, so this is purely the confirmation: the
+            two places, each with what goes from it. The password's line says
+            "celular" and not "servidor" because that is where it is — the
+            linking screen already made that promise, and re-arguing it here
+            would only cast doubt on it. */}
+        <Dialog isOpen={isConfirmandoExclusao} onOpenChange={setIsConfirmandoExclusao}>
+          <Dialog.Portal>
+            <Dialog.Overlay />
+            <Dialog.Content>
+              {/* `self-end`: the close button is a plain block in the content
+                  column, so left to itself it lands beside the title and the
+                  two fight for the same line. */}
+              <Dialog.Close className="self-end" />
+              {/* HeroUI's dialog parts carry no margins of their own — title,
+                  description and actions all sit flush unless spaced here. */}
+              <View className="gap-2.5 pb-1">
+                <Dialog.Title>Apagar tudo e sair?</Dialog.Title>
+                {/* Overrides the component's own `text-left`. */}
+                <Dialog.Description className="text-justify">
+                  Suas notas, matérias, horário e a própria conta, com email e nome, serão apagados
+                  do servidor. A senha do SIGAA será apagada do celular. Entrar de novo com o
+                  Google começa uma conta vazia.
+                </Dialog.Description>
+              </View>
+              {/* A wide gap before the actions on purpose: the two buttons are
+                  the decision, and they should not read as a fourth line of
+                  the paragraph above them. */}
+              <View className="gap-3 pt-7">
+                <Button
+                  testID="confirmar-exclusao-button"
+                  variant="danger"
+                  isDisabled={isApagando}
+                  onPress={() => void handleApagar()}
+                >
+                  <Button.Label>{isApagando ? "Apagando…" : "Apagar tudo"}</Button.Label>
+                </Button>
+                <Button
+                  testID="cancelar-exclusao-button"
+                  variant="tertiary"
+                  isDisabled={isApagando}
+                  onPress={() => setIsConfirmandoExclusao(false)}
+                >
+                  <Button.Label>Cancelar</Button.Label>
+                </Button>
+              </View>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+
+        <View className="gap-2.5">
+          <Typography.Paragraph type="body-xs" color="muted">
+            Integrações
+          </Typography.Paragraph>
+          <ListGroup>
+            <ListGroup.Item
+              testID="export-calendar-item"
+              disabled={isExportingCalendar}
+              onPress={handleExportCalendar}
+            >
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconCalendarBlank" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Exportar horário para o calendário</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {'Cria um calendário "UFBA" no aparelho com suas aulas do semestre'}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
             <ListGroup.Item testID="link-moodle-item" disabled className="opacity-50">
@@ -433,53 +754,6 @@ export default function AjustesTab(): JSX.Element {
                   Em breve
                 </Chip>
               </ListGroup.ItemSuffix>
-            </ListGroup.Item>
-          </ListGroup>
-        </View>
-
-        <View className="gap-2.5">
-          <Typography.Paragraph type="body-xs" color="muted">
-            Horário
-          </Typography.Paragraph>
-          <ListGroup>
-            <ListGroup.Item
-              testID="export-calendar-item"
-              disabled={!isSigaaLinked || isExportingCalendar}
-              onPress={handleExportCalendar}
-            >
-              <ListGroup.ItemPrefix>
-                <AppIcon name="IconCalendarBlank" size={22} color={mutedColor} />
-              </ListGroup.ItemPrefix>
-              <ListGroup.ItemContent>
-                <ListGroup.ItemTitle>Exportar horário para o calendário</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>
-                  {isSigaaLinked
-                    ? "Cria um calendário \"UFBA\" no aparelho com suas aulas do semestre"
-                    : "Vincule sua conta do SIGAA para exportar"}
-                </ListGroup.ItemDescription>
-              </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
-            </ListGroup.Item>
-            <View className="h-px bg-white/10 mx-4" />
-            <ListGroup.Item
-              testID="sync-schedule-item"
-              disabled={!isSigaaLinked || isSyncingSchedule}
-              onPress={handleSyncSchedule}
-            >
-              <ListGroup.ItemPrefix>
-                <AppIcon name="IconArrowsClockwise" size={22} color={mutedColor} />
-              </ListGroup.ItemPrefix>
-              <ListGroup.ItemContent>
-                <ListGroup.ItemTitle>Sincronizar horário com o SIGAA</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>
-                  {!isSigaaLinked
-                    ? "Vincule sua conta do SIGAA para sincronizar"
-                    : scheduleFetchedAt
-                      ? `Sincronizado ${relativeFreshness(scheduleFetchedAt, new Date())}`
-                      : "Nunca sincronizado"}
-                </ListGroup.ItemDescription>
-              </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isSyncingSchedule ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>
         </View>

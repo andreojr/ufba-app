@@ -12,6 +12,20 @@ describe("describeApiError", () => {
     expect(describeApiError(new ApiError("nope", 401))).toBe("Credenciais inválidas");
   });
 
+  it("names the actual problem, and the fix, when SIGAA is the one rejecting the password", () => {
+    expect(
+      describeApiError(new ApiError("nope", 401, "SIGAA_INVALID_CREDENTIALS")),
+    ).toBe("Sua senha do SIGAA mudou. Atualize em Perfil › Conta acadêmica.");
+  });
+
+  it("says only that the credentials are wrong when the user just typed them", () => {
+    expect(
+      describeApiError(new ApiError("nope", 401, "SIGAA_INVALID_CREDENTIALS"), {
+        passwordJustTyped: true,
+      }),
+    ).toBe("Credenciais inválidas");
+  });
+
   it("asks to wait on 429", () => {
     expect(describeApiError(new ApiError("nope", 429))).toBe(
       "Muitas tentativas. Aguarde um momento e tente de novo.",

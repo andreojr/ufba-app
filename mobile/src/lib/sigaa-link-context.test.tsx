@@ -28,9 +28,179 @@ function wrapper({ children }: PropsWithChildren) {
   return <SigaaLinkProvider>{children}</SigaaLinkProvider>;
 }
 
+/** Hands back the verdict listener the provider registered on mount. */
+function subscribedListener(): (verdict: "accepted" | "rejected") => void {
+  const [listener] = mockedApi.onSigaaCredentialsVerdict.mock.calls.at(-1) ?? [];
+  if (!listener) {
+    throw new Error("SigaaLinkProvider never subscribed to credential verdicts");
+  }
+  return listener;
+}
+
+const LINKED_CREDENTIAL = {
+  login: "12345678900",
+  senha: "segredo",
+  syncMode: "device" as const,
+};
+
 describe("SigaaLinkProvider / useSigaaLink", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedApi.onSigaaCredentialsVerdict.mockReturnValue(jest.fn());
+    mockedSigaaStorage.hasEverLinkedSigaa.mockResolvedValue(false);
+    mockedSigaaStorage.rememberSigaaWasLinked.mockResolvedValue(undefined);
+  });
+
+  it("reports no previous link on a fresh install, so onboarding can run", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(null);
+    mockedApi.getSigaaLink.mockResolvedValue({ linked: false });
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe("unlinked"));
+    expect(result.current.jaVinculou).toBe(false);
+  });
+
+  it("knows the account was linked before by the time it reports unlinked", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(null);
+    mockedSigaaStorage.hasEverLinkedSigaa.mockResolvedValue(true);
+    mockedApi.getSigaaLink.mockResolvedValue({ linked: false });
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe("unlinked"));
+    expect(result.current.jaVinculou).toBe(true);
+  });
+
+  it("link() records the link so a later unlink never sends the user back to onboarding", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(null);
+    mockedApi.getSigaaLink.mockResolvedValue({ linked: false });
+    mockedApi.postSigaaLink.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("unlinked"));
+
+    await act(async () => {
+      await result.current.link("12345678900", "segredo", "device");
+    });
+
+    expect(mockedSigaaStorage.rememberSigaaWasLinked).toHaveBeenCalled();
+    expect(result.current.jaVinculou).toBe(true);
+  });
+
+  it("still reports a previous link after unlink()", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+    mockedSigaaStorage.hasEverLinkedSigaa.mockResolvedValue(true);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+
+    await act(async () => {
+      await result.current.unlink();
+    });
+
+    expect(result.current.status).toBe("unlinked");
+    expect(result.current.jaVinculou).toBe(true);
+  });
+
+  it("starts out with the password considered current", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+    expect(result.current).toMatchObject({ senhaDesatualizada: false });
+  });
+
+  it("restores the stale mark left by an earlier session, so Perfil is already red on reopen", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue({
+      ...LINKED_CREDENTIAL,
+      senhaDesatualizada: true,
+    });
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+    expect(result.current).toMatchObject({ status: "linked", senhaDesatualizada: true });
+  });
+
+  it("backfills the link mark for someone already linked before the flag existed", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+    mockedSigaaStorage.hasEverLinkedSigaa.mockResolvedValue(false);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+    expect(result.current.jaVinculou).toBe(true);
+    expect(mockedSigaaStorage.rememberSigaaWasLinked).toHaveBeenCalled();
+  });
+
+  it("marks the password stale — and persists it — when any SIGAA call reports a rejection", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+
+    await act(async () => {
+      subscribedListener()("rejected");
+    });
+
+    expect(result.current).toMatchObject({ senhaDesatualizada: true });
+    expect(mockedSigaaStorage.markSigaaPasswordStale).toHaveBeenCalledWith(true);
+  });
+
+  it("clears the stale mark when a later SIGAA call goes through", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue({
+      ...LINKED_CREDENTIAL,
+      senhaDesatualizada: true,
+    });
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current).toMatchObject({ senhaDesatualizada: true }));
+
+    await act(async () => {
+      subscribedListener()("accepted");
+    });
+
+    expect(result.current).toMatchObject({ senhaDesatualizada: false });
+    expect(mockedSigaaStorage.markSigaaPasswordStale).toHaveBeenCalledWith(false);
+  });
+
+  it("does not rewrite storage when the verdict only confirms what it already knew", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current.status).toBe("linked"));
+
+    await act(async () => {
+      subscribedListener()("accepted");
+    });
+
+    expect(mockedSigaaStorage.markSigaaPasswordStale).not.toHaveBeenCalled();
+  });
+
+  it("unsubscribes from verdicts when it unmounts", async () => {
+    const unsubscribe = jest.fn();
+    mockedApi.onSigaaCredentialsVerdict.mockReturnValue(unsubscribe);
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue(LINKED_CREDENTIAL);
+
+    const { unmount } = await renderHook(() => useSigaaLink(), { wrapper });
+    await act(async () => {
+      unmount();
+    });
+
+    expect(unsubscribe).toHaveBeenCalled();
   });
 
   it("stays loading while the user is signed out", async () => {
@@ -129,6 +299,7 @@ describe("SigaaLinkProvider / useSigaaLink", () => {
       login: "12345678900",
       senha: "segredo",
       syncMode: "cloud",
+      senhaDesatualizada: false,
     });
     expect(result.current).toMatchObject({ status: "linked", syncMode: "cloud" });
   });
@@ -188,6 +359,30 @@ describe("SigaaLinkProvider / useSigaaLink", () => {
     ).rejects.toThrow("invalid credentials");
 
     expect(result.current.status).toBe("unlinked");
+  });
+
+  it("link() clears the stale mark, since the new password just proved itself", async () => {
+    mockedUseAuth.mockReturnValue(SIGNED_IN);
+    mockedSigaaStorage.getSigaaCredentials.mockResolvedValue({
+      ...LINKED_CREDENTIAL,
+      senhaDesatualizada: true,
+    });
+    mockedApi.postSigaaLink.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useSigaaLink(), { wrapper });
+    await waitFor(() => expect(result.current).toMatchObject({ senhaDesatualizada: true }));
+
+    await act(async () => {
+      await result.current.link("12345678900", "nova", "device");
+    });
+
+    expect(result.current).toMatchObject({ status: "linked", senhaDesatualizada: false });
+    expect(mockedSigaaStorage.saveSigaaCredentials).toHaveBeenCalledWith({
+      login: "12345678900",
+      senha: "nova",
+      syncMode: "device",
+      senhaDesatualizada: false,
+    });
   });
 
   it("unlink() clears local storage and sets status to unlinked", async () => {

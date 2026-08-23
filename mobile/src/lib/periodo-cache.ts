@@ -40,3 +40,8 @@ export async function getPeriodoCache(): Promise<PeriodoLetivo | null> {
 export async function savePeriodoCache(periodo: PeriodoLetivo): Promise<void> {
   await SecureStore.setItemAsync(PERIODO_KEY, JSON.stringify(periodo));
 }
+
+/** Drops the cached term — part of erasing the student's data. */
+export async function clearPeriodoCache(): Promise<void> {
+  await SecureStore.deleteItemAsync(PERIODO_KEY);
+}
