@@ -913,10 +913,10 @@ git commit -m "feat(mobile): contexto de vínculo do Moodle"
 
 **Contexto de implementação:**
 - Em `_layout.tsx`, envolver a árvore com `MoodleLinkProvider` (não depende de auth; pode ficar ao lado de `SigaaLinkProvider`).
-- Em `ajustes.tsx`, no item `link-moodle-item` (hoje em `mobile/src/app/(tabs)/ajustes.tsx:729`): remover `disabled` e `className="opacity-50"`; remover o `<Chip>Em breve</Chip>`. Ler `const moodle = useMoodleLink();`. `onPress`:
-  - `moodle.status === "unlinked"` → `await moodle.link()`; se `result.status === "failed"`, `useToast()` com "Não foi possível conectar ao Moodle. Tente novamente."; `cancelled` não mostra toast.
-  - `moodle.status === "linked"` → `router.push("/moodle")` (rota da Task 7).
-- Descrição do item passa a refletir estado: `linked` → sufixo `<Chip>Conectado</Chip>`; `unlinked` → sem chip.
+- Em `ajustes.tsx`, no item `link-moodle-item` (hoje em `mobile/src/app/(tabs)/ajustes.tsx:729`): remover `disabled` e `className="opacity-50"`; remover o `<Chip>Em breve</Chip>`. Ler `const moodle = useMoodleLink();`. `onPress` (**sem navegação — não existe tela de Moodle**):
+  - `moodle.status === "unlinked"` → `await moodle.link()`; se `result.status === "failed"`, `toast.show("Não foi possível conectar ao Moodle. Tente novamente.")`; `cancelled` não mostra toast.
+  - `moodle.status === "linked"` → abre um diálogo de confirmação "Desvincular Moodle?"; confirmando, chama `moodle.unlink()`. Reutilize o padrão de `Dialog`/`Dialog.Portal` já presente nesta tela.
+- Sufixo do item reflete estado: `linked` → `<Chip>Conectado</Chip>` (e, se `moodle.expired`, `<Chip>Reconectar</Chip>`); `unlinked` → sem chip.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -925,30 +925,59 @@ git commit -m "feat(mobile): contexto de vínculo do Moodle"
 // (near the other jest.mock calls at the top)
 jest.mock("@/lib/moodle-link-context");
 
-// (inside the describe block, a new test)
+// (inside the describe block)
+import { within } from "@testing-library/react-native";
 import { useMoodleLink } from "@/lib/moodle-link-context";
 
 const mockUseMoodleLink = useMoodleLink as jest.Mock;
+
+// Give every OTHER test in this file a sane default so the new mock does not
+// break them: add this in the file's beforeEach (or right after the existing
+// default mocks), e.g.
+//   mockUseMoodleLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() });
 
 it("enables the Moodle item and starts linking when tapped while unlinked", async () => {
   const link = jest.fn().mockResolvedValue({ status: "cancelled" });
   mockUseMoodleLink.mockReturnValue({ status: "unlinked", link, unlink: jest.fn() });
 
-  // ...standard render of AjustesTab used elsewhere in this file...
   const screen = renderAjustes(); // reuse the file's existing render helper/pattern
 
   const item = await screen.findByTestId("link-moodle-item");
   expect(item.props.accessibilityState?.disabled).toBeFalsy();
+  expect(within(item).queryByText("Em breve")).toBeNull();
 
   await act(async () => {
     fireEvent.press(item);
   });
   expect(link).toHaveBeenCalled();
-  expect(screen.queryByText("Em breve")).toBeNull();
+});
+
+it("shows 'Conectado' and offers unlink when already linked", async () => {
+  const unlink = jest.fn().mockResolvedValue(undefined);
+  mockUseMoodleLink.mockReturnValue({
+    status: "linked",
+    expired: false,
+    session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 },
+    link: jest.fn(),
+    unlink,
+  });
+
+  const screen = renderAjustes();
+  const item = await screen.findByTestId("link-moodle-item");
+  expect(within(item).getByText("Conectado")).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(item);
+  });
+  // Confirmation dialog appears; confirm it.
+  await act(async () => {
+    fireEvent.press(screen.getByText("Desvincular"));
+  });
+  expect(unlink).toHaveBeenCalled();
 });
 ```
 
-> Nota para o executor: reutilize o helper/props de render de `AjustesTab` já presente neste arquivo (mocks de `auth-context`, `sigaa-link-context`, etc.). O ponto do teste é: item habilitado, `link()` chamado no toque, e o chip "Em breve" ausente. Como há dois itens com "Em breve" (Moodle e Classroom), a asserção do chip deve ser feita via `within(item)` no item do Moodle, não global.
+> Nota para o executor: reutilize o helper/props de render de `AjustesTab` já presente neste arquivo (mocks de `auth-context`, `sigaa-link-context`, etc.). Como há dois itens com "Em breve" (Moodle e Classroom), asserte a ausência do chip via `within(item)`, não global. O texto exato do botão de confirmação ("Desvincular") deve casar com o que o `Dialog` renderiza.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -957,13 +986,10 @@ Expected: FAIL (item ainda `disabled`; `useMoodleLink` não usado pela tela).
 
 - [ ] **Step 3: Write minimal implementation**
 
-Aplique as mudanças descritas no "Contexto de implementação": monte `MoodleLinkProvider` em `_layout.tsx`; em `ajustes.tsx` troque o item placeholder por:
+Monte `MoodleLinkProvider` em `_layout.tsx`; em `ajustes.tsx` troque o item placeholder por:
 
 ```tsx
-<ListGroup.Item
-  testID="link-moodle-item"
-  onPress={handleMoodlePress}
->
+<ListGroup.Item testID="link-moodle-item" onPress={handleMoodlePress}>
   <ListGroup.ItemPrefix>
     <MoodleIcon size={22} />
   </ListGroup.ItemPrefix>
@@ -973,19 +999,23 @@ Aplique as mudanças descritas no "Contexto de implementação": monte `MoodleLi
   </ListGroup.ItemContent>
   <ListGroup.ItemSuffix>
     {moodle.status === "linked" ? (
-      <Chip variant="secondary" size="sm">Conectado</Chip>
+      <Chip variant="secondary" size="sm">
+        {moodle.expired ? "Reconectar" : "Conectado"}
+      </Chip>
     ) : null}
   </ListGroup.ItemSuffix>
 </ListGroup.Item>
 ```
 
-Com o handler no corpo do componente:
+Com o handler e o estado do diálogo no corpo do componente (reaproveitando o `Dialog` já usado na tela):
 
 ```tsx
 const moodle = useMoodleLink();
+const [confirmMoodleUnlink, setConfirmMoodleUnlink] = useState(false);
+
 const handleMoodlePress = async (): Promise<void> => {
   if (moodle.status === "linked") {
-    router.push("/moodle");
+    setConfirmMoodleUnlink(true);
     return;
   }
   if (moodle.status === "unlinked") {
@@ -997,7 +1027,7 @@ const handleMoodlePress = async (): Promise<void> => {
 };
 ```
 
-(Use o mesmo `useToast()`/`router` já importados na tela; ajuste nomes conforme o arquivo.)
+E um `Dialog` de confirmação (mesmo padrão do que já existe na tela) com um botão "Desvincular" que chama `moodle.unlink()` e fecha, e um "Cancelar" que só fecha. (Use o mesmo `useToast()` já importado na tela; ajuste nomes conforme o arquivo.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1008,256 +1038,12 @@ Expected: PASS.
 
 ```bash
 git add mobile/src/app/_layout.tsx "mobile/src/app/(tabs)/ajustes.tsx" mobile/src/__tests__/ajustes.test.tsx
-git commit -m "feat(mobile): habilitar vínculo do Moodle em Ajustes"
+git commit -m "feat(mobile): habilitar vínculo/desvínculo do Moodle em Ajustes"
 ```
 
 ---
 
-### Task 7: Tela de turmas e materiais (`app/moodle/`)
-
-Entrega a leitura de turmas e materiais. Avisos e tarefas ficam para uma task posterior (mesma estrutura de fetch); esta task já produz software útil e testável.
-
-**Files:**
-- Create: `mobile/src/app/moodle/index.tsx` (lista de turmas)
-- Create: `mobile/src/app/moodle/[courseId].tsx` (seções/materiais)
-- Test: `mobile/src/__tests__/moodle-turmas.test.tsx`
-
-**Interfaces:**
-- Consumes: `useMoodleLink` (Task 5), `getCourses`/`getCourseContents`/`fileUrl` (Task 4).
-- Produces: rotas `"/moodle"` e `"/moodle/[courseId]"` (Expo Router).
-
-**Contexto de implementação:**
-- `index.tsx`: se `status !== "linked"`, mostra estado vazio com botão "Conectar Moodle" (chama `link()`); se `linked`, `getCourses(session)` e lista cada turma tocável → `router.push(\`/moodle/${id}\`)`. Estado de carregando com `Spinner`, erro com toast. Se `expired`, banner "Sua conexão com o Moodle expirou" + ação reconectar.
-- `[courseId].tsx`: `getCourseContents(session, courseId)`; renderiza seções e, dentro, módulos; para módulos com `contents[].fileurl`, abrir via `Linking.openURL(fileUrl(session, content.fileurl))`.
-- Siga os padrões visuais das telas existentes (ex.: `documentos.tsx`), reutilizando componentes de lista/loading do app.
-
-- [ ] **Step 1: Write the failing test**
-
-```typescript
-// mobile/src/__tests__/moodle-turmas.test.tsx
-import { render, waitFor } from "@testing-library/react-native";
-
-import { getCourses } from "@/lib/moodle-api";
-import { useMoodleLink } from "@/lib/moodle-link-context";
-
-import MoodleTurmas from "@/app/moodle/index";
-
-jest.mock("@/lib/moodle-link-context");
-jest.mock("@/lib/moodle-api", () => ({
-  ...jest.requireActual("@/lib/moodle-api"),
-  getCourses: jest.fn(),
-}));
-
-const mockUseMoodleLink = useMoodleLink as jest.Mock;
-const mockGetCourses = getCourses as jest.Mock;
-
-it("lists the enrolled courses when linked", async () => {
-  mockUseMoodleLink.mockReturnValue({
-    status: "linked",
-    session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 },
-    expired: false,
-    link: jest.fn(),
-    unlink: jest.fn(),
-  });
-  mockGetCourses.mockResolvedValueOnce([{ id: 1, fullname: "Cálculo A", shortname: "MATA01" }]);
-
-  const screen = render(<MoodleTurmas />);
-  await waitFor(() => expect(screen.getByText("Cálculo A")).toBeTruthy());
-});
-
-it("shows a connect prompt when unlinked", async () => {
-  const link = jest.fn();
-  mockUseMoodleLink.mockReturnValue({ status: "unlinked", link, unlink: jest.fn() });
-  const screen = render(<MoodleTurmas />);
-  expect(screen.getByText(/Conectar Moodle/i)).toBeTruthy();
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `cd mobile && npx jest src/__tests__/moodle-turmas.test.tsx`
-Expected: FAIL (rota `@/app/moodle/index` não existe).
-
-- [ ] **Step 3: Write minimal implementation**
-
-Crie `index.tsx` e `[courseId].tsx` conforme o "Contexto de implementação". Esboço mínimo do `index.tsx` que satisfaz o teste (expanda com os componentes visuais do app):
-
-```tsx
-// mobile/src/app/moodle/index.tsx
-import { useEffect, useState, type JSX } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
-import { router } from "expo-router";
-
-import { getCourses, type MoodleCourse } from "@/lib/moodle-api";
-import { useMoodleLink } from "@/lib/moodle-link-context";
-
-export default function MoodleTurmas(): JSX.Element {
-  const moodle = useMoodleLink();
-  const [courses, setCourses] = useState<MoodleCourse[]>([]);
-
-  useEffect(() => {
-    if (moodle.status !== "linked") return;
-    void getCourses(moodle.session).then(setCourses).catch(() => setCourses([]));
-  }, [moodle.status]);
-
-  if (moodle.status !== "linked") {
-    return (
-      <View>
-        <Pressable onPress={() => moodle.status === "unlinked" && moodle.link()}>
-          <Text>Conectar Moodle</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <FlatList
-      data={courses}
-      keyExtractor={(c) => String(c.id)}
-      renderItem={({ item }) => (
-        <Pressable onPress={() => router.push(`/moodle/${item.id}`)}>
-          <Text>{item.fullname}</Text>
-        </Pressable>
-      )}
-    />
-  );
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `cd mobile && npx jest src/__tests__/moodle-turmas.test.tsx`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add "mobile/src/app/moodle/index.tsx" "mobile/src/app/moodle/[courseId].tsx" mobile/src/__tests__/moodle-turmas.test.tsx
-git commit -m "feat(mobile): telas de turmas e materiais do Moodle"
-```
-
----
-
-### Task 8: Avisos e tarefas (fórum de notícias + assignments)
-
-Estende `moodle-api.ts` com as funções WS restantes da v1 e liga-as na tela da turma, respeitando o que `getSiteInfo().functions` expõe.
-
-**Files:**
-- Modify: `mobile/src/lib/moodle-api.ts`
-- Modify: `mobile/src/lib/moodle-api.test.ts`
-- Modify: `mobile/src/app/moodle/[courseId].tsx`
-- Modify: `mobile/src/__tests__/moodle-turmas.test.tsx`
-
-**Interfaces:**
-- Produces (em `moodle-api.ts`):
-  - `type MoodleDiscussion = { id: number; name: string; message: string }`
-  - `getNewsDiscussions(session: MoodleSession, courseId: number): Promise<MoodleDiscussion[]>` — usa `mod_forum_get_forums_by_courses` (filtra `type === "news"`) + `mod_forum_get_forum_discussions`.
-  - `type MoodleAssignment = { id: number; name: string; duedate: number }`
-  - `getAssignments(session: MoodleSession, courseIds: number[]): Promise<MoodleAssignment[]>` — usa `mod_assign_get_assignments`.
-
-- [ ] **Step 1: Write the failing test**
-
-```typescript
-// add to mobile/src/lib/moodle-api.test.ts
-import { getAssignments, getNewsDiscussions } from "./moodle-api";
-
-it("returns discussions from the news forum only", async () => {
-  global.fetch = jest
-    .fn()
-    // mod_forum_get_forums_by_courses
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [
-      { id: 5, type: "news", course: 1 },
-      { id: 6, type: "general", course: 1 },
-    ] })
-    // mod_forum_get_forum_discussions (for forum 5)
-    .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({
-      discussions: [{ discussion: 90, name: "Aula cancelada", message: "<p>Sem aula</p>" }],
-    }) }) as unknown as typeof fetch;
-
-  const discussions = await getNewsDiscussions(session, 1);
-  expect(discussions).toEqual([{ id: 90, name: "Aula cancelada", message: "<p>Sem aula</p>" }]);
-});
-
-it("maps assignments with due dates", async () => {
-  global.fetch = jest.fn().mockResolvedValueOnce({
-    ok: true,
-    status: 200,
-    json: async () => ({
-      courses: [{ id: 1, assignments: [{ id: 3, name: "Lista 1", duedate: 1735689600 }] }],
-    }),
-  }) as unknown as typeof fetch;
-
-  const assignments = await getAssignments(session, [1]);
-  expect(assignments).toEqual([{ id: 3, name: "Lista 1", duedate: 1735689600 }]);
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `cd mobile && npx jest src/lib/moodle-api.test.ts`
-Expected: FAIL (`getNewsDiscussions`/`getAssignments` não exportados).
-
-- [ ] **Step 3: Write minimal implementation**
-
-```typescript
-// append to mobile/src/lib/moodle-api.ts
-export type MoodleDiscussion = { id: number; name: string; message: string };
-export type MoodleAssignment = { id: number; name: string; duedate: number };
-
-export async function getNewsDiscussions(
-  session: MoodleSession,
-  courseId: number,
-): Promise<MoodleDiscussion[]> {
-  const forums = await callMoodle<{ id: number; type: string; course: number }[]>(
-    session,
-    "mod_forum_get_forums_by_courses",
-    { "courseids[0]": String(courseId) },
-  );
-  const news = forums.find((f) => f.type === "news" && f.course === courseId);
-  if (!news) return [];
-
-  const raw = await callMoodle<{
-    discussions: { discussion: number; name: string; message: string }[];
-  }>(session, "mod_forum_get_forum_discussions", { forumid: String(news.id) });
-
-  return raw.discussions.map((d) => ({ id: d.discussion, name: d.name, message: d.message }));
-}
-
-export async function getAssignments(
-  session: MoodleSession,
-  courseIds: number[],
-): Promise<MoodleAssignment[]> {
-  const params: Record<string, string> = {};
-  courseIds.forEach((id, i) => {
-    params[`courseids[${i}]`] = String(id);
-  });
-  const raw = await callMoodle<{
-    courses: { id: number; assignments: { id: number; name: string; duedate: number }[] }[];
-  }>(session, "mod_assign_get_assignments", params);
-
-  return raw.courses.flatMap((c) =>
-    c.assignments.map((a) => ({ id: a.id, name: a.name, duedate: a.duedate })),
-  );
-}
-```
-
-Depois, em `[courseId].tsx`, renderize seções de "Avisos" e "Tarefas" abaixo dos materiais, cada uma escondida quando a função WS correspondente não estiver em `getSiteInfo().functions` (leia site info uma vez no provider ou na tela e passe adiante).
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `cd mobile && npx jest src/lib/moodle-api.test.ts && npx jest src/__tests__/moodle-turmas.test.tsx`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add mobile/src/lib/moodle-api.ts mobile/src/lib/moodle-api.test.ts "mobile/src/app/moodle/[courseId].tsx" mobile/src/__tests__/moodle-turmas.test.tsx
-git commit -m "feat(mobile): avisos e tarefas do Moodle na tela da turma"
-```
-
----
-
-### Task 9: Verificação final (typecheck, lint, suite completa) e spikes de campo
+### Task 7: Verificação final (typecheck, lint, suite completa) e spikes de campo
 
 **Files:** nenhum novo (ajustes pontuais se algo falhar).
 
@@ -1282,9 +1068,9 @@ Rode o app num dispositivo/emulador, toque em "Vincular Moodle", complete o logi
 - Retornou `ufba-app://token=...` → nada a fazer.
 - Retornou `moodlemobile://token=...` → o site força `forcedurlscheme`. Adicione `moodlemobile` aos schemes em `mobile/app.json`, rode `npx expo prebuild` (regenera `android/`, que é gitignored — ver gotcha do projeto), ajuste `MOODLE_RETURN_SCHEME`/`openAuthSessionAsync` e re-teste.
 
-- [ ] **Step 5: Spike de campo — funções WS expostas**
+- [ ] **Step 5: Spike de campo — `get_site_info` responde**
 
-Após o primeiro login, logue `getSiteInfo().functions` e confirme presença de `core_enrol_get_users_courses`, `core_course_get_contents`, `mod_forum_get_forums_by_courses`, `mod_forum_get_forum_discussions`, `mod_assign_get_assignments`. Para as ausentes, confirme que a UI as esconde (não quebra).
+Após o primeiro login, confirme que `getSiteInfo(session)` resolve com um `userId` válido (o token capturado é utilizável). Isso valida que o serviço `moodle_mobile_app` está de fato disponível para a conta. (Quais funções de conteúdo o site expõe é assunto do spec da página de turma virtual, não deste.)
 
 - [ ] **Step 6: Commit (se houver ajustes)**
 
