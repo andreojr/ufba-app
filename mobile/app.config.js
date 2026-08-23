@@ -1,0 +1,63 @@
+const IS_DEV = process.env.APP_VARIANT === "development";
+
+module.exports = {
+  expo: {
+    name: IS_DEV ? "UFBA (Dev)" : "UFBA",
+    slug: "ufba",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/images/icon.png",
+    scheme: "ufba-app",
+    userInterfaceStyle: "automatic",
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: IS_DEV ? "com.gradline.ufba.dev" : "com.gradline.ufba",
+    },
+    android: {
+      package: IS_DEV ? "com.gradline.ufba.dev" : "com.gradline.ufba",
+      adaptiveIcon: {
+        foregroundImage: "./assets/images/adaptive-icon.png",
+        backgroundColor: "#FFFFFF",
+      },
+      backgroundColor: "#FFFFFF",
+      predictiveBackGestureEnabled: false,
+      versionCode: 1,
+      permissions: ["REQUEST_INSTALL_PACKAGES"],
+    },
+    plugins: [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          image: "./assets/images/splash-icon.png",
+          resizeMode: "contain",
+          backgroundColor: "#FFFFFF",
+        },
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-secure-store",
+      [
+        "expo-calendar",
+        {
+          calendarPermission:
+            "O app usa o calendário para exportar o horário de aulas do semestre.",
+          remindersPermission: false,
+        },
+      ],
+      [
+        "expo-system-ui",
+        {
+          userInterfaceStyle: "automatic",
+        },
+      ],
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser",
+    ],
+    experiments: {
+      typedRoutes: true,
+      reactCompiler: true,
+    },
+  },
+};
