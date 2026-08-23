@@ -1,4 +1,6 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import * as React from "react";
+
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 import { useUniwind } from "uniwind";
 
@@ -12,6 +14,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
+import { useMoodleLink } from "@/lib/moodle-link-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
 import {
@@ -20,12 +23,15 @@ import {
   getSigaaCredentials,
 } from "@/lib/sigaa-storage";
 import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
+import { useAppUpdate } from "@/lib/use-app-update";
 import { saveThemePreference } from "@/lib/theme-preference";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 import AjustesTab from "@/app/(tabs)/ajustes";
 
 jest.mock("@/lib/auth-context");
+jest.mock("@/lib/use-app-update");
+jest.mock("@/lib/moodle-link-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
 jest.mock("@/lib/periodo-cache", () => ({
@@ -73,7 +79,7 @@ jest.mock("react-native-safe-area-context", () => ({
 const mockToastShow = jest.fn();
 
 jest.mock("heroui-native", () => {
-  const React = jest.requireActual("react");
+  const React: typeof import("react") = jest.requireActual("react");
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
   const DialogOpenContext = React.createContext(false);
@@ -218,6 +224,7 @@ jest.mock("react-native-svg", () => {
 const mockedUseAuth = jest.mocked(useAuth);
 const mockSignOut = jest.fn();
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
+const mockedUseMoodleLink = jest.mocked(useMoodleLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
 const mockedGetSchedule = jest.mocked(getSchedule);
 const mockedPostScheduleSync = jest.mocked(postScheduleSync);
@@ -274,6 +281,18 @@ function mockSignedIn(userOverrides: Record<string, unknown> = {}) {
   } as any);
 }
 
+// The screen destructures this hook unconditionally, so every test needs it to
+// return something. "No release fetched" is the honest default: most of these
+// tests are about other parts of the screen and never reach the network.
+beforeEach(() => {
+  jest.mocked(useAppUpdate).mockReturnValue({
+    versaoInstalada: "1.0.0",
+    release: null,
+    temAtualizacao: false,
+    dispensar: jest.fn(),
+  });
+});
+
 describe("AjustesTab", () => {
   beforeEach(() => {
     mockRefreshUser.mockClear();
@@ -285,7 +304,61 @@ describe("AjustesTab", () => {
     mockUniwindSetTheme.mockClear();
     mockedSaveThemePreference.mockClear();
     mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
+    mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() } as any);
     mockSignedIn();
+  });
+
+  async function renderAjustes() {
+    return await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+  }
+
+  describe("vincular Moodle", () => {
+    it("enables the Moodle item and starts linking when tapped while unlinked", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      const link = jest.fn().mockResolvedValue({ status: "cancelled" });
+      mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link, unlink: jest.fn() } as any);
+
+      const screen = await renderAjustes();
+
+      const item = await screen.findByTestId("link-moodle-item");
+      expect(item.props.accessibilityState?.disabled).toBeFalsy();
+      expect(within(item).queryByText("Em breve")).toBeNull();
+
+      await act(async () => {
+        fireEvent.press(item);
+      });
+      expect(link).toHaveBeenCalled();
+    });
+
+    it("shows 'Vinculado' with a check and offers unlink when already linked", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      const unlink = jest.fn().mockResolvedValue(undefined);
+      mockedUseMoodleLink.mockReturnValue({
+        status: "linked",
+        expired: false,
+        session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 },
+        link: jest.fn(),
+        unlink,
+      } as any);
+
+      const screen = await renderAjustes();
+      const item = await screen.findByTestId("link-moodle-item");
+      expect(within(item).getByTestId("moodle-status-ok")).toBeTruthy();
+      expect(within(item).getByText("Vinculado")).toBeTruthy();
+      expect(within(item).queryByText("Materiais e avisos das suas salas")).toBeNull();
+
+      await act(async () => {
+        fireEvent.press(item);
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByText("Desvincular"));
+      });
+      expect(unlink).toHaveBeenCalled();
+    });
   });
 
   it("shows the signed-in user's name and email", async () => {
@@ -823,29 +896,14 @@ describe("AjustesTab", () => {
         expect(getByTestId("sync-profile-item").props.accessibilityState?.disabled).toBe(true);
       });
 
-      it("discloses what is kept and what is discarded before the first histórico sync", async () => {
-        // Moved here from Trajetória's old first-sync screen: pressing sync
-        // now always fetches the histórico too, so the disclosure belongs
-        // wherever that press actually lives.
-        const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
-
-        expect(await getByText(/O que fica guardado/i)).toBeTruthy();
-        expect(getByText(/matérias, notas e carga horária/i)).toBeTruthy();
-        expect(getByText(/O que não fica/i)).toBeTruthy();
-        expect(getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
-      });
-
-      it("hides the disclosure once the histórico has already been synced", async () => {
-        mockedGetTrajetoria.mockResolvedValue({
-          historico: {} as any,
-          fetchedAt: new Date().toISOString(),
-          plano: [],
-          marcos: null,
-        });
-
+      it("leaves the kept-vs-discarded disclosure to the linking screen", async () => {
+        // Vive em link-account.tsx, junto dos outros checks de segurança e
+        // sempre visível, em vez de aparecer aqui uma única vez antes do
+        // primeiro sync.
         const { queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
 
         await waitFor(() => expect(queryByText(/O que fica guardado/i)).toBeNull());
+        expect(queryByText(/CPF, RG e data de nascimento/i)).toBeNull();
       });
 
       it("re-scrapes both the schedule and the histórico and reports success when pressed", async () => {
@@ -869,6 +927,7 @@ describe("AjustesTab", () => {
           fetchedAt: new Date().toISOString(),
           plano: [],
           marcos: null,
+          projecao: null,
         });
 
         const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
@@ -967,5 +1026,73 @@ describe("AjustesTab", () => {
       expect(mockUniwindSetTheme).toHaveBeenCalledWith("system");
       await waitFor(() => expect(mockedSaveThemePreference).toHaveBeenCalledWith("system"));
     });
+  });
+});
+
+describe("AjustesTab — versão do app", () => {
+  const RELEASE = {
+    latestVersion: "1.1.0",
+    versionCode: 3,
+    downloadUrl: "https://example.com/app.apk",
+    releaseNotes: "",
+    publishedAt: "2026-09-01T12:00:00Z",
+  };
+
+  it("shows the installed version and says it is up to date", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.1.0",
+      release: RELEASE,
+      temAtualizacao: false,
+      dispensar: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByTestId("app-version-item")).toBeTruthy();
+    expect(getByText("1.1.0")).toBeTruthy();
+    expect(getByText("Você está na versão mais recente")).toBeTruthy();
+  });
+
+  it("says a new version is available when one is", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: RELEASE,
+      temAtualizacao: true,
+      dispensar: jest.fn(),
+    });
+
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByText("Nova versão disponível: 1.1.0")).toBeTruthy();
+  });
+
+  it("still shows the installed version when the check never succeeded", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: null,
+      temAtualizacao: false,
+      dispensar: jest.fn(),
+    });
+
+    const { getByText, queryByText, queryByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByText("1.0.0")).toBeTruthy();
+    // No claim either way — the app does not know, and must not guess.
+    expect(queryByText("Você está na versão mais recente")).toBeNull();
+    // E a linha não pode reservar espaço para a descrição que não existe: uma
+    // ItemDescription vazia ainda ocupa a linha e desalinha o título.
+    expect(queryByTestId("app-version-description")).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spinner, Typography } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Alert, ScrollView, View } from "react-native";
@@ -33,12 +33,14 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
     [],
   );
 
+  // Nada de setState antes do primeiro await: o efeito abaixo chama esta
+  // função na montagem, e o lint do React Compiler trata escrita síncrona de
+  // estado dentro de efeito como render em cascata. O estado inicial já é
+  // "loading", e a ausência de sessão é derivada no render (estadoEfetivo).
   const carregar = useCallback(async () => {
     if (!accessToken) {
-      setEstado({ status: "erro" });
       return;
     }
-    setEstado({ status: "loading" });
     try {
       // A lista completa (incluindo vencidos) já traz o item por inteiro —
       // não existe endpoint de item único, ver brief da Task 12.
@@ -52,9 +54,14 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
     }
   }, [accessToken, id]);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  // Mesmo padrão das telas irmãs desta feature (a lista e a Home): recarrega
+  // ao ganhar o foco, então o item volta atualizado se alguém da turma o
+  // corrigiu enquanto esta tela estava empilhada por baixo.
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar]),
+  );
 
   async function salvar(_turmaEscolhida: string, entrada: EntradaPonto): Promise<void> {
     if (!accessToken) return;
@@ -76,7 +83,9 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
     ]);
   }
 
-  if (estado.status === "loading") {
+  const estadoEfetivo: Estado = accessToken === null ? { status: "erro" } : estado;
+
+  if (estadoEfetivo.status === "loading") {
     return (
       <View className="flex-1 bg-background">
         <AppBar title="Editar ponto de atenção" onClose={() => router.back()} />
@@ -87,7 +96,7 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
     );
   }
 
-  if (estado.status === "erro" || estado.status === "naoEncontrado") {
+  if (estadoEfetivo.status === "erro" || estadoEfetivo.status === "naoEncontrado") {
     return (
       <View className="flex-1 bg-background">
         <AppBar title="Editar ponto de atenção" onClose={() => router.back()} />
@@ -97,12 +106,19 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
             color="muted"
             align="center"
           >
-            {estado.status === "naoEncontrado"
+            {estadoEfetivo.status === "naoEncontrado"
               ? "Este ponto de atenção não existe mais."
               : "Não foi possível carregar este ponto de atenção agora."}
           </Typography.Paragraph>
-          {estado.status === "erro" ? (
-            <Button variant="outline" size="sm" onPress={() => void carregar()}>
+          {estadoEfetivo.status === "erro" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onPress={() => {
+                setEstado({ status: "loading" });
+                void carregar();
+              }}
+            >
               Tentar novamente
             </Button>
           ) : null}
@@ -111,7 +127,7 @@ export default function EditarPontoAtencaoScreen(): JSX.Element {
     );
   }
 
-  const { ponto } = estado;
+  const { ponto } = estadoEfetivo;
 
   return (
     <View className="flex-1 bg-background">

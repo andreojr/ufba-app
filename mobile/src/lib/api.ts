@@ -1,8 +1,10 @@
 import type {
+  AppRelease,
   DocentePerfil,
   DocenteResumo,
   EntradaPonto,
   GoogleUserInfo,
+  ItemPlano,
   PontoAtencao,
   ScheduleResponse,
   SigaaCredentials,
@@ -174,6 +176,14 @@ export async function getSigaaLink(accessToken: string): Promise<SigaaLinkStatus
 }
 
 /** Reads the cached schedule. Cheap — this hits our own database, not SIGAA. */
+/**
+ * Public on purpose — the app checks for updates before anyone has signed in,
+ * so no access token travels here.
+ */
+export async function getAppVersion(): Promise<AppRelease> {
+  return request<AppRelease>("/app/version", { method: "GET" });
+}
+
 export async function getSchedule(accessToken: string): Promise<ScheduleResponse> {
   return request<ScheduleResponse>("/schedule", { method: "GET", accessToken });
 }
@@ -505,5 +515,17 @@ export async function deleteVotoPontoAtencao(
   return request<PontoAtencao>(`/pontos-atencao/${id}/voto`, {
     method: "DELETE",
     accessToken,
+  });
+}
+
+/** Saves the positions the student chose and returns the re-projected trajectory. */
+export async function putPlano(
+  accessToken: string,
+  itens: ItemPlano[],
+): Promise<TrajetoriaResponse> {
+  return request<TrajetoriaResponse>("/trajetoria/plano", {
+    method: "PUT",
+    accessToken,
+    body: { itens },
   });
 }

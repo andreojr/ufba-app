@@ -3,6 +3,7 @@ import {
   deleteAccount,
   deletePontoAtencao,
   deleteVotoPontoAtencao,
+  getAppVersion,
   getPontosAtencao,
   getSchedule,
   getSigaaLink,
@@ -12,6 +13,7 @@ import {
   postPontoAtencao,
   postScheduleSync,
   postSigaaLink,
+  putPlano,
   putVotoPontoAtencao,
 } from "../lib/api";
 
@@ -723,5 +725,89 @@ describe("deleteVotoPontoAtencao", () => {
       "https://api.example.com/pontos-atencao/ponto-1/voto",
       expect.objectContaining({ method: "DELETE", body: undefined }),
     );
+  });
+});
+
+describe("putPlano", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  it("putPlano manda os itens para /trajetoria/plano", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ sincronizado: false }),
+    }) as unknown as typeof fetch;
+
+    await putPlano("token", [{ codigo: "MATA55", nome: "SO", cargaHoraria: 68, semestre: "2027.1" }]);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/trajetoria/plano"),
+      expect.objectContaining({
+        method: "PUT",
+        // The envelope matters: the endpoint expects `{ itens }`, not the
+        // bare array — a regression here would silently ship a 400.
+        body: JSON.stringify({
+          itens: [{ codigo: "MATA55", nome: "SO", cargaHoraria: 68, semestre: "2027.1" }],
+        }),
+      }),
+    );
+  });
+});
+
+describe("checking for an app update", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  const RELEASE = {
+    latestVersion: "1.1.0",
+    versionCode: 3,
+    downloadUrl: "https://example.com/gradline-1.1.0.apk",
+    releaseNotes: "Optativas na Trajetória.",
+    publishedAt: "2026-09-01T12:00:00Z",
+  };
+
+  it("GETs the published release without an Authorization header", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => RELEASE,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await expect(getAppVersion()).resolves.toEqual(RELEASE);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.example.com/app/version");
+    expect(init.method).toBe("GET");
+    expect(init.headers.Authorization).toBeUndefined();
+  });
+
+  it("rejects with an ApiError when nothing is published", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ message: "No app release is published" }),
+    }) as unknown as typeof fetch;
+
+    await expect(getAppVersion()).rejects.toBeInstanceOf(ApiError);
   });
 });

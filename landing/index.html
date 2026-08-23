@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UFBA — app não oficial para alunos da Universidade Federal da Bahia</title>
+<meta name="description" content="Sua grade da semana, seu histórico e seu CR do SIGAA, guardados no aparelho. Projeto independente, sem vínculo com a UFBA.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Source+Code+Pro:wght@400;600&display=swap">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main class="page">
+
+  <div class="stack hero">
+    <span class="chip chip--accent chip--soft">
+      <span class="chip__label">App da UFBA · não oficial</span>
+    </span>
+
+    <h1 class="typography typography--h1 hero__title">Baixe. Instale. Pronto.</h1>
+
+    <p class="typography typography--body typography--color-muted" style="margin: 0;">
+      Sua grade da semana, seu histórico e seu CR do SIGAA, guardados no aparelho
+      para abrir rápido e funcionar sem internet.
+    </p>
+
+    <!--
+      TODO(vídeo): a sessão que captura as telas via adb entrega um MP4 e um
+      poster frame. Quando chegarem, coloque-os em landing/ e troque este
+      comentário pelo bloco abaixo. Fica DEPOIS do botão de propósito: a
+      direção desta página é entregar o download antes de qualquer argumento.
+
+      <video class="demo" src="./demo.mp4" poster="./demo.jpg"
+             muted playsinline loop controls preload="none"
+             aria-label="Gravação das telas do app"></video>
+    -->
+
+    <a class="button button--lg button--primary button--full-width"
+       href="[URL_DO_APK]" download>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3v12"></path><path d="m7 11 5 5 5-5"></path><path d="M4 20h16"></path>
+      </svg>
+      Baixar o APK
+    </a>
+
+    <p class="meta mono typography typography--body-sm typography--color-muted" style="margin: 0;">
+      <span>[VERSÃO]</span>
+      <span class="meta__sep" aria-hidden="true"></span>
+      <span>[TAMANHO]</span>
+      <span class="meta__sep" aria-hidden="true"></span>
+      <span>Android 8+</span>
+      <span class="meta__sep" aria-hidden="true"></span>
+      <span>[DATA]</span>
+    </p>
+  </div>
+
+  <!-- O bloco que existe para economizar suporte: antecipa o aviso do Android
+       antes de o usuário topar com ele e desistir. -->
+  <section class="surface surface--default card" style="margin-top: 2.5rem;">
+    <h2 class="typography typography--h5" style="margin: 0 0 0.75rem;">
+      O Android vai reclamar. É normal.
+    </h2>
+    <p class="typography typography--body-sm typography--color-muted" style="margin: 0 0 1.25rem;">
+      Todo app instalado fora da Play Store passa por isso. O aviso não quer dizer
+      que o arquivo é perigoso — quer dizer que ele não veio da loja.
+    </p>
+
+    <ol class="steps" style="margin: 0; padding: 0; list-style: none;">
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">1</span>
+        <span class="typography typography--body-sm">Toque no arquivo assim que o download terminar.</span>
+      </li>
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">2</span>
+        <span class="typography typography--body-sm">
+          No aviso que aparecer, toque em <strong>Configurações</strong> e ligue
+          <strong>Permitir desta fonte</strong>.
+        </span>
+      </li>
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">3</span>
+        <span class="typography typography--body-sm">
+          Volte e confirme a instalação. É uma vez por aparelho, não a cada atualização.
+        </span>
+      </li>
+    </ol>
+  </section>
+
+  <section class="stack section">
+    <span class="eyebrow typography typography--body-xs" style="color: var(--accent);">O que é isto</span>
+    <p class="typography typography--body" style="margin: 0;">
+      Um app feito por um estudante, sem vínculo com a Universidade Federal da Bahia.
+      Não é serviço oficial da UFBA nem do SIGAA. Suas credenciais e seus dados ficam
+      no seu aparelho.
+    </p>
+  </section>
+
+  <section class="stack section">
+    <span class="eyebrow typography typography--body-xs typography--color-muted">Versões</span>
+    <div class="log mono typography typography--body-sm">
+      <div class="log__row">
+        <span class="log__v">[VERSÃO]</span>
+        <span class="typography--color-muted">[O QUE MUDOU]</span>
+      </div>
+      <div class="log__row">
+        <span class="log__v" style="color: var(--muted);">[ANTERIOR]</span>
+        <span class="typography--color-muted">[O QUE MUDOU]</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p class="typography typography--body-sm typography--color-muted" style="margin: 0;">
+      <strong style="color: var(--foreground);">iPhone:</strong> não tem. Distribuir fora
+      da App Store exige conta paga de desenvolvedor da Apple, e este projeto não gera
+      receita nenhuma.
+    </p>
+  </footer>
+
+</main>
+</body>
+</html>

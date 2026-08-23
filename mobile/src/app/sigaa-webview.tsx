@@ -8,6 +8,7 @@ import { WebView } from "react-native-webview";
 
 import { AppIcon } from "@/components/AppIcon";
 import { UfbaCrest } from "@/components/UfbaCrest";
+import { sigaaSheetHeights } from "@/lib/sigaa-webview-sheet";
 import { markSigaaWebviewClosed, markSigaaWebviewOpened } from "@/lib/sigaa-webview-state";
 
 // Not the actual login domain (sigaa.ufba.br can front multiple app servers behind a
@@ -15,7 +16,6 @@ import { markSigaaWebviewClosed, markSigaaWebviewOpened } from "@/lib/sigaa-webv
 const SIGAA_COOKIE_DOMAIN = "sigaa.ufba.br";
 
 const SHEET_RADIUS = 24;
-const COLLAPSED_HEIGHT_RATIO = 0.5;
 // How far below the collapsed height the user has to drag before it's read
 // as "let go of this" rather than "snap back down".
 const DISMISS_DRAG_PX = 120;
@@ -51,10 +51,15 @@ export default function SigaaWebViewScreen(): JSX.Element {
   const [cookieError, setCookieError] = useState(false);
 
   const windowHeight = Dimensions.get("window").height;
-  const collapsedHeight = windowHeight * COLLAPSED_HEIGHT_RATIO;
-  const expandedHeight = windowHeight;
+  const { collapsed: collapsedHeight, expanded: expandedHeight } = sigaaSheetHeights(
+    windowHeight,
+    insets.top,
+  );
 
-  const height = useRef(new Animated.Value(collapsedHeight)).current;
+  // Lazy state em vez de `useRef(new Animated.Value(...)).current`: aquele
+  // idioma lê o ref durante o render e, pior, constrói um Animated.Value novo a
+  // cada render só para descartá-lo. O inicializador preguiçoso constrói uma vez.
+  const [height] = useState(() => new Animated.Value(collapsedHeight));
   const heightAtGestureStart = useRef(collapsedHeight);
 
   // Lets the tab bar's SIGAA button (a world away from here, on the other
@@ -116,6 +121,11 @@ export default function SigaaWebViewScreen(): JSX.Element {
 
   const panResponder = useMemo(
     () =>
+      // A regra abaixo enxerga leituras de ref no corpo deste useMemo, mas elas
+      // estão dentro dos handlers de gesto: `heightAtGestureStart.current` só é
+      // lido quando o dedo se move, nunca durante o render. O analisador não
+      // consegue provar quando um closure roda; aqui dá para afirmar.
+      // eslint-disable-next-line react-hooks/refs
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,

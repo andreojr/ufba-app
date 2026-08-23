@@ -5,7 +5,10 @@ import {
   Inject,
   Logger,
   Post,
+  Put,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -16,9 +19,14 @@ import {
   montarMarcosResponse,
   type MarcosResponse,
 } from '../curriculo/marcos-semestralizacao';
+import {
+  montarProjecao,
+  type ProjecaoResponse,
+} from '../curriculo/projecao-trajetoria';
 import type { ItemPlano, TrajetoriaSalva } from './historico.repository';
 import { HistoricoService } from './historico.service';
 import type { Historico } from './parsers/historico';
+import { SalvarPlanoDto } from './plano.dto';
 import { SigaaCredentialsDto } from './sigaa-credentials.dto';
 
 /**
@@ -40,10 +48,17 @@ export type TrajetoriaResponse =
        * Trajetória screen over.
        */
       marcos: MarcosResponse | null;
+      /**
+       * Null pelos mesmos motivos que `marcos`: sem estrutura curricular
+       * resolvida não há período de onde inferir nada. A tela cai na linha do
+       * tempo só-passado.
+       */
+      projecao: ProjecaoResponse | null;
     };
 
 @Controller()
 @UseGuards(JwtAuthGuard)
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class TrajetoriaController {
   private readonly logger = new Logger(TrajetoriaController.name);
 
@@ -56,27 +71,46 @@ export class TrajetoriaController {
   private async serializar(
     salva: TrajetoriaSalva,
   ): Promise<TrajetoriaResponse> {
+    const { marcos, projecao } = await this.resolverCurriculo(salva);
     return {
       historico: salva.historico,
       fetchedAt: salva.fetchedAt.toISOString(),
       plano: salva.plano,
-      marcos: await this.resolverMarcos(salva.historico),
+      marcos,
+      projecao,
     };
   }
 
-  private async resolverMarcos(
-    historico: Historico,
-  ): Promise<MarcosResponse | null> {
+  /**
+   * Marcos e projeção saem da mesma estrutura curricular, então são resolvidos
+   * juntos: separá-los custaria um segundo `resolverPorNomeUsuario` por leitura
+   * de tela. Falha em qualquer um dos dois derruba os dois — ambos são extras
+   * best-effort, e uma tela com marcos mas sem projeção não é um estado que
+   * valha a pena existir.
+   */
+  private async resolverCurriculo(salva: TrajetoriaSalva): Promise<{
+    marcos: MarcosResponse | null;
+    projecao: ProjecaoResponse | null;
+  }> {
     try {
       const estrutura = await this.curriculoService.resolverPorNomeUsuario(
-        historico.nomeCurso,
+        salva.historico.nomeCurso,
       );
-      return montarMarcosResponse(estrutura, historico);
+      const marcos = montarMarcosResponse(estrutura, salva.historico);
+      return {
+        marcos,
+        projecao: montarProjecao(
+          estrutura,
+          salva.historico,
+          marcos,
+          salva.plano,
+        ),
+      };
     } catch (erro) {
       this.logger.warn(
-        `Não foi possível resolver os marcos de semestralização: ${erro}`,
+        `Não foi possível resolver a estrutura curricular do aluno: ${erro}`,
       );
-      return null;
+      return { marcos: null, projecao: null };
     }
   }
 
@@ -99,5 +133,14 @@ export class TrajetoriaController {
         senha: dto.senha,
       }),
     );
+  }
+
+  @Put('trajetoria/plano')
+  async salvarPlano(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SalvarPlanoDto,
+  ): Promise<TrajetoriaResponse> {
+    await this.historicoService.salvarPlano(user.userId, dto.itens);
+    return this.get(user);
   }
 }

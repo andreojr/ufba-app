@@ -1,0 +1,171 @@
+/*
+ * Fonte do `styles.css`, que é o arquivo realmente servido.
+ *
+ * Este projeto NÃO tem toolchain: o `styles.css` é compilado uma vez e
+ * commitado. Este arquivo existe para tornar essa compilação reproduzível —
+ * ver landing/README.md para o comando.
+ *
+ * Ordem dos imports importa. Duas pegadinhas descobertas na marra:
+ *
+ * 1. O `exports` do @heroui/styles bloqueia caminhos internos: importar
+ *    "@heroui/styles/dist/base/base.css" falha. Use os specifiers abaixo.
+ * 2. `utilities` precisa vir ANTES dos componentes. Sem ele o build morre em
+ *    "Cannot apply unknown utility class `no-highlight`", porque o button.css
+ *    do HeroUI aplica um utilitário que o próprio pacote define.
+ */
+
+@import "tailwindcss";
+@import "@heroui/styles/themes/default";
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/base";
+@import "@heroui/styles/components/button.css";
+@import "@heroui/styles/components/chip.css";
+@import "@heroui/styles/components/surface.css";
+@import "@heroui/styles/components/typography.css";
+@import "@heroui/styles/components/separator.css";
+
+/*
+ * Override do accent, idêntico ao de mobile/src/global.css — é o azul do
+ * brasão da UFBA. O tema dark usa um tom mais claro do mesmo matiz porque o
+ * navy puro fica sujo sobre fundo escuro, e por isso o foreground inverte
+ * para um quase-preto azulado em vez de branco.
+ */
+:root {
+  --accent: #2b3a8f;
+  --accent-foreground: #fafafa;
+}
+
+.dark,
+[data-theme="dark"] {
+  --accent: #6478d1;
+  --accent-foreground: #10152e;
+}
+
+/* ---- Página ---- */
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Poppins", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Source Code Pro só onde o número É o conteúdo — versão, tamanho, data —
+ * seguindo a mesma regra que o app aplica (ver o comentário de --font-mono
+ * em mobile/src/global.css).
+ */
+.mono {
+  font-family: "Source Code Pro", ui-monospace, monospace;
+}
+
+.page {
+  max-width: 44rem;
+  margin: 0 auto;
+  /* Mobile primeiro: quem abre esta página está quase sempre no celular
+     onde vai instalar o APK. */
+  padding: 2.5rem 1.25rem 3.5rem;
+}
+
+@media (width >= 40rem) {
+  .page {
+    padding: 4rem 3rem 3.5rem;
+  }
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.hero {
+  gap: 1.5rem;
+}
+
+.hero__title {
+  margin: 0;
+  /* O h1 do HeroUI é 36px; aqui ele cresce como display sem sair da escala
+     (mesmo peso e tracking), e encolhe no celular para não quebrar feio. */
+  font-size: clamp(2rem, 8vw, 3rem);
+  line-height: 1.06;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.meta__sep {
+  width: 1px;
+  height: 0.75rem;
+  background: var(--separator);
+}
+
+.card {
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.step {
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+
+.step__n {
+  flex-shrink: 0;
+  width: 1.125rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.section {
+  gap: 0.625rem;
+  padding-top: 2.5rem;
+}
+
+.eyebrow {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.log__row {
+  display: flex;
+  gap: 1.125rem;
+  flex-wrap: wrap;
+}
+
+.log__v {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.footer {
+  margin-top: 2.5rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.demo {
+  width: 100%;
+  height: auto;
+  border-radius: 1.5rem;
+  display: block;
+  background: var(--surface);
+}

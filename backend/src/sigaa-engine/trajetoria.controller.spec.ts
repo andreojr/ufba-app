@@ -1,6 +1,10 @@
+import type { ArgumentMetadata } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import { PIPES_METADATA } from '@nestjs/common/constants';
 import { TrajetoriaController } from './trajetoria.controller';
 import type { HistoricoService } from './historico.service';
 import type { TrajetoriaSalva } from './historico.repository';
+import { SalvarPlanoDto } from './plano.dto';
 import type { CurriculoService } from '../curriculo/curriculo.service';
 import { CursoDesconhecidoError } from '../curriculo/curriculo.service';
 import type { EstruturaCurricularSalva } from '../curriculo/curriculo.repository';
@@ -16,6 +20,14 @@ function salvaFalsa(
     historico: {
       nomeCurso: 'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR',
       periodoLetivoAtual: 1,
+      // A projeção agora sai junto dos marcos (Task 6), então mesmo fixtures
+      // que só testam marcos precisam desses campos preenchidos —
+      // sem eles montarProjecao lança ao tentar fatiar undefined. `emitidoEm`
+      // entra na conta porque é dele que sai o primeiro semestre projetado de
+      // quem ainda não cursou nada.
+      emitidoEm: '2026-08-19',
+      prazoConclusaoPadrao: '2026.2',
+      prazoConclusaoMaximo: '2030.2',
       indices: { cr: 8.1597, iap: 0.8434 },
       cursados: [],
       pendentesObrigatorios: [],
@@ -169,5 +181,148 @@ describe('TrajetoriaController', () => {
     );
 
     expect(resposta).toMatchObject({ marcos: null });
+  });
+
+  it('devolve a projeção junto dos marcos', async () => {
+    const service = {
+      getTrajetoria: jest.fn(async () =>
+        salvaFalsa({
+          pendentesObrigatorios: [
+            { codigo: 'A1', nome: 'A1', cargaHoraria: 100, matriculado: false },
+          ],
+        }),
+      ),
+      sync: jest.fn(),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => estruturaFalsa()),
+    } as unknown as CurriculoService;
+
+    const resposta = await new TrajetoriaController(service, curriculo).get(
+      USUARIO,
+    );
+
+    expect(resposta).toMatchObject({ projecao: expect.any(Object) });
+    if (!('projecao' in resposta) || resposta.projecao === null) {
+      throw new Error('esperava projeção');
+    }
+    expect(resposta.projecao.semestres.length).toBeGreaterThan(0);
+  });
+
+  it('degrada para projecao null quando a estrutura não resolve, sem derrubar o resto', async () => {
+    const service = {
+      getTrajetoria: jest.fn(async () => salvaFalsa()),
+      sync: jest.fn(),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => {
+        throw new CursoDesconhecidoError('curso desconhecido');
+      }),
+    } as unknown as CurriculoService;
+
+    const resposta = await new TrajetoriaController(service, curriculo).get(
+      USUARIO,
+    );
+
+    expect(resposta).toMatchObject({ marcos: null, projecao: null });
+    // O histórico continua lá: a projeção é extra, nunca motivo de falha.
+    expect('historico' in resposta && resposta.historico).toBeTruthy();
+  });
+
+  it('PUT /trajetoria/plano grava e devolve a trajetória reprojetada', async () => {
+    const itens = [
+      { codigo: 'MATA55', nome: 'SO', cargaHoraria: 68, semestre: '2027.1' },
+    ];
+    const service = {
+      getTrajetoria: jest.fn(async () => salvaFalsa()),
+      sync: jest.fn(),
+      salvarPlano: jest.fn(async () => undefined),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => estruturaFalsa()),
+    } as unknown as CurriculoService;
+    const controller = new TrajetoriaController(service, curriculo);
+
+    const resposta = await controller.salvarPlano(USUARIO, { itens });
+
+    expect(service.salvarPlano).toHaveBeenCalledWith('user-1', itens);
+    expect('historico' in resposta).toBe(true);
+  });
+
+  // Os dois testes abaixo provam o comportamento do ValidationPipe em
+  // isolamento (semestre malformado é rejeitado, bem formado passa) — mas
+  // instanciam o pipe à mão e chamam `.transform()` direto, sem tocar no
+  // TrajetoriaController. Se alguém apagar o @UsePipes(...) do controller
+  // amanhã, estes dois continuam verdes: eles não sabem que o controller
+  // existe. Quem fecha esse buraco é o teste seguinte ("mantém o
+  // ValidationPipe ligado no controller"), que lê a metadata do decorator —
+  // as duas metades juntas são necessárias, nenhuma sozinha basta.
+  it('o ValidationPipe do controller rejeita um semestre fora do formato AAAA.N', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    await expect(
+      pipe.transform(
+        {
+          itens: [
+            { codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: 'lixo' },
+          ],
+        },
+        metadata,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('o ValidationPipe do controller aceita um semestre bem formado', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    const resultado = await pipe.transform(
+      {
+        itens: [
+          { codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: '2027.1' },
+        ],
+      },
+      metadata,
+    );
+
+    expect(resultado.itens[0].semestre).toBe('2027.1');
+  });
+
+  it('o ValidationPipe do controller aceita o semestre null, que tira do plano', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    const resultado = await pipe.transform(
+      { itens: [{ codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: null }] },
+      metadata,
+    );
+
+    expect(resultado.itens[0].semestre).toBeNull();
+  });
+
+  it('o ValidationPipe do controller rejeita um item sem a chave semestre', async () => {
+    // Com `@IsOptional` isto passava, e aí `semestre === null` era falso: o
+    // item escapava do deleteMany e chegava ao upsert com `undefined`. Tirar
+    // do plano tem que ser dito com `null`, não com omissão.
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    await expect(
+      pipe.transform({ itens: [{ codigo: 'X', nome: 'Y', cargaHoraria: 1 }] }, metadata),
+    ).rejects.toThrow();
+  });
+
+  // Fecha o buraco que os dois testes acima deixam em aberto: prova que o
+  // ValidationPipe está de fato pendurado no TrajetoriaController via
+  // @UsePipes, não só que a classe ValidationPipe funciona isoladamente. Sem
+  // este teste, apagar o @UsePipes(...) do controller não quebraria nada
+  // nesta suíte.
+  it('mantém o ValidationPipe ligado no controller', () => {
+    const pipes = Reflect.getMetadata(PIPES_METADATA, TrajetoriaController) ?? [];
+
+    expect(
+      pipes.some((pipe: unknown) => pipe instanceof ValidationPipe),
+    ).toBe(true);
   });
 });

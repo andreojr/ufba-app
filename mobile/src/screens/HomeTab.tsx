@@ -7,6 +7,7 @@ import { AppIcon } from "@/components/AppIcon";
 import { LocationBadge } from "@/components/LocationBadge";
 import { PontosAtencaoSection } from "@/components/PontosAtencaoSection";
 import { SemesterTrack } from "@/components/SemesterTrack";
+import { UpdateCard } from "@/components/UpdateCard";
 import { describeApiError } from "@/lib/api-errors";
 import { getPontosAtencao, getSchedule, postScheduleSync } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -201,6 +202,9 @@ export default function HomeTab(): JSX.Element {
   // first sync happens inside loadSchedule) — never to decide *whether* to read.
   useEffect(() => {
     if (accessToken) {
+      // Assíncrono: o setState de `loadSchedule` acontece depois de um await, nunca no tick
+      // deste efeito, então não há a cascata de renders que a regra previne.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadSchedule();
     }
   }, [sigaaLink.status, accessToken, loadSchedule]);
@@ -314,6 +318,11 @@ export default function HomeTab(): JSX.Element {
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
       >
+        {/* O aviso de versão nova vem antes dos prazos por ser transitório e
+            raro: quando aparece, é a única coisa na tela que o aluno não vai
+            rever amanhã. */}
+        <UpdateCard />
+
         <PontosAtencaoSection
           pontos={pontos}
           agora={now}

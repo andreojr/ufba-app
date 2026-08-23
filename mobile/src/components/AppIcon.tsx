@@ -58,6 +58,8 @@ const ICON_MAP = {
   IconBook: "book-outline",
   IconTrayFull: "file-tray-full-outline",
   IconPlus: "add",
+  IconGithubLogo: "logo-github",
+  IconLibrary: "library-outline",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;

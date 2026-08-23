@@ -38,4 +38,14 @@ export interface HistoricoRepository {
    * data that has to outlive the snapshot it was built from.
    */
   reconciliarPlano(userId: string, codigosConcluidos: string[]): Promise<void>;
+
+  /**
+   * Grava as posições que o aluno escolheu à mão. Upsert por código, não
+   * replace da tabela inteira: a tela manda só o que mudou, e um replace
+   * apagaria as decisões que ela não estava exibindo.
+   *
+   * `semestre: null` apaga a linha — a ausência de posição não é uma posição,
+   * e guardá-la deixaria um override que o projetor ignora.
+   */
+  salvarPlano(userId: string, itens: ItemPlano[]): Promise<void>;
 }

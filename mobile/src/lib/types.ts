@@ -166,6 +166,37 @@ export interface MarcosSemestralizacao {
   equivalencias: { codigo: string; equivalenteDe: string }[];
 }
 
+/** Mirrors ComponenteProjetado from backend — see backend/src/curriculo/projetor.ts. */
+export interface ComponenteProjetado {
+  codigo: string;
+  nome: string;
+  cargaHoraria: number;
+  /** Null when obsolete: no active component with this code. */
+  periodo: number | null;
+  atrasada: boolean;
+  /** The student placed it here; the projector didn't choose. */
+  manual: boolean;
+  /** Allocated by the valve, without being able to confirm the prerequisite. */
+  preRequisitoNaoVerificado: boolean;
+}
+
+export interface SemestreProjetado {
+  semestre: string;
+  componentes: ComponenteProjetado[];
+  horasOptativas: number;
+  horasComplementares: number;
+}
+
+/** Mirrors ProjecaoResponse from backend — see backend/src/curriculo/projecao-trajetoria.ts. */
+export interface ProjecaoTrajetoria {
+  semestres: SemestreProjetado[];
+  teto: number;
+  atrasadas: number;
+  conclusaoProjetada: string;
+  semestresAlemDoPrevisto: number;
+  alemDoPrazoMaximo: boolean;
+}
+
 export type TrajetoriaResponse =
   | { sincronizado: false }
   | {
@@ -174,6 +205,8 @@ export type TrajetoriaResponse =
       plano: ItemPlano[];
       /** Null when the aluno's curso couldn't be resolved yet — best-effort extra. */
       marcos: MarcosSemestralizacao | null;
+      /** Null when the curriculum structure doesn't resolve — extra best-effort. */
+      projecao: ProjecaoTrajetoria | null;
     };
 
 /** Mirrors the backend's DocenteSelos — see backend/src/docentes/selos.ts. */
@@ -280,4 +313,13 @@ export interface EntradaPonto {
   data: string;
   hora?: string;
   observacao?: string;
+}
+
+/** Mirrors the backend's `AppRelease` (backend/src/app-release/app-release.service.ts). */
+export interface AppRelease {
+  latestVersion: string;
+  versionCode: number;
+  downloadUrl: string;
+  releaseNotes: string;
+  publishedAt: string;
 }

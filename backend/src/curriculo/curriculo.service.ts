@@ -69,6 +69,7 @@ const HISTORICO_REPOSITORY_AUSENTE: HistoricoRepository = {
   buscar: async () => null,
   salvar: async () => undefined,
   reconciliarPlano: async () => undefined,
+  salvarPlano: async () => undefined,
 };
 
 export class CurriculoService {

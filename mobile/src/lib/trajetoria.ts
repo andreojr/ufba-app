@@ -5,8 +5,10 @@ import type {
   ComponentePendente,
   MarcoSemestre,
   MarcosSemestralizacao,
+  ProjecaoTrajetoria,
   ResumoCargaHoraria,
   Ritmo,
+  SemestreProjetado,
 } from "./types";
 
 export interface PeriodoTrajetoria {
@@ -133,58 +135,50 @@ export function rotuloSituacao(situacao: string): string | null {
   return ROTULOS_SITUACAO[situacao] ?? situacao;
 }
 
-/** What the planner may offer: pending, not already enrolled, actually curricular. */
-export function poolPlanejavel(pendentes: ComponentePendente[]): ComponentePendente[] {
-  return pendentes.filter((p) => !p.matriculado && p.codigo !== CODIGO_ENADE);
-}
-
 /**
- * How many obligatory components are still missing — unlike `poolPlanejavel`,
- * this counts a component the student is already taking too: the planner
- * shouldn't offer to move something already placed, but "how many left" isn't
- * done just because it's enrolled and waiting on a grade.
+ * How many obligatory components are still missing — doesn't count just those
+ * not yet enrolled: includes components the student is already taking too,
+ * because an enrolled-but-ungraded component is still not done.
  */
 export function contarFaltantes(pendentes: ComponentePendente[]): number {
   return pendentes.filter((p) => p.codigo !== CODIGO_ENADE).length;
 }
 
-/**
- * The terms the planner offers as drop zones: the ones after the current term,
- * capped at `limite` and never past the conclusion deadline the transcript
- * states. SIGAA terms run `.1` then `.2` within a year.
- */
-export function zonasDePlanejamento(
-  semestreAtual: string,
-  prazoMaximo: string,
-  limite: number,
-): string[] {
-  const proximo = (semestre: string): string => {
-    const [ano, periodo] = semestre.split(".").map(Number);
-    return periodo === 1 ? `${ano}.2` : `${ano + 1}.1`;
-  };
-
-  const zonas: string[] = [];
-  let atual = proximo(semestreAtual);
-  while (zonas.length < limite && atual.localeCompare(prazoMaximo) <= 0) {
-    zonas.push(atual);
-    atual = proximo(atual);
-  }
-  return zonas;
-}
-
 export interface AnoTrajetoria {
   ano: string;
   periodos: PeriodoTrajetoria[];
+  /** Os semestres que ainda não aconteceram, no mesmo ano. */
+  projetados: SemestreProjetado[];
 }
 
-/** Groups already-ordered periods by the year in their "AAAA.N" semestre. */
-export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
-  const porAno = new Map<string, PeriodoTrajetoria[]>();
+/**
+ * Passado e futuro no mesmo eixo de anos. Um ano pode ter os dois — o ano
+ * corrente costuma ter o semestre em curso e o seguinte já projetado — então
+ * agrupar os dois separadamente e concatenar produziria "2026" duas vezes.
+ */
+export function anosDaProjecao(
+  periodos: PeriodoTrajetoria[],
+  projecao: ProjecaoTrajetoria | null,
+): AnoTrajetoria[] {
+  const anos = new Map<string, AnoTrajetoria>();
+  const doAno = (semestre: string): AnoTrajetoria => {
+    const ano = semestre.slice(0, 4);
+    const existente = anos.get(ano);
+    if (existente) {
+      return existente;
+    }
+    const criado: AnoTrajetoria = { ano, periodos: [], projetados: [] };
+    anos.set(ano, criado);
+    return criado;
+  };
+
   for (const periodo of periodos) {
-    const ano = periodo.semestre.slice(0, 4);
-    porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
+    doAno(periodo.semestre).periodos.push(periodo);
   }
-  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos }));
+  for (const semestre of projecao?.semestres ?? []) {
+    doAno(semestre.semestre).projetados.push(semestre);
+  }
+  return [...anos.values()];
 }
 
 /**
@@ -648,9 +642,11 @@ export type NivelDensidade = 1 | 2 | 3 | 4;
  * The tier vocabulary: a glyph and the words for it.
  *
  * A progression of "how much material is in this matéria" — uma folha, várias
- * folhas, um livro, uma bandeja cheia. The first two steps multiply the same
- * object, so they carry their own order; the 3→4 step changes object, and that
- * is the part the legend earns its place explaining.
+ * folhas, um livro, uma estante. Each step holds more than the last without
+ * ever doubling back: the first two multiply the same object, and 3→4 goes
+ * from one book to the shelf that holds many. An earlier pass had a full paper
+ * tray at the top, which broke that — after reaching a book, the scale went
+ * back to loose paper.
  *
  * All four come from Ionicons deliberately. An earlier pass reached into
  * MaterialCommunityIcons for a multiple-books glyph, but two families inside a
@@ -668,7 +664,7 @@ const ESCALA_DENSIDADE: Record<
   1: { icone: "IconPaper", rotulo: "Carga leve", curto: "leve" },
   2: { icone: "IconPapers", rotulo: "Carga média", curto: "média" },
   3: { icone: "IconBook", rotulo: "Carga pesada", curto: "pesada" },
-  4: { icone: "IconTrayFull", rotulo: "Carga muito densa", curto: "muito densa" },
+  4: { icone: "IconLibrary", rotulo: "Carga muito densa", curto: "muito densa" },
 };
 
 /** Every tier, lightest first — what the legend at the top of the aba walks through. */
@@ -680,7 +676,7 @@ export const ESCALA_DENSIDADE_ORDENADA = [1, 2, 3, 4].map((nivel) => ({
 /**
  * Classifies a componente's carga horária into one of four density tiers.
  * Cuts sit at 50/75/100h so a 90h componente (um livro) reads as heavier than
- * a 60-68h one (várias folhas) but lighter than a 120h one (uma bandeja cheia) —
+ * a 60-68h one (várias folhas) but lighter than a 120h one (uma estante) —
  * the two ends of the range this app's transcripts actually carry.
  */
 export function densidadeCarga(horas: number): {
