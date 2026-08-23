@@ -318,7 +318,7 @@ describe("AjustesTab", () => {
       expect(link).toHaveBeenCalled();
     });
 
-    it("shows 'Conectado' and offers unlink when already linked", async () => {
+    it("shows 'Vinculado' with a check and offers unlink when already linked", async () => {
       mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
       const unlink = jest.fn().mockResolvedValue(undefined);
       mockedUseMoodleLink.mockReturnValue({
@@ -331,7 +331,9 @@ describe("AjustesTab", () => {
 
       const screen = await renderAjustes();
       const item = await screen.findByTestId("link-moodle-item");
-      expect(within(item).getByText("Conectado")).toBeTruthy();
+      expect(within(item).getByTestId("moodle-status-ok")).toBeTruthy();
+      expect(within(item).getByText("Vinculado")).toBeTruthy();
+      expect(within(item).queryByText("Materiais e avisos das suas salas")).toBeNull();
 
       await act(async () => {
         fireEvent.press(item);

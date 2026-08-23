@@ -648,7 +648,11 @@ export default function AjustesTab(): JSX.Element {
                       : "Nunca sincronizado"}
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isSyncingPerfil ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isSyncingPerfil ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
             <ListGroup.Item
@@ -665,7 +669,11 @@ export default function AjustesTab(): JSX.Element {
                   Inclusive a conta. Sem volta e sem cópia guardada.
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isApagando ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isApagando ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
           </ListGroup>
         </View>
@@ -772,29 +780,43 @@ export default function AjustesTab(): JSX.Element {
                   {'Cria um calendário "UFBA" no aparelho com suas aulas do semestre'}
                 </ListGroup.ItemDescription>
               </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>{isExportingCalendar ? <Spinner size="sm" /> : null}</ListGroup.ItemSuffix>
+              {isExportingCalendar ? (
+                <ListGroup.ItemSuffix>
+                  <Spinner size="sm" />
+                </ListGroup.ItemSuffix>
+              ) : null}
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
-            <ListGroup.Item testID="link-moodle-item" onPress={() => void handleMoodlePress()}>
+            <ListGroup.Item testID="link-moodle-item" onPress={() => handleMoodlePress()}>
               <ListGroup.ItemPrefix>
                 <MoodleIcon size={22} />
               </ListGroup.ItemPrefix>
               <ListGroup.ItemContent>
                 <ListGroup.ItemTitle>Vincular Moodle</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
-              </ListGroup.ItemContent>
-              <ListGroup.ItemSuffix>
                 {moodle.status === "linked" ? (
-                  <Chip variant="secondary" size="sm">
-                    {/* moodle.expired só vira true via veredito de token dentro de
-                        link()/getSiteInfo — nesta build somente-conexão nada mais
-                        dispara esse veredito, então "Reconectar" é inalcançável
-                        na prática. Uma ação de reconexão real fica para o
-                        trabalho de turma virtual (leitura de conteúdo). */}
-                    {moodle.expired ? "Reconectar" : "Conectado"}
-                  </Chip>
-                ) : null}
-              </ListGroup.ItemSuffix>
+                  // Vinculado: espelha o item da Conta acadêmica — check verde +
+                  // "Vinculado" no lugar da descrição. moodle.expired só viraria
+                  // true por veredito de token, inalcançável nesta build
+                  // somente-conexão; o ramo de alerta fica pronto para quando a
+                  // leitura de conteúdo (turma virtual) puder disparar o veredito.
+                  <View className="flex-row items-center gap-1.5">
+                    <AppIcon
+                      name={moodle.expired ? "IconErrorCircle" : "IconCheckCircle"}
+                      size={14}
+                      color={moodle.expired ? dangerColor : successColor}
+                    />
+                    <ListGroup.ItemDescription
+                      testID={moodle.expired ? "moodle-status-alerta" : "moodle-status-ok"}
+                      className={moodle.expired ? "text-danger" : "text-success"}
+                    >
+                      {moodle.expired ? "Reconectar" : "Vinculado"}
+                    </ListGroup.ItemDescription>
+                  </View>
+                ) : (
+                  <ListGroup.ItemDescription>Materiais e avisos das suas salas</ListGroup.ItemDescription>
+                )}
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix />
             </ListGroup.Item>
             <View className="h-px bg-white/10 mx-4" />
             <ListGroup.Item testID="link-classroom-item" disabled className="opacity-50">
