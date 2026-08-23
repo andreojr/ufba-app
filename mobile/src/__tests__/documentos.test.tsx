@@ -44,6 +44,11 @@ jest.mock("heroui-native", () => {
     Avatar: Object.assign(({ children }: any) => <View>{children}</View>, {
       Fallback: ({ children }: any) => <Text>{children}</Text>,
     }),
+    Button: ({ children, onPress }: any) => (
+      <TouchableOpacity onPress={onPress}>
+        <Text>{children}</Text>
+      </TouchableOpacity>
+    ),
     Chip: ({ children }: any) => <Text>{children}</Text>,
     ListGroup: Object.assign(({ children }: any) => <View>{children}</View>, {
       Item: ({ children, onPress }: any) => (
@@ -131,10 +136,10 @@ describe("DocumentosScreen", () => {
   });
 
   it("goes back to Perfil when the close button is pressed", async () => {
-    const { getByTestId } = await render(<DocumentosScreen />);
+    const { getByText } = await render(<DocumentosScreen />);
 
     await act(async () => {
-      fireEvent.press(getByTestId("app-bar-close"));
+      fireEvent.press(getByText("Fechar"));
     });
 
     expect(mockBack).toHaveBeenCalled();

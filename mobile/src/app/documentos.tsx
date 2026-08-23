@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import { Chip, ListGroup, Typography, useThemeColor } from "heroui-native";
+import { Button, Chip, ListGroup, Typography, useThemeColor } from "heroui-native";
 import { useEffect, useState, type JSX } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
@@ -79,6 +80,7 @@ export default function DocumentosScreen(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  const insets = useSafeAreaInsets();
 
   const [states, setStates] = useState<Record<DocumentKey, DocState>>({
     atestado: { status: "idle" },
@@ -161,7 +163,9 @@ export default function DocumentosScreen(): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
-      <AppBar title="Documentos" onClose={() => router.back()} />
+      {/* No onClose here — closing this screen happens via the "Fechar"
+          button at the bottom instead, same pattern as professor/[siape].tsx. */}
+      <AppBar title="Documentos" />
       <ScrollView
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pb-8"
@@ -282,6 +286,14 @@ export default function DocumentosScreen(): JSX.Element {
           </>
         ) : null}
       </ScrollView>
+
+      {/* Fixed footer, outside the ScrollView — same pattern as
+          professor/[siape].tsx's "Fechar" button. */}
+      <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
+        <Button variant="danger-soft" onPress={() => router.back()}>
+          Fechar
+        </Button>
+      </View>
     </View>
   );
 }
