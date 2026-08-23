@@ -241,3 +241,12 @@ export interface VizinhosCurricularesResponse {
   preRequisitos: VizinhoCurricular[];
   desbloqueia: VizinhoCurricular[];
 }
+
+/** Mirrors the backend's `AppRelease` (backend/src/app-release/app-release.service.ts). */
+export interface AppRelease {
+  latestVersion: string;
+  versionCode: number;
+  downloadUrl: string;
+  releaseNotes: string;
+  publishedAt: string;
+}

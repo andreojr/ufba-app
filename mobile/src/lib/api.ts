@@ -1,4 +1,5 @@
 import type {
+  AppRelease,
   DocentePerfil,
   DocenteResumo,
   GoogleUserInfo,
@@ -171,6 +172,14 @@ export async function getSigaaLink(accessToken: string): Promise<SigaaLinkStatus
 }
 
 /** Reads the cached schedule. Cheap — this hits our own database, not SIGAA. */
+/**
+ * Public on purpose — the app checks for updates before anyone has signed in,
+ * so no access token travels here.
+ */
+export async function getAppVersion(): Promise<AppRelease> {
+  return request<AppRelease>("/app/version", { method: "GET" });
+}
+
 export async function getSchedule(accessToken: string): Promise<ScheduleResponse> {
   return request<ScheduleResponse>("/schedule", { method: "GET", accessToken });
 }
