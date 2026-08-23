@@ -120,7 +120,22 @@ export class PontoAtencaoService {
       atual.data.toISOString().slice(0, 10) !== entrada.data ||
       atual.hora !== entrada.hora;
 
-    await this.repository.atualizar(id, paraDados(entrada), userId, prazoMudou);
+    // A transferência de responsabilidade segue a mesma régua da zeragem de
+    // votos: só quem reafirma o prazo assume por ele. Editar só título ou
+    // observação de um item CONTESTADO não pode virar um jeito indireto de
+    // tomar o `podeApagar` de outra pessoa. Um item órfão (responsável
+    // apagado) é a exceção: não há mais ninguém para preservar como dono,
+    // então qualquer edição o reivindica.
+    const novoResponsavelId = prazoMudou
+      ? userId
+      : (atual.responsavelId ?? userId);
+
+    await this.repository.atualizar(
+      id,
+      paraDados(entrada),
+      novoResponsavelId,
+      prazoMudou,
+    );
     return this.exigirPonto(userId, id);
   }
 

@@ -68,7 +68,7 @@ describe('PontoAtencaoService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('permite edição por qualquer matriculado quando o item está contestado, e transfere a responsabilidade para quem corrigiu', async () => {
+  it('permite edição por qualquer matriculado quando o item está contestado, e transfere a responsabilidade para quem corrigiu a data', async () => {
     const repo = repositorioFalso({
       buscar: jest.fn(() =>
         Promise.resolve(
@@ -77,23 +77,56 @@ describe('PontoAtencaoService', () => {
       ),
     });
 
-    await new PontoAtencaoService(repo).atualizar('user-1', 'ponto-1', DADOS);
+    await new PontoAtencaoService(repo).atualizar('user-1', 'ponto-1', {
+      ...DADOS,
+      data: '2026-09-29',
+    });
 
-    // O terceiro argumento é o novo responsável: quem corrigiu ('user-1'),
-    // não quem segurava o item antes ('user-2').
+    // O terceiro argumento é o novo responsável: quem corrigiu a data
+    // ('user-1'), não quem segurava o item antes ('user-2'). É o prazo que
+    // foi contestado, então é ele que precisa ser reafirmado.
     // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
     expect(repo.atualizar).toHaveBeenCalledWith(
       'ponto-1',
       {
         tipo: 'PROVA',
         titulo: 'Avaliação I',
-        data: new Date('2026-09-22T00:00:00Z'),
+        data: new Date('2026-09-29T00:00:00Z'),
         hora: '16:40',
         observacao: null,
       },
       'user-1',
+      true,
+    );
+  });
+
+  it('permite edição de item contestado por terceiro sem transferir a responsabilidade quando só a observação muda, e não concede podeApagar', async () => {
+    const repo = repositorioFalso({
+      buscar: jest.fn(() =>
+        Promise.resolve(
+          linha({ responsavelId: 'user-2', confirmacoes: 0, contestacoes: 3 }),
+        ),
+      ),
+    });
+
+    const visao = await new PontoAtencaoService(repo).atualizar(
+      'user-1',
+      'ponto-1',
+      { ...DADOS, observacao: 'levar calculadora' },
+    );
+
+    // Editar só a observação de um item CONTESTADO não pode virar um jeito
+    // indireto de tomar a responsabilidade (e o podeApagar) de outra pessoa:
+    // o que foi contestado foi o prazo, não o texto.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+    expect(repo.atualizar).toHaveBeenCalledWith(
+      'ponto-1',
+      expect.anything(),
+      'user-2',
       false,
     );
+    expect(visao.responsavelId).toBe('user-2');
+    expect(visao.podeApagar).toBe(false);
   });
 
   it('permite edição quando o item ficou sem responsável, e atribui a responsabilidade a quem corrigiu', async () => {
