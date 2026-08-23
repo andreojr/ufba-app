@@ -5,7 +5,7 @@ import type { UserRecord, UserRepository } from '../users/user.repository';
 
 const ALLOWED_EMAIL_DOMAIN = '@ufba.br';
 
-export interface GradlineLoginResult {
+export interface UfbaLoginResult {
   accessToken: string;
   user: UserRecord;
 }
@@ -18,12 +18,12 @@ export class AuthService {
     private readonly userRepository: UserRepository,
   ) {}
 
-  async loginWithGoogle(idToken: string): Promise<GradlineLoginResult> {
+  async loginWithGoogle(idToken: string): Promise<UfbaLoginResult> {
     const googleUser = await this.googleTokenService.verify(idToken);
 
     if (!googleUser.email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)) {
       throw new ForbiddenException(
-        'Apenas contas @ufba.br podem entrar no Gradline',
+        'Apenas contas @ufba.br podem entrar no UFBA',
       );
     }
 

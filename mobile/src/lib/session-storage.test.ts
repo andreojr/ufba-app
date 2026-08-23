@@ -61,7 +61,7 @@ describe("session-storage", () => {
     await saveSession(SESSION);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.session",
+      "ufba.session",
       JSON.stringify(SESSION),
     );
   });
@@ -69,6 +69,6 @@ describe("session-storage", () => {
   it("clears the stored session", async () => {
     await clearSession();
 
-    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.session");
+    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.session");
   });
 });

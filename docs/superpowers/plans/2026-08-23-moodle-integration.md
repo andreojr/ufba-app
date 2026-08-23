@@ -91,19 +91,19 @@ describe("moodle-storage", () => {
   it("persists the session as JSON under the moodle key", async () => {
     await saveMoodleSession(validSession);
     expect(mockStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.moodle",
+      "ufba.moodle",
       JSON.stringify(validSession),
     );
   });
 
   it("clears the session", async () => {
     await clearMoodleSession();
-    expect(mockStore.deleteItemAsync).toHaveBeenCalledWith("gradline.moodle");
+    expect(mockStore.deleteItemAsync).toHaveBeenCalledWith("ufba.moodle");
   });
 
   it("remembers and reports that the account was ever linked", async () => {
     await rememberMoodleWasLinked();
-    expect(mockStore.setItemAsync).toHaveBeenCalledWith("gradline.moodle.jaVinculou", "1");
+    expect(mockStore.setItemAsync).toHaveBeenCalledWith("ufba.moodle.jaVinculou", "1");
 
     mockStore.getItemAsync.mockResolvedValueOnce("1");
     await expect(hasEverLinkedMoodle()).resolves.toBe(true);
@@ -127,8 +127,8 @@ Expected: FAIL (module `./moodle-storage` not found).
 // mobile/src/lib/moodle-storage.ts
 import * as SecureStore from "expo-secure-store";
 
-const MOODLE_KEY = "gradline.moodle";
-const EVER_LINKED_KEY = "gradline.moodle.jaVinculou";
+const MOODLE_KEY = "ufba.moodle";
+const EVER_LINKED_KEY = "ufba.moodle.jaVinculou";
 
 export type MoodleSession = {
   wstoken: string;

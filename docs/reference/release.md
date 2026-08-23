@@ -70,7 +70,7 @@ como sendo o seu app.
 **Se for local.** Gere uma vez e guarde do mesmo jeito:
 
 ```bash
-keytool -genkeypair -v -keystore gradline-release.keystore -alias gradline -keyalg RSA -keysize 2048 -validity 10000
+keytool -genkeypair -v -keystore ufba-release.keystore -alias ufba -keyalg RSA -keysize 2048 -validity 10000
 ```
 
 `-validity 10000` são ~27 anos. Uma chave que expira é o mesmo problema com
@@ -117,7 +117,7 @@ Alternativa local: `expo prebuild` e depois `./gradlew assembleRelease` em
 Baixe o artefato do EAS e suba como asset:
 
 ```bash
-gh release create v1.1.0 ./gradline-1.1.0.apk --title "v1.1.0" --notes "..."
+gh release create v1.1.0 ./ufba-1.1.0.apk --title "v1.1.0" --notes "..."
 ```
 
 **Não linke a URL do EAS direto** — ela expira. A URL do asset do GitHub é
@@ -128,7 +128,7 @@ estável, e é ela que vai no passo seguinte e na landing.
 ```bash
 railway variables --set APP_LATEST_VERSION=1.1.0 \
   --set APP_LATEST_VERSION_CODE=3 \
-  --set APP_DOWNLOAD_URL=https://github.com/<owner>/<repo>/releases/download/v1.1.0/gradline-1.1.0.apk \
+  --set APP_DOWNLOAD_URL=https://github.com/<owner>/<repo>/releases/download/v1.1.0/ufba-1.1.0.apk \
   --set APP_RELEASE_NOTES="Optativas na Trajetória." \
   --set APP_PUBLISHED_AT=2026-09-01T12:00:00Z
 ```
@@ -168,7 +168,7 @@ Lidas por `backend/src/app-release/app-release.service.ts` e servidas em
 |---|---|---|
 | `APP_LATEST_VERSION` | `1.1.0` | sim |
 | `APP_LATEST_VERSION_CODE` | `3` | sim (inteiro) |
-| `APP_DOWNLOAD_URL` | `https://github.com/.../gradline-1.1.0.apk` | sim |
+| `APP_DOWNLOAD_URL` | `https://github.com/.../ufba-1.1.0.apk` | sim |
 | `APP_PUBLISHED_AT` | `2026-09-01T12:00:00Z` | sim (ISO 8601) |
 | `APP_RELEASE_NOTES` | `Optativas na Trajetória.` | não (vazio = sem notas) |
 

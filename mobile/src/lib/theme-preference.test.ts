@@ -35,6 +35,6 @@ describe("theme-preference", () => {
   it("persists the preference", async () => {
     await saveThemePreference("system");
 
-    expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith("gradline.theme-preference", "system");
+    expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith("ufba.theme-preference", "system");
   });
 });

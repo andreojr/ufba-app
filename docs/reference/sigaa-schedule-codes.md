@@ -1,6 +1,6 @@
 # Códigos de horário do SIGAA — formato e algoritmo de tradução
 
-Fonte: análise do código-fonte da extensão [ernestosrf/sigaa-horarios-extension](https://github.com/ernestosrf/sigaa-horarios-extension) (`content.js`, verificado via `curl` do raw file em 2026-08-18, licença/uso: extensão pública de código aberto, só lida — nada foi copiado literalmente pro Gradline, isso aqui é a documentação do formato que ela decodifica).
+Fonte: análise do código-fonte da extensão [ernestosrf/sigaa-horarios-extension](https://github.com/ernestosrf/sigaa-horarios-extension) (`content.js`, verificado via `curl` do raw file em 2026-08-18, licença/uso: extensão pública de código aberto, só lida — nada foi copiado literalmente pro UFBA, isso aqui é a documentação do formato que ela decodifica).
 
 Esse formato bate com os códigos reais observados na investigação do SIGAA da UFBA ([sigaa-investigation spike](../superpowers/spikes/2026-08-17-sigaa-investigation.md)): `2N34`, `35N12`, etc.
 
@@ -60,7 +60,7 @@ Regex de reconhecimento usada pela extensão: `^([2-7]+)([MTN])(\d+)$`
 - Não trata slots fora da tabela (`M7`, `N5`, etc.) além de simplesmente ignorá-los silenciosamente (o loop só empurra pra `timeSlots` se `timeMap[shift]?.[timeCode]` existir) — um slot inválido nesse meio é descartado sem aviso. Preferimos logar/alertar em vez de descartar silenciosamente.
 - Não lida com múltiplos turnos no mesmo código (não é um caso observado no SIGAA, mas vale um teste de none-match explícito).
 
-## Onde isso entra no Gradline
+## Onde isso entra no UFBA
 
 Essa tradução deve virar uma função utilitária pura (ex: `parseSigaaScheduleCode(code: string): { days: string[]; shift: string; timeRanges: string[] }`), testável isoladamente com os exemplos acima como fixtures, usada tanto:
 - no backend, ao normalizar os dados de horário extraídos do portal (`Componente Curricular` / `Local` / `Horário` — ver spike), antes de devolver JSON pro app;

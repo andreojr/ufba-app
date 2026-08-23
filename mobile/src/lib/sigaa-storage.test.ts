@@ -60,7 +60,7 @@ describe("sigaa-storage", () => {
     await saveSigaaCredentials(CREDENTIALS);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.sigaa",
+      "ufba.sigaa",
       JSON.stringify(CREDENTIALS),
     );
   });
@@ -88,7 +88,7 @@ describe("sigaa-storage", () => {
     await markSigaaPasswordStale(true);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.sigaa",
+      "ufba.sigaa",
       JSON.stringify({ ...CREDENTIALS, senhaDesatualizada: true }),
     );
   });
@@ -101,7 +101,7 @@ describe("sigaa-storage", () => {
     await markSigaaPasswordStale(false);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.sigaa",
+      "ufba.sigaa",
       JSON.stringify({ ...CREDENTIALS, senhaDesatualizada: false }),
     );
   });
@@ -117,13 +117,13 @@ describe("sigaa-storage", () => {
   it("clears the stored credentials", async () => {
     await clearSigaaCredentials();
 
-    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.sigaa");
+    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.sigaa");
   });
 
   it("does not forget that the account was once linked when the credentials are cleared", async () => {
     await clearSigaaCredentials();
 
-    expect(mockedSecureStore.deleteItemAsync).not.toHaveBeenCalledWith("gradline.sigaa.jaVinculou");
+    expect(mockedSecureStore.deleteItemAsync).not.toHaveBeenCalledWith("ufba.sigaa.jaVinculou");
   });
 
   it("reports no previous link on a fresh install", async () => {
@@ -135,7 +135,7 @@ describe("sigaa-storage", () => {
   it("remembers a link across an unlink, so onboarding never runs twice", async () => {
     await rememberSigaaWasLinked();
 
-    expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith("gradline.sigaa.jaVinculou", "1");
+    expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith("ufba.sigaa.jaVinculou", "1");
   });
 
   it("reports a previous link once the mark is stored", async () => {
@@ -147,7 +147,7 @@ describe("sigaa-storage", () => {
   it("forgets the previous link entirely, so a fresh sign-in sees onboarding again", async () => {
     await forgetSigaaWasLinked();
 
-    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.sigaa.jaVinculou");
+    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.sigaa.jaVinculou");
   });
 
   it("treats an unreadable keystore as no previous link rather than crashing", async () => {

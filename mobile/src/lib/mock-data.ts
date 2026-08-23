@@ -1,7 +1,7 @@
 /**
- * Mock data for the Gradline UI screens.
+ * Mock data for the UFBA UI screens.
  *
- * Ported from the `Gradline App.dc.html` Claude Design mockup. Everything here is
+ * Ported from the `Gradline App.dc.html` Claude Design mockup (historical file name). Everything here is
  * static/fake data used to drive the front-end mockup — there is no backend behind it.
  */
 

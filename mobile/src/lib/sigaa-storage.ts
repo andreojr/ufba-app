@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 import type { SigaaCredentials } from "./types";
 
-const SIGAA_KEY = "gradline.sigaa";
+const SIGAA_KEY = "ufba.sigaa";
 /**
  * Survives `clearSigaaCredentials` on purpose. Unlinking is not the same as
  * never having linked: the student's schedule and histórico stay in our own
@@ -10,7 +10,7 @@ const SIGAA_KEY = "gradline.sigaa";
  * needs the password back. This flag is what tells the onboarding redirect
  * apart from "this person already used the app".
  */
-const EVER_LINKED_KEY = "gradline.sigaa.jaVinculou";
+const EVER_LINKED_KEY = "ufba.sigaa.jaVinculou";
 
 function isSigaaCredentials(value: unknown): value is SigaaCredentials {
   return (

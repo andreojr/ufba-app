@@ -11,10 +11,12 @@ module.exports = {
     userInterfaceStyle: "automatic",
     ios: {
       supportsTablet: true,
-      bundleIdentifier: IS_DEV ? "com.gradline.ufba.dev" : "com.gradline.ufba",
+      bundleIdentifier: IS_DEV
+        ? "com.espectrotech.ufba.dev"
+        : "com.espectrotech.ufba",
     },
     android: {
-      package: IS_DEV ? "com.gradline.ufba.dev" : "com.gradline.ufba",
+      package: IS_DEV ? "com.espectrotech.ufba.dev" : "com.espectrotech.ufba",
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#FFFFFF",
@@ -58,6 +60,11 @@ module.exports = {
     experiments: {
       typedRoutes: true,
       reactCompiler: true,
+    },
+    extra: {
+      eas: {
+        projectId: "e902672b-16bf-4f5a-abbf-4f42f2299283",
+      },
     },
   },
 };

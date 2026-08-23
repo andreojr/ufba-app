@@ -1,6 +1,6 @@
-# Gradline backend
+# UFBA backend
 
-NestJS backend for Gradline — replaces the SIGAA (UFBA) web UI with a modern API for the mobile app.
+NestJS backend for UFBA — replaces the SIGAA (UFBA) web UI with a modern API for the mobile app.
 
 ## Setup
 
@@ -40,7 +40,7 @@ npm test
 
 Two separate auth domains, deliberately kept apart:
 
-- **Gradline auth** — Google Sign-In only. The app sends a Google ID token to `POST /auth/google`; the backend verifies it (`google-auth-library`) and issues its own JWT (`src/auth/`).
+- **UFBA auth** — Google Sign-In only. The app sends a Google ID token to `POST /auth/google`; the backend verifies it (`google-auth-library`) and issues its own JWT (`src/auth/`).
 - **SIGAA credential** — used only by the sigaa-engine to scrape the portal on the user's behalf. **Never persisted by default**: it travels in the request body on every call and is discarded from memory once used. Only if the user opts into "lembrar senha" (`rememberPassword: true` on `POST /sigaa/link`) is it encrypted (AES-256-GCM, key from `SIGAA_CREDENTIAL_ENC_KEY`, never in the DB) and stored — every decryption is written to `audit_log`.
 
 ### Database (`prisma/`, `src/db/`)
@@ -70,9 +70,9 @@ Pure HTTP + cheerio, no headless browser — validated feasible in
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | POST | `/auth/google` | — | Body: `{ idToken }`. Returns `{ accessToken, user }`. |
-| POST | `/sigaa/link` | Gradline JWT | Body: `{ login, senha, rememberPassword? }`. Validates live against SIGAA before storing anything. |
-| GET | `/schedule` | Gradline JWT | Body: `{ login, senha }` (credentials travel per-request; not a strict REST convention for GET, but keeps them out of query strings/persistence by default). |
-| GET | `/grades` | Gradline JWT | **501** — see Known gap above. |
+| POST | `/sigaa/link` | UFBA JWT | Body: `{ login, senha, rememberPassword? }`. Validates live against SIGAA before storing anything. |
+| GET | `/schedule` | UFBA JWT | Body: `{ login, senha }` (credentials travel per-request; not a strict REST convention for GET, but keeps them out of query strings/persistence by default). |
+| GET | `/grades` | UFBA JWT | **501** — see Known gap above. |
 
 ## Safety rule
 

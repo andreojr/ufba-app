@@ -1,7 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 
-const MOODLE_KEY = "gradline.moodle";
-const EVER_LINKED_KEY = "gradline.moodle.jaVinculou";
+const MOODLE_KEY = "ufba.moodle";
+const EVER_LINKED_KEY = "ufba.moodle.jaVinculou";
 
 export type MoodleSession = {
   wstoken: string;

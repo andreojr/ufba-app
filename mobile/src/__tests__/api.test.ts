@@ -207,7 +207,7 @@ describe("postGoogleLogin", () => {
       ok: false,
       status: 403,
       json: async () => ({
-        message: "Apenas contas @ufba.br podem entrar no Gradline",
+        message: "Apenas contas @ufba.br podem entrar no UFBA",
       }),
     }) as unknown as typeof fetch;
 
@@ -216,7 +216,7 @@ describe("postGoogleLogin", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(403);
     expect(error.message).toBe(
-      "Apenas contas @ufba.br podem entrar no Gradline",
+      "Apenas contas @ufba.br podem entrar no UFBA",
     );
   });
 });
@@ -780,7 +780,7 @@ describe("checking for an app update", () => {
   const RELEASE = {
     latestVersion: "1.1.0",
     versionCode: 3,
-    downloadUrl: "https://example.com/gradline-1.1.0.apk",
+    downloadUrl: "https://example.com/ufba-1.1.0.apk",
     releaseNotes: "Optativas na Trajetória.",
     publishedAt: "2026-09-01T12:00:00Z",
   };

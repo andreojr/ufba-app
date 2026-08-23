@@ -2,7 +2,7 @@
 
 ## Motivation
 
-To fetch schedule/grades, Gradline needs the student's SIGAA login and
+To fetch schedule/grades, UFBA needs the student's SIGAA login and
 password (SIGAA has no OAuth/SSO — confirmed in
 `docs/superpowers/spikes/2026-08-17-sigaa-investigation.md`). The
 backend already has the storage side of this built: `SigaaLink`
@@ -65,7 +65,7 @@ Google sign-in.
 - `mobile/src/lib/sigaa-storage.ts` — mirrors
   `session-storage.ts`: `getSigaaCredentials()` /
   `saveSigaaCredentials(creds)` / `clearSigaaCredentials()`, backed by
-  `expo-secure-store` under its own key (`"gradline.sigaa"`).
+  `expo-secure-store` under its own key (`"ufba.sigaa"`).
 - `mobile/src/lib/api.ts` (additions):
   - `postSigaaLink(accessToken, { login, senha }, rememberPassword): Promise<void>`
     — `POST /sigaa/link` with `Authorization: Bearer ${accessToken}`.
@@ -147,7 +147,7 @@ User fills sigaa-link.tsx and submits
 
 - This does not change the transmission trust model already accepted
   for the existing `sigaa-engine`: the SIGAA password transits to the
-  Gradline backend on every `/sigaa/link` and `/schedule` call
+  UFBA backend on every `/sigaa/link` and `/schedule` call
   regardless of the cloud checkbox, because the SIGAA scrape itself
   runs server-side. The checkbox controls only *persistence*
   (whether a durable encrypted copy exists after the request

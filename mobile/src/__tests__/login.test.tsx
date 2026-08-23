@@ -161,7 +161,7 @@ describe("LoginScreen", () => {
       data: { idToken: "some-id-token", user: { email: "aluno@ufba.br" } },
     } as never);
     signIn.mockRejectedValue(
-      new ApiError("Apenas contas @ufba.br podem entrar no Gradline", 403),
+      new ApiError("Apenas contas @ufba.br podem entrar no UFBA", 403),
     );
 
     const { getByRole } = await render(<LoginScreen />);

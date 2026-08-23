@@ -58,7 +58,7 @@ const AVATAR_SIZE_LG_PX = 64;
 // Fixed (not random) seeds for the "escolha um avatar" showcase — a preview of what's
 // waiting in the picker, so a first-time visitor knows there's something fun there
 // instead of just seeing a bare "avatar" label with no idea what it means.
-const AVATAR_SHOWCASE_SEEDS = ["gradline-vitrine-1", "gradline-vitrine-2", "gradline-vitrine-3"];
+const AVATAR_SHOWCASE_SEEDS = ["ufba-vitrine-1", "ufba-vitrine-2", "ufba-vitrine-3"];
 const AVATAR_SHOWCASE_SIZE_PX = 36;
 const AVATAR_SHOWCASE_OVERLAP_PX = 14;
 

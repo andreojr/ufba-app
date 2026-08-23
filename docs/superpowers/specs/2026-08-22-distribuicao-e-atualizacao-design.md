@@ -102,7 +102,7 @@ OTA, o manifest embarcado e o binário nunca divergem.
 
 Instalar um APK por cima de outro é update no lugar — preserva dados do
 SecureStore e caches, não duplica o app — **desde que** o `applicationId`
-(`com.gradline.ufba`) e a **chave de assinatura** sejam os mesmos.
+(`com.espectrotech.ufba`) e a **chave de assinatura** sejam os mesmos.
 
 Se a chave mudar, o Android recusa com "app não instalado" e o usuário só
 prossegue desinstalando primeiro, **perdendo os dados locais**. Isso acontece
@@ -125,7 +125,7 @@ de qualquer login).
 {
   "latestVersion": "1.1.0",
   "versionCode": 3,
-  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v1.1.0/gradline-1.1.0.apk",
+  "downloadUrl": "https://github.com/<owner>/<repo>/releases/download/v1.1.0/ufba-1.1.0.apk",
   "releaseNotes": "Optativas na Trajetória. Correção no cálculo do CR.",
   "publishedAt": "2026-09-01T12:00:00Z"
 }
@@ -194,7 +194,7 @@ desconhecidos" — uma vez por aparelho, não por atualização.
 
 `src/lib/app-update-storage.ts` — grava a versão dispensada no SecureStore
 (mecanismo que `src/lib/theme-preference.ts` já usa), chave
-`gradline.update-dismissed`. A dispensa é **por versão**: some agora, reaparece
+`ufba.update-dismissed`. A dispensa é **por versão**: some agora, reaparece
 quando sair a próxima.
 
 ### Download e instalação
@@ -295,7 +295,7 @@ keystores diferentes.
 e subir como asset:
 
 ```bash
-gh release create v1.1.0 ./gradline-1.1.0.apk --title "v1.1.0" --notes "..."
+gh release create v1.1.0 ./ufba-1.1.0.apk --title "v1.1.0" --notes "..."
 ```
 
 A URL do asset é estável e é o que vai em `APP_DOWNLOAD_URL`.

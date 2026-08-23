@@ -10,7 +10,7 @@ function configFake(values: Record<string, string | undefined>): ConfigService {
 const COMPLETE = {
   APP_LATEST_VERSION: '1.1.0',
   APP_LATEST_VERSION_CODE: '3',
-  APP_DOWNLOAD_URL: 'https://example.com/gradline-1.1.0.apk',
+  APP_DOWNLOAD_URL: 'https://example.com/ufba-1.1.0.apk',
   APP_RELEASE_NOTES: 'Optativas na Trajetória.',
   APP_PUBLISHED_AT: '2026-09-01T12:00:00Z',
 };
@@ -22,7 +22,7 @@ describe('AppReleaseService', () => {
     expect(service.release()).toEqual({
       latestVersion: '1.1.0',
       versionCode: 3,
-      downloadUrl: 'https://example.com/gradline-1.1.0.apk',
+      downloadUrl: 'https://example.com/ufba-1.1.0.apk',
       releaseNotes: 'Optativas na Trajetória.',
       publishedAt: '2026-09-01T12:00:00Z',
     });

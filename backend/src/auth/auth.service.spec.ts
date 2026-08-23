@@ -26,7 +26,7 @@ function fakeUserRepository(userRecord: UserRecord) {
 }
 
 describe('AuthService.loginWithGoogle', () => {
-  it('upserts the Gradline user and signs the JWT with the internal user id', async () => {
+  it('upserts the UFBA user and signs the JWT with the internal user id', async () => {
     const googleTokenService = fakeGoogleTokenService({
       googleId: 'google-123',
       email: 'aluno@ufba.br',

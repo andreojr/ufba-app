@@ -332,7 +332,7 @@ describe("sigaa-storage", () => {
     await saveSigaaCredentials(CREDENTIALS);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.sigaa",
+      "ufba.sigaa",
       JSON.stringify(CREDENTIALS),
     );
   });
@@ -340,7 +340,7 @@ describe("sigaa-storage", () => {
   it("clears the stored credentials", async () => {
     await clearSigaaCredentials();
 
-    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.sigaa");
+    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.sigaa");
   });
 });
 ```
@@ -359,7 +359,7 @@ import * as SecureStore from "expo-secure-store";
 
 import type { SigaaCredentials } from "./types";
 
-const SIGAA_KEY = "gradline.sigaa";
+const SIGAA_KEY = "ufba.sigaa";
 
 function isSigaaCredentials(value: unknown): value is SigaaCredentials {
   return (

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the Gradline mobile app's first screen — Google Sign-In — that authenticates against the existing `POST /auth/google` backend endpoint, persists the session, and gates access to the existing `(tabs)` group.
+**Goal:** Build the UFBA mobile app's first screen — Google Sign-In — that authenticates against the existing `POST /auth/google` backend endpoint, persists the session, and gates access to the existing `(tabs)` group.
 
 **Architecture:** `@react-native-google-signin/google-signin` (native Google SDK, requires a local Android dev client build) obtains a Google `idToken`; a small `lib/` layer (`session-storage.ts`, `api.ts`, `auth-context.tsx`) exchanges it with the backend, persists the resulting session in `expo-secure-store`, and exposes auth state via a `useAuth()` hook. The root layout uses Expo Router's `Stack.Protected` to show `login` or `(tabs)` based on that state.
 
@@ -57,10 +57,10 @@ Edit `mobile/app.json` — add `"package"` under `"android"`, add `"bundleIdenti
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gradline.app"
+      "bundleIdentifier": "com.ufba.app"
     },
     "android": {
-      "package": "com.gradline.app",
+      "package": "com.ufba.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -88,7 +88,7 @@ Edit `mobile/app.json` — add `"package"` under `"android"`, add `"bundleIdenti
 }
 ```
 
-(`com.gradline.app` is a placeholder reverse-DNS package name — fine pre-launch, easy to change later before any store submission.)
+(`com.ufba.app` is a placeholder reverse-DNS package name — fine pre-launch, easy to change later before any store submission.)
 
 - [ ] **Step 3: Create the env files**
 
@@ -230,7 +230,7 @@ describe("session-storage", () => {
     await saveSession(SESSION);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.session",
+      "ufba.session",
       JSON.stringify(SESSION),
     );
   });
@@ -238,7 +238,7 @@ describe("session-storage", () => {
   it("clears the stored session", async () => {
     await clearSession();
 
-    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.session");
+    expect(mockedSecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.session");
   });
 });
 ```
@@ -255,7 +255,7 @@ import * as SecureStore from "expo-secure-store";
 
 import type { Session } from "./types";
 
-const SESSION_KEY = "gradline.session";
+const SESSION_KEY = "ufba.session";
 
 export async function getSession(): Promise<Session | null> {
   const raw = await SecureStore.getItemAsync(SESSION_KEY);
@@ -732,7 +732,7 @@ export default function LoginScreen(): JSX.Element {
   return (
     <View className="flex-1 bg-background items-center justify-center gap-8 px-6">
       <Image source={require("@/assets/images/icon.png")} className="w-24 h-24" />
-      <Typography.Heading type="h3">Gradline</Typography.Heading>
+      <Typography.Heading type="h3">UFBA</Typography.Heading>
       <Button
         className="w-full"
         isDisabled={isSigningIn}
@@ -866,7 +866,7 @@ Look for the `debug` variant's `SHA1` line.
 - [ ] **Step 3: Register an Android OAuth client in Google Cloud Console**
 
 In the same Google Cloud project as the existing Web client (`console.cloud.google.com` → APIs & Services → Credentials → Create credentials → OAuth client ID → Application type: Android):
-- Package name: `com.gradline.app` (from Task 1's `app.json`)
+- Package name: `com.ufba.app` (from Task 1's `app.json`)
 - SHA-1 certificate fingerprint: from Step 2
 
 This is required for `GoogleSignin` to authenticate at all on Android (`DEVELOPER_ERROR` / status code 10 otherwise) — it doesn't change what value goes into `GoogleSignin.configure()` (still the Web client ID), it's a separate registration Google uses to verify the calling app.

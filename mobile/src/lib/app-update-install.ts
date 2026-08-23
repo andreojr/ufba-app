@@ -32,7 +32,7 @@ export async function baixarEInstalar(
   versao: string,
   onProgresso: (fracao: number | null) => void,
 ): Promise<void> {
-  const destino = new File(Paths.cache, `gradline-${versao}.apk`);
+  const destino = new File(Paths.cache, `ufba-${versao}.apk`);
 
   // A failed download leaves nothing worth cleaning up and nothing to install.
   // `idempotent` so a retry after a partial download overwrites instead of throwing.

@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 import type { Session } from "./types";
 
-const SESSION_KEY = "gradline.session";
+const SESSION_KEY = "ufba.session";
 
 function isSession(value: unknown): value is Session {
   return (

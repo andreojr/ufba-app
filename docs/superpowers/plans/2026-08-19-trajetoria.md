@@ -3136,7 +3136,7 @@ import type { PeriodoLetivo } from "./types";
  * Trajetória screen to decide whether to nudge a re-sync. Not secret — it lives
  * in SecureStore only because that is the app's one persistence mechanism.
  */
-const PERIODO_KEY = "gradline.periodo";
+const PERIODO_KEY = "ufba.periodo";
 
 function isPeriodoLetivo(value: unknown): value is PeriodoLetivo {
   return (

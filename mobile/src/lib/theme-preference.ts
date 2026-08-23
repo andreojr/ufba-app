@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 
 export type ThemePreference = "light" | "dark" | "system";
 
-const THEME_PREFERENCE_KEY = "gradline.theme-preference";
+const THEME_PREFERENCE_KEY = "ufba.theme-preference";
 
 function isThemePreference(value: unknown): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";

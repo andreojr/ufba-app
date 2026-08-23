@@ -29,7 +29,7 @@ describe("app-update-storage", () => {
     await dispensarVersao("1.1.0");
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.update-dismissed",
+      "ufba.update-dismissed",
       "1.1.0",
     );
   });
@@ -56,7 +56,7 @@ describe("app-update-storage", () => {
     await marcarChecagem(1756000000000);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.update-last-check",
+      "ufba.update-last-check",
       "1756000000000",
     );
   });

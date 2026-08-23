@@ -6,8 +6,8 @@ import * as SecureStore from "expo-secure-store";
  * so it expires on its own: dismissing 1.1.0 says nothing about 1.2.0.
  */
 
-const VERSAO_DISPENSADA_KEY = "gradline.update-dismissed";
-const ULTIMA_CHECAGEM_KEY = "gradline.update-last-check";
+const VERSAO_DISPENSADA_KEY = "ufba.update-dismissed";
+const ULTIMA_CHECAGEM_KEY = "ufba.update-last-check";
 
 /** The check runs at most once an hour — an update is never urgent to the minute. */
 export const INTERVALO_CHECAGEM_MS = 60 * 60 * 1000;

@@ -2,7 +2,7 @@
 
 ## Context
 
-The Gradline backend (`backend/src/auth`) already exposes `POST /auth/google`,
+The UFBA backend (`backend/src/auth`) already exposes `POST /auth/google`,
 which accepts `{ idToken: string }`, verifies it against `GOOGLE_CLIENT_ID`
 (a Google Web OAuth client), and returns:
 
@@ -10,7 +10,7 @@ which accepts `{ idToken: string }`, verifies it against `GOOGLE_CLIENT_ID`
 { accessToken: string; user: { googleId: string; email: string; name: string } }
 ```
 
-Google Sign-In is Gradline's only auth method (see `backend/.env.example`) —
+Google Sign-In is UFBA's only auth method (see `backend/.env.example`) —
 there is no email/password flow to support.
 
 The mobile app (`mobile/`) is an Expo Router + HeroUI Native scaffold with a
@@ -137,7 +137,7 @@ No third-party navigation guard library needed.
 
 ### `login.tsx`
 
-Single screen: the existing Gradline app icon asset
+Single screen: the existing UFBA app icon asset
 (`assets/images/icon.png`), a HeroUI Native `Button` labeled "Entrar com
 Google" (swapped for a `Spinner` while signing in, via `isIconOnly` +
 `isDisabled`), and a `useToast()` call on failure. On success, the routing

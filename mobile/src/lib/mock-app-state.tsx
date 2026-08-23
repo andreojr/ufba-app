@@ -7,7 +7,7 @@ type MockAppStateValue = {
 const MockAppStateContext = createContext<MockAppStateValue | undefined>(undefined);
 
 /**
- * Cross-screen mock state for the front-end-only Gradline screens that don't have a
+ * Cross-screen mock state for the front-end-only UFBA screens that don't have a
  * real backend endpoint yet (student profile info). Intentionally NOT persisted —
  * this is mockup state, not real app state, so it resets whenever the app reloads.
  *

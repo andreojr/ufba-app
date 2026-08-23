@@ -6,7 +6,7 @@ import { baixarEInstalar, InstalacaoIndisponivelError } from "./app-update-insta
 jest.mock("expo-file-system", () => {
   class FileFake {
     static downloadFileAsync = jest.fn();
-    contentUri = "content://gradline/gradline-1.1.0.apk";
+    contentUri = "content://ufba/ufba-1.1.0.apk";
     delete = jest.fn();
     constructor(...uris: unknown[]) {
       (FileFake as unknown as { ultimaConstrucao: unknown[] }).ultimaConstrucao = uris;
@@ -44,7 +44,7 @@ describe("baixarEInstalar", () => {
 
     await baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {});
 
-    expect(FileFake.ultimaConstrucao[1]).toBe("gradline-1.1.0.apk");
+    expect(FileFake.ultimaConstrucao[1]).toBe("ufba-1.1.0.apk");
     expect(FileFake.downloadFileAsync).toHaveBeenCalledWith(
       "https://example.com/app.apk",
       expect.anything(),
@@ -83,7 +83,7 @@ describe("baixarEInstalar", () => {
     expect(mockedIntent.startActivityAsync).toHaveBeenCalledWith(
       "android.intent.action.INSTALL_PACKAGE",
       expect.objectContaining({
-        data: "content://gradline/gradline-1.1.0.apk",
+        data: "content://ufba/ufba-1.1.0.apk",
         flags: 1,
       }),
     );

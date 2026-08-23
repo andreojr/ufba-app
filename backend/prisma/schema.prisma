@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Gradline's own identity (Google Sign-In only).
+// UFBA's own identity (Google Sign-In only).
 model User {
   id        String   @id @default(uuid())
   googleId  String   @unique @map("google_id")

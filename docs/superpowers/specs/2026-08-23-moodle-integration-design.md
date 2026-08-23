@@ -3,7 +3,7 @@
 ## Motivation
 
 Muitos professores da UFBA entregam material, avisos e tarefas pelo
-Moodle em `https://ava.ufba.br`. Hoje o Gradline não alcança nada disso:
+Moodle em `https://ava.ufba.br`. Hoje o UFBA não alcança nada disso:
 o item "Vincular Moodle" em Ajustes existe apenas como placeholder
 desabilitado com chip "Em breve" (`mobile/src/app/(tabs)/ajustes.tsx`,
 `testID="link-moodle-item"`).
@@ -112,7 +112,7 @@ fluxo real e observar o scheme de retorno:
 - `mobile/src/lib/moodle-storage.ts` — espelha `sigaa-storage.ts`.
   `getMoodleSession()` / `saveMoodleSession(session)` /
   `clearMoodleSession()` / `hasEverLinkedMoodle()` /
-  `rememberMoodleWasLinked()`, sob a chave `"gradline.moodle"` em
+  `rememberMoodleWasLinked()`, sob a chave `"ufba.moodle"` em
   `expo-secure-store`. Tipo:
   `{ wstoken: string; privatetoken?: string; siteUrl: string; userId: number }`.
 
@@ -189,10 +189,10 @@ Token expira (detectado por futura leitura que use callMoodle)
 ## Security considerations
 
 - A senha institucional **nunca** transita pelo app nem pelo backend do
-  Gradline: é digitada apenas no IdP `cafe.ufba.br` dentro de uma sessão
+  UFBA: é digitada apenas no IdP `cafe.ufba.br` dentro de uma sessão
   de autenticação do sistema (ASWebAuthenticationSession / Custom Tabs).
 - O `wstoken` é armazenado **exclusivamente** em `expo-secure-store`
-  (Keychain/Keystore). Sem transmissão a servidores do Gradline, sem
+  (Keychain/Keystore). Sem transmissão a servidores do UFBA, sem
   persistência em nuvem.
 - Validação de `signature` no retorno protege contra token injetado por
   um redirect malicioso para o custom scheme.

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-export interface GradlineJwtPayload {
+export interface UfbaJwtPayload {
   sub: string;
   email: string;
   name: string;
@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: GradlineJwtPayload): Promise<RequestUser> {
+  validate(payload: UfbaJwtPayload): Promise<RequestUser> {
     return Promise.resolve({
       userId: payload.sub,
       email: payload.email,

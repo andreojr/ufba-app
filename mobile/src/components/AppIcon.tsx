@@ -5,7 +5,7 @@ import type { ColorValue } from "react-native";
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 /**
- * Maps the Phosphor-style icon names used in the Gradline design mockup to the
+ * Maps the Phosphor-style icon names used in the UFBA design mockup to the
  * closest `@expo/vector-icons` (Ionicons) equivalent, since the app doesn't depend on
  * a Phosphor icon package. Keeps screen code readable and aligned with the design's
  * vocabulary without adding a new dependency.

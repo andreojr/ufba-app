@@ -225,7 +225,7 @@ para marca, regular para sistema.
   aprovado pelo usuário; precisa ser explícito no tema, não herdado.
 - **Renomeações de tela:** `explore.tsx` vira Trajetória, nasce
   `documentos.tsx` e uma tela de Ajustes.
-- **Assets do repo desatualizados:** `design/logo/gradline-icon.svg` e
+- **Assets do repo desatualizados:** `design/logo/ufba-icon.svg` e
   `-mono.svg` ainda têm a arte navy+dourada. Os PNGs em
   `mobile/assets/images/` aparecem modificados no git desde o início da
   sessão; não confirmado se batem com o mark novo.
@@ -336,7 +336,7 @@ Registradas para não se repetirem.
 
 ## Prompt de continuação
 
-> Estou continuando o design system do Gradline no Figma. Run ID
+> Estou continuando o design system do UFBA no Figma. Run ID
 > `gradline-001`, arquivo `4POhgKwHjaUglgLJ4R5RAI`. Leia
 > `docs/superpowers/specs/2026-08-18-figma-design-system-state.md`,
 > carregue as skills `figma-use`, `figma-generate-library` e

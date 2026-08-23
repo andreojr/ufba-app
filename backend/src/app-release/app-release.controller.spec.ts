@@ -5,7 +5,7 @@ import { AppReleaseService, type AppRelease } from './app-release.service';
 const RELEASE: AppRelease = {
   latestVersion: '1.1.0',
   versionCode: 3,
-  downloadUrl: 'https://example.com/gradline-1.1.0.apk',
+  downloadUrl: 'https://example.com/ufba-1.1.0.apk',
   releaseNotes: 'Optativas na Trajetória.',
   publishedAt: '2026-09-01T12:00:00Z',
 };

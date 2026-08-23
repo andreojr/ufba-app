@@ -18,7 +18,7 @@ describe("periodo-cache", () => {
     await savePeriodoCache(periodo);
 
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.periodo",
+      "ufba.periodo",
       JSON.stringify(periodo),
     );
   });
@@ -62,6 +62,6 @@ describe("periodo-cache", () => {
   it("clears the cached term", async () => {
     await clearPeriodoCache();
 
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("gradline.periodo");
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("ufba.periodo");
   });
 });

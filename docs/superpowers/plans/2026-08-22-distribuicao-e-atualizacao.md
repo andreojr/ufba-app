@@ -14,7 +14,7 @@
 
 - **Falha é silêncio.** Qualquer erro na checagem de atualização (rede, timeout, 404, backend fora) resulta em **nenhum aviso renderizado**. A checagem nunca bloqueia render nem mostra erro ao usuário.
 - **Idioma:** copy de interface em português do Brasil; **comentários e nomes de teste em inglês**, como o resto do código. Docs e specs em português.
-- **Chaves de SecureStore** usam o prefixo `gradline.`, como `gradline.theme-preference`.
+- **Chaves de SecureStore** usam o prefixo `ufba.`, como `ufba.theme-preference`.
 - **Mensagens de exceção do backend em inglês**, como `No cached profile for siape ...`.
 - **Pré-requisito: SDK 57.** Este plano assume o upgrade feito (branch `upgrade-sdk-57`). Verificar antes de começar que `mobile/package.json` traz `expo` na faixa `^57`.
 - **`expo-file-system`: usar só a API moderna, nunca o subpath `legacy`.** O legacy está depreciado, e desde a 56 a API moderna cobre tudo que esta entrega precisa. Confirmado na 57.0.5 instalada: `File.downloadFileAsync(url, destino, { headers, idempotent, onProgress, signal })`, `DownloadProgress { bytesWritten, totalBytes }` (com `totalBytes: -1` quando não há `Content-Length`), `File#contentUri` (Android, herdado de `FileSystemFile`), `file.delete()` e `Paths.cache`.
@@ -85,7 +85,7 @@ function configFake(values: Record<string, string | undefined>): ConfigService {
 const COMPLETE = {
   APP_LATEST_VERSION: '1.1.0',
   APP_LATEST_VERSION_CODE: '3',
-  APP_DOWNLOAD_URL: 'https://example.com/gradline-1.1.0.apk',
+  APP_DOWNLOAD_URL: 'https://example.com/ufba-1.1.0.apk',
   APP_RELEASE_NOTES: 'Optativas na Trajetória.',
   APP_PUBLISHED_AT: '2026-09-01T12:00:00Z',
 };
@@ -97,7 +97,7 @@ describe('AppReleaseService', () => {
     expect(service.release()).toEqual({
       latestVersion: '1.1.0',
       versionCode: 3,
-      downloadUrl: 'https://example.com/gradline-1.1.0.apk',
+      downloadUrl: 'https://example.com/ufba-1.1.0.apk',
       releaseNotes: 'Optativas na Trajetória.',
       publishedAt: '2026-09-01T12:00:00Z',
     });
@@ -211,7 +211,7 @@ import { AppReleaseService, type AppRelease } from './app-release.service';
 const RELEASE: AppRelease = {
   latestVersion: '1.1.0',
   versionCode: 3,
-  downloadUrl: 'https://example.com/gradline-1.1.0.apk',
+  downloadUrl: 'https://example.com/ufba-1.1.0.apk',
   releaseNotes: 'Optativas na Trajetória.',
   publishedAt: '2026-09-01T12:00:00Z',
 };
@@ -465,7 +465,7 @@ describe("checking for an app update", () => {
   const RELEASE = {
     latestVersion: "1.1.0",
     versionCode: 3,
-    downloadUrl: "https://example.com/gradline-1.1.0.apk",
+    downloadUrl: "https://example.com/ufba-1.1.0.apk",
     releaseNotes: "Optativas na Trajetória.",
     publishedAt: "2026-09-01T12:00:00Z",
   };
@@ -592,7 +592,7 @@ describe("app-update-storage", () => {
     await dispensarVersao("1.1.0");
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.update-dismissed",
+      "ufba.update-dismissed",
       "1.1.0",
     );
   });
@@ -619,7 +619,7 @@ describe("app-update-storage", () => {
     await marcarChecagem(1756000000000);
 
     expect(mockedSecureStore.setItemAsync).toHaveBeenCalledWith(
-      "gradline.update-last-check",
+      "ufba.update-last-check",
       "1756000000000",
     );
   });
@@ -644,8 +644,8 @@ import * as SecureStore from "expo-secure-store";
  * so it expires on its own: dismissing 1.1.0 says nothing about 1.2.0.
  */
 
-const VERSAO_DISPENSADA_KEY = "gradline.update-dismissed";
-const ULTIMA_CHECAGEM_KEY = "gradline.update-last-check";
+const VERSAO_DISPENSADA_KEY = "ufba.update-dismissed";
+const ULTIMA_CHECAGEM_KEY = "ufba.update-last-check";
 
 /** The check runs at most once an hour — an update is never urgent to the minute. */
 export const INTERVALO_CHECAGEM_MS = 60 * 60 * 1000;
@@ -730,7 +730,7 @@ jest.mock("expo-constants", () => ({ expoConfig: { version: "1.0.0" } }));
 const RELEASE = {
   latestVersion: "1.1.0",
   versionCode: 3,
-  downloadUrl: "https://example.com/gradline-1.1.0.apk",
+  downloadUrl: "https://example.com/ufba-1.1.0.apk",
   releaseNotes: "Optativas.",
   publishedAt: "2026-09-01T12:00:00Z",
 };
@@ -980,7 +980,7 @@ import { baixarEInstalar, InstalacaoIndisponivelError } from "./app-update-insta
 jest.mock("expo-file-system", () => {
   class FileFake {
     static downloadFileAsync = jest.fn();
-    contentUri = "content://gradline/gradline-1.1.0.apk";
+    contentUri = "content://ufba/ufba-1.1.0.apk";
     delete = jest.fn();
     constructor(...uris: unknown[]) {
       (FileFake as unknown as { ultimaConstrucao: unknown[] }).ultimaConstrucao = uris;
@@ -1018,7 +1018,7 @@ describe("baixarEInstalar", () => {
 
     await baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {});
 
-    expect(FileFake.ultimaConstrucao[1]).toBe("gradline-1.1.0.apk");
+    expect(FileFake.ultimaConstrucao[1]).toBe("ufba-1.1.0.apk");
     expect(FileFake.downloadFileAsync).toHaveBeenCalledWith(
       "https://example.com/app.apk",
       expect.anything(),
@@ -1057,7 +1057,7 @@ describe("baixarEInstalar", () => {
     expect(mockedIntent.startActivityAsync).toHaveBeenCalledWith(
       "android.intent.action.INSTALL_PACKAGE",
       expect.objectContaining({
-        data: "content://gradline/gradline-1.1.0.apk",
+        data: "content://ufba/ufba-1.1.0.apk",
         flags: 1,
       }),
     );
@@ -1136,7 +1136,7 @@ export async function baixarEInstalar(
   versao: string,
   onProgresso: (fracao: number | null) => void,
 ): Promise<void> {
-  const destino = new File(Paths.cache, `gradline-${versao}.apk`);
+  const destino = new File(Paths.cache, `ufba-${versao}.apk`);
 
   // A failed download leaves nothing worth cleaning up and nothing to install.
   // `idempotent` so a retry after a partial download overwrites instead of throwing.
@@ -1245,7 +1245,7 @@ jest.mock("heroui-native", () => {
 const RELEASE = {
   latestVersion: "1.1.0",
   versionCode: 3,
-  downloadUrl: "https://example.com/gradline-1.1.0.apk",
+  downloadUrl: "https://example.com/ufba-1.1.0.apk",
   releaseNotes: "Optativas na Trajetória.",
   publishedAt: "2026-09-01T12:00:00Z",
 };
