@@ -295,7 +295,13 @@ export default function HomeTab(): JSX.Element {
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
       >
-        <PontosAtencaoSection pontos={pontos} agora={now} indicePorTurma={indiceCorPorTurma} />
+        <PontosAtencaoSection
+          pontos={pontos}
+          agora={now}
+          indicePorTurma={indiceCorPorTurma}
+          onNovo={() => router.push("/ponto-de-atencao/novo")}
+          onVerTudo={() => router.push("/pontos-atencao")}
+        />
 
         {/* Heading and freshness share one row — the semester moved out of this
             text and into the badge on the term track inside the grid card. */}

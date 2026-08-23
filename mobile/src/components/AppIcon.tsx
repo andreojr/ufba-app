@@ -57,6 +57,7 @@ const ICON_MAP = {
   IconPapers: "documents-outline",
   IconBook: "book-outline",
   IconTrayFull: "file-tray-full-outline",
+  IconPlus: "add",
 } as const satisfies Record<string, IoniconName>;
 
 export type AppIconName = keyof typeof ICON_MAP;

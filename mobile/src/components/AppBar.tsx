@@ -30,6 +30,10 @@ type AppBarProps = {
    * something to explicitly dismiss. Takes over from `onClose` when both are
    * given, though a screen should only ever pass one. */
   onBack?: () => void;
+  /** Shows a trailing "+" button (e.g. a list screen's "cadastrar novo item").
+   * Mutually exclusive with `initials`/`avatarUrl` in practice — this is for
+   * pushed detail screens with no profile avatar of their own. */
+  onAdd?: () => void;
 };
 
 /** Screen header used across the internal (post-login) screens, matching the design's AppBar. */
@@ -40,6 +44,7 @@ export function AppBar({
   avatarUrl,
   onClose,
   onBack,
+  onAdd,
 }: AppBarProps): JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -68,6 +73,11 @@ export function AppBar({
           {title}
         </Typography.Heading>
       </View>
+      {onAdd ? (
+        <Pressable testID="app-bar-add" onPress={onAdd} hitSlop={12}>
+          <AppIcon name="IconPlus" size={24} color={mutedColor} />
+        </Pressable>
+      ) : null}
       {initials || avatarUrl ? (
         <Pressable
           testID="app-bar-profile"
