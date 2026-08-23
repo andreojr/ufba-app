@@ -1,5 +1,6 @@
 import type { ArgumentMetadata } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
+import { PIPES_METADATA } from '@nestjs/common/constants';
 import { TrajetoriaController } from './trajetoria.controller';
 import type { HistoricoService } from './historico.service';
 import type { TrajetoriaSalva } from './historico.repository';
@@ -245,10 +246,14 @@ describe('TrajetoriaController', () => {
     expect('historico' in resposta).toBe(true);
   });
 
-  // O controller declara @UsePipes(new ValidationPipe(...)) — este teste prova
-  // que o pipe de fato roda em cima do DTO, não só que ele existe no código.
-  // Sem @UsePipes, o Nest passaria o JSON cru para salvarPlano, e um semestre
-  // fora do formato "AAAA.N" chegaria intacto até a aritmética do projetor.
+  // Os dois testes abaixo provam o comportamento do ValidationPipe em
+  // isolamento (semestre malformado é rejeitado, bem formado passa) — mas
+  // instanciam o pipe à mão e chamam `.transform()` direto, sem tocar no
+  // TrajetoriaController. Se alguém apagar o @UsePipes(...) do controller
+  // amanhã, estes dois continuam verdes: eles não sabem que o controller
+  // existe. Quem fecha esse buraco é o teste seguinte ("mantém o
+  // ValidationPipe ligado no controller"), que lê a metadata do decorator —
+  // as duas metades juntas são necessárias, nenhuma sozinha basta.
   it('o ValidationPipe do controller rejeita um semestre fora do formato AAAA.N', async () => {
     const pipe = new ValidationPipe({ whitelist: true, transform: true });
     const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
@@ -279,5 +284,18 @@ describe('TrajetoriaController', () => {
     );
 
     expect(resultado.itens[0].semestre).toBe('2027.1');
+  });
+
+  // Fecha o buraco que os dois testes acima deixam em aberto: prova que o
+  // ValidationPipe está de fato pendurado no TrajetoriaController via
+  // @UsePipes, não só que a classe ValidationPipe funciona isoladamente. Sem
+  // este teste, apagar o @UsePipes(...) do controller não quebraria nada
+  // nesta suíte.
+  it('mantém o ValidationPipe ligado no controller', () => {
+    const pipes = Reflect.getMetadata(PIPES_METADATA, TrajetoriaController) ?? [];
+
+    expect(
+      pipes.some((pipe: unknown) => pipe instanceof ValidationPipe),
+    ).toBe(true);
   });
 });
