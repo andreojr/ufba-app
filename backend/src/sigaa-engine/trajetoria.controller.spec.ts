@@ -16,6 +16,11 @@ function salvaFalsa(
     historico: {
       nomeCurso: 'ENGENHARIA DA COMPUTAÇÃO/EPOLI - SALVADOR',
       periodoLetivoAtual: 1,
+      // A projeção agora sai junto dos marcos (Task 6), então mesmo fixtures
+      // que só testam marcos precisam desses dois campos preenchidos —
+      // sem eles montarProjecao lança ao tentar fatiar undefined.
+      prazoConclusaoPadrao: '2026.2',
+      prazoConclusaoMaximo: '2030.2',
       indices: { cr: 8.1597, iap: 0.8434 },
       cursados: [],
       pendentesObrigatorios: [],
@@ -169,5 +174,51 @@ describe('TrajetoriaController', () => {
     );
 
     expect(resposta).toMatchObject({ marcos: null });
+  });
+
+  it('devolve a projeção junto dos marcos', async () => {
+    const service = {
+      getTrajetoria: jest.fn(async () =>
+        salvaFalsa({
+          pendentesObrigatorios: [
+            { codigo: 'A1', nome: 'A1', cargaHoraria: 100, matriculado: false },
+          ],
+        }),
+      ),
+      sync: jest.fn(),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => estruturaFalsa()),
+    } as unknown as CurriculoService;
+
+    const resposta = await new TrajetoriaController(service, curriculo).get(
+      USUARIO,
+    );
+
+    expect(resposta).toMatchObject({ projecao: expect.any(Object) });
+    if (!('projecao' in resposta) || resposta.projecao === null) {
+      throw new Error('esperava projeção');
+    }
+    expect(resposta.projecao.semestres.length).toBeGreaterThan(0);
+  });
+
+  it('degrada para projecao null quando a estrutura não resolve, sem derrubar o resto', async () => {
+    const service = {
+      getTrajetoria: jest.fn(async () => salvaFalsa()),
+      sync: jest.fn(),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => {
+        throw new CursoDesconhecidoError('curso desconhecido');
+      }),
+    } as unknown as CurriculoService;
+
+    const resposta = await new TrajetoriaController(service, curriculo).get(
+      USUARIO,
+    );
+
+    expect(resposta).toMatchObject({ marcos: null, projecao: null });
+    // O histórico continua lá: a projeção é extra, nunca motivo de falha.
+    expect('historico' in resposta && resposta.historico).toBeTruthy();
   });
 });
