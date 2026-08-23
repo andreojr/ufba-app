@@ -82,7 +82,7 @@ export class ScheduleService {
       );
     }
 
-    await this.repository.salvar(userId, turmas, periodoLetivo);
+    await this.repository.salvar(userId, turmas, periodoLetivo, new Date());
 
     this.logger.log(`Horário sincronizado para ${userId}: ${turmas.length} turmas`);
 

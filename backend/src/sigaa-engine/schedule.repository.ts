@@ -1,24 +1,27 @@
 import type { PeriodoLetivo } from './parsers/atestado-turmas';
 import type { Turma } from './parsers/turma';
 
+/** Uma turma já persistida — o `id` é o que a tela de cadastro de pontos usa. */
+export type TurmaSalva = Turma & { id: string };
+
 export interface HorarioSalvo {
-  turmas: Turma[];
+  turmas: TurmaSalva[];
   periodoLetivo: PeriodoLetivo | null;
   fetchedAt: Date;
 }
 
 export interface ScheduleRepository {
   /**
-   * Replaces the user's whole snapshot in one transaction. The fetch is the
-   * complete state for the term, so a partial write would mix two fetches'
-   * turmas together.
+   * Faz upsert das turmas (globais, compartilhadas entre alunos) e substitui
+   * as matrículas deste aluno, numa transação. `fetchedAt` decide se os dados
+   * da turma sobrescrevem os que já estão lá — ver a guarda de atualizadoEm.
    */
   salvar(
     userId: string,
     turmas: Turma[],
     periodoLetivo: PeriodoLetivo | null,
+    fetchedAt: Date,
   ): Promise<void>;
 
-  /** Null when the user has never synced — the screen's fallback state. */
   buscar(userId: string): Promise<HorarioSalvo | null>;
 }

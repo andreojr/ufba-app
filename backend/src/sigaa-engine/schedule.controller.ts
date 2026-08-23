@@ -3,8 +3,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { RequestUser } from '../auth/jwt.strategy';
 import type { PeriodoLetivo } from './parsers/atestado-turmas';
-import type { Turma } from './parsers/turma';
-import type { HorarioSalvo } from './schedule.repository';
+import type { HorarioSalvo, TurmaSalva } from './schedule.repository';
 import { ScheduleService } from './schedule.service';
 import { SigaaCredentialsDto } from './sigaa-credentials.dto';
 
@@ -15,7 +14,11 @@ import { SigaaCredentialsDto } from './sigaa-credentials.dto';
  */
 export type ScheduleResponse =
   | { sincronizado: false }
-  | { turmas: Turma[]; periodoLetivo: PeriodoLetivo | null; fetchedAt: string };
+  | {
+      turmas: TurmaSalva[];
+      periodoLetivo: PeriodoLetivo | null;
+      fetchedAt: string;
+    };
 
 function serializar(salvo: HorarioSalvo): ScheduleResponse {
   return {

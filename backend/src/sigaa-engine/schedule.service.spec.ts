@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ScheduleService, SigaaScheduleUnavailableError } from './schedule.service';
-import type { HorarioSalvo, ScheduleRepository } from './schedule.repository';
+import type { HorarioSalvo, ScheduleRepository, TurmaSalva } from './schedule.repository';
 import type { Turma } from './parsers/turma';
 import type { PeriodoLetivo } from './parsers/atestado-turmas';
 import type { DiscentePerfil } from './parsers/discente-perfil';
@@ -33,6 +33,13 @@ function turmasFalsas(): Turma[] {
   ];
 }
 
+// buscar() devolve turmas já persistidas — o repositório-fake do sync
+// não escreve de verdade, então o `id` aqui é só o suficiente pra satisfazer
+// o tipo TurmaSalva.
+function turmasSalvasFalsas(): TurmaSalva[] {
+  return turmasFalsas().map((turma) => ({ ...turma, id: 'turma-1' }));
+}
+
 // Silences ScheduleService's own success/warning logs: real output, not a
 // mock artefact, but this suite has no interest in asserting on it and the
 // standing requirement is pristine test output.
@@ -49,7 +56,7 @@ afterAll(() => {
 
 function repositorioFalso(): jest.Mocked<ScheduleRepository> {
   return {
-    salvar: jest.fn<Promise<void>, [string, Turma[], PeriodoLetivo | null]>(
+    salvar: jest.fn<Promise<void>, [string, Turma[], PeriodoLetivo | null, Date]>(
       async () => undefined,
     ),
     buscar: jest.fn<Promise<HorarioSalvo | null>, [string]>(async () => null),
@@ -74,7 +81,7 @@ describe('ScheduleService', () => {
   it('downloads, persists and returns the schedule in one call', async () => {
     const repositorio = repositorioFalso();
     const salvo: HorarioSalvo = {
-      turmas: turmasFalsas(),
+      turmas: turmasSalvasFalsas(),
       periodoLetivo,
       fetchedAt: new Date('2026-08-19T03:35:00Z'),
     };
@@ -92,6 +99,7 @@ describe('ScheduleService', () => {
       'user-1',
       turmasFalsas(),
       periodoLetivo,
+      expect.any(Date),
     );
   });
 
@@ -99,7 +107,7 @@ describe('ScheduleService', () => {
     const userRepositorio = userRepositorioFalso();
     const repositorio = repositorioFalso();
     repositorio.buscar.mockResolvedValue({
-      turmas: turmasFalsas(),
+      turmas: turmasSalvasFalsas(),
       periodoLetivo,
       fetchedAt: new Date(),
     });
@@ -119,7 +127,7 @@ describe('ScheduleService', () => {
     userRepositorio.updateSigaaProfile.mockRejectedValue(new Error('db is down'));
     const repositorio = repositorioFalso();
     const salvo: HorarioSalvo = {
-      turmas: turmasFalsas(),
+      turmas: turmasSalvasFalsas(),
       periodoLetivo,
       fetchedAt: new Date(),
     };
@@ -148,7 +156,7 @@ describe('ScheduleService', () => {
   it('never touches the cache when SIGAA cannot be reached at all', async () => {
     const repositorio = repositorioFalso();
     repositorio.buscar.mockResolvedValue({
-      turmas: turmasFalsas(),
+      turmas: turmasSalvasFalsas(),
       periodoLetivo,
       fetchedAt: new Date(),
     });
@@ -174,7 +182,7 @@ describe('ScheduleService', () => {
   it('refuses to overwrite a good cached schedule with an empty scrape', async () => {
     const repositorio = repositorioFalso();
     repositorio.buscar.mockResolvedValue({
-      turmas: turmasFalsas(),
+      turmas: turmasSalvasFalsas(),
       periodoLetivo,
       fetchedAt: new Date(),
     });
@@ -220,6 +228,11 @@ describe('ScheduleService', () => {
     );
 
     await expect(service.sync('user-1', CREDENCIAIS)).resolves.toBeTruthy();
-    expect(repositorio.salvar).toHaveBeenCalledWith('user-1', [], null);
+    expect(repositorio.salvar).toHaveBeenCalledWith(
+      'user-1',
+      [],
+      null,
+      expect.any(Date),
+    );
   });
 });

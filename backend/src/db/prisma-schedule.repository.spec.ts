@@ -4,13 +4,11 @@ import type { PeriodoLetivo } from '../sigaa-engine/parsers/atestado-turmas';
 import type { Turma } from '../sigaa-engine/parsers/turma';
 
 function turmasFalsas(): Turma[] {
-  // numero fica vazio porque o schema do cachedTurma ainda não tem essa
-  // coluna — chega junto da migração de uma task posterior desta feature.
   return [
     {
       codigo: 'MATA37',
       nome: 'CÁLCULO A',
-      numero: '',
+      numero: '01',
       docente: 'DR. ALGUEM',
       slots: [
         {
@@ -28,7 +26,7 @@ function turmasFalsas(): Turma[] {
     {
       codigo: null,
       nome: 'REDES DE COMPUTADORES',
-      numero: '',
+      numero: '02',
       docente: null,
       slots: [],
       vigencia: { inicio: '2026-08-19', fim: '2026-12-19' },
@@ -43,138 +41,74 @@ const periodoLetivo: PeriodoLetivo = {
   fim: '2026-12-19',
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function prismaFalso(overrides: { atualizadoEm?: Date } = {}) {
+  const upserts: any[] = [];
+  const tx = {
+    turma: {
+      findUnique: jest.fn(async () =>
+        overrides.atualizadoEm ? { id: 'turma-1', atualizadoEm: overrides.atualizadoEm } : null,
+      ),
+      upsert: jest.fn(async (args: any) => {
+        upserts.push(args);
+        return { id: 'turma-1' };
+      }),
+    },
+    matricula: {
+      deleteMany: jest.fn(async () => undefined),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      createMany: jest.fn(async (_args: any) => undefined),
+    },
+    cachedSchedule: { upsert: jest.fn(async () => undefined) },
+  };
+  const prisma = {
+    $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+  } as unknown as PrismaService;
+  return { prisma, tx, upserts };
+}
+
 describe('PrismaScheduleRepository', () => {
-  it('replaces the previous snapshot inside a single transaction', async () => {
-    const operacoes: string[] = [];
-    const tx = {
-      cachedSchedule: {
-        deleteMany: jest.fn(async () => {
-          operacoes.push('delete');
-        }),
-        create: jest.fn(async () => {
-          operacoes.push('create');
-        }),
-      },
-    };
-    const prisma = {
-      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
-    } as unknown as PrismaService;
+  it('não sobrescreve uma turma que outro aluno sincronizou depois', async () => {
+    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T12:00:00Z') });
 
     await new PrismaScheduleRepository(prisma).salvar(
       'user-1',
       turmasFalsas(),
       periodoLetivo,
+      new Date('2026-08-23T09:00:00Z'),
     );
 
-    // Delete before create, both inside the same transaction callback:
-    // otherwise a failure mid-write leaves two fetches' turmas mixed together.
-    expect(operacoes).toEqual(['delete', 'create']);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // O upsert acontece (a matrícula precisa do id), mas sem update dos dados.
+    expect(tx.turma.upsert.mock.calls[0][0].update).toEqual({});
   });
 
-  it('preserves each turma at the ordem it was passed in', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dadosCriados: any;
-    const tx = {
-      cachedSchedule: {
-        deleteMany: jest.fn(async () => undefined),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        create: jest.fn(async (args: any) => {
-          dadosCriados = args.data;
-        }),
-      },
-    };
-    const prisma = {
-      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
-    } as unknown as PrismaService;
+  it('sobrescreve quando o sync é mais recente que o registro', async () => {
+    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
 
     await new PrismaScheduleRepository(prisma).salvar(
       'user-1',
       turmasFalsas(),
       periodoLetivo,
+      new Date('2026-08-23T12:00:00Z'),
     );
 
-    expect(dadosCriados.turmas.create.map((t: { ordem: number }) => t.ordem)).toEqual([
+    expect(tx.turma.upsert.mock.calls[0][0].update.nome).toBe('CÁLCULO A');
+  });
+
+  it('substitui as matrículas do aluno preservando a ordem do SIGAA', async () => {
+    const { prisma, tx } = prismaFalso();
+
+    await new PrismaScheduleRepository(prisma).salvar(
+      'user-1',
+      turmasFalsas(),
+      periodoLetivo,
+      new Date('2026-08-23T12:00:00Z'),
+    );
+
+    expect(tx.matricula.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    expect(tx.matricula.createMany.mock.calls[0][0].data.map((m: any) => m.ordem)).toEqual([
       0, 1,
     ]);
-  });
-
-  it('reads back exactly what salvar wrote', async () => {
-    const turmas = turmasFalsas();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dadosCriados: any;
-    const tx = {
-      cachedSchedule: {
-        deleteMany: jest.fn(async () => undefined),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        create: jest.fn(async (args: any) => {
-          dadosCriados = args.data;
-        }),
-      },
-    };
-    const prismaEscrita = {
-      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
-    } as unknown as PrismaService;
-
-    await new PrismaScheduleRepository(prismaEscrita).salvar(
-      'user-1',
-      turmas,
-      periodoLetivo,
-    );
-
-    // Feeds buscar's fake findUnique the exact payload salvar's create()
-    // received — a round trip through the real mapping code on both sides.
-    const prismaLeitura = {
-      cachedSchedule: {
-        findUnique: jest.fn(async () => ({
-          ...dadosCriados,
-          turmas: dadosCriados.turmas.create,
-          fetchedAt: new Date('2026-08-19T03:35:00Z'),
-        })),
-      },
-    } as unknown as PrismaService;
-
-    const salvo = await new PrismaScheduleRepository(prismaLeitura).buscar('user-1');
-
-    expect(salvo?.turmas).toEqual(turmas);
-    expect(salvo?.periodoLetivo).toEqual(periodoLetivo);
-  });
-
-  it('reports periodoLetivo as null when the fetch degraded to the portal home', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dadosCriados: any;
-    const tx = {
-      cachedSchedule: {
-        deleteMany: jest.fn(async () => undefined),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        create: jest.fn(async (args: any) => {
-          dadosCriados = args.data;
-        }),
-      },
-    };
-    const prismaEscrita = {
-      $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
-    } as unknown as PrismaService;
-
-    await new PrismaScheduleRepository(prismaEscrita).salvar(
-      'user-1',
-      turmasFalsas(),
-      null,
-    );
-
-    const prismaLeitura = {
-      cachedSchedule: {
-        findUnique: jest.fn(async () => ({
-          ...dadosCriados,
-          turmas: dadosCriados.turmas.create,
-          fetchedAt: new Date('2026-08-19T03:35:00Z'),
-        })),
-      },
-    } as unknown as PrismaService;
-
-    const salvo = await new PrismaScheduleRepository(prismaLeitura).buscar('user-1');
-
-    expect(salvo?.periodoLetivo).toBeNull();
   });
 
   it('reports null when the user has never synced', async () => {
