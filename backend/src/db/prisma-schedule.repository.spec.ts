@@ -50,9 +50,14 @@ function prismaFalso(overrides: { atualizadoEm?: Date } = {}) {
       findUnique: jest.fn(async () =>
         overrides.atualizadoEm ? { id: 'turma-1', atualizadoEm: overrides.atualizadoEm } : null,
       ),
+      // Um id distinto por chave natural: com um id fixo para todas as
+      // turmas, o par turmaId↔ordem gravado na matrícula seria
+      // indistinguível e uma regressão que usasse a ordem de gravação
+      // (ordenada pela chave natural) no lugar da ordem do SIGAA passaria.
       upsert: jest.fn(async (args: any) => {
         upserts.push(args);
-        return { id: 'turma-1' };
+        const { codigo, numero } = args.where.semestre_codigo_numero;
+        return { id: `turma-${codigo ?? 'sem-codigo'}-${numero}` };
       }),
     },
     matricula: {
@@ -178,8 +183,13 @@ describe('PrismaScheduleRepository', () => {
     );
 
     expect(tx.matricula.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
-    expect(tx.matricula.createMany.mock.calls[0][0].data.map((m: any) => m.ordem)).toEqual([
-      0, 1,
+    // A fixture é justamente o caso que inverte: `codigo: null` ordena antes
+    // de 'MATA37', então as turmas são gravadas na ordem oposta à do
+    // atestado. Cada turmaId tem que voltar para o índice em que o SIGAA
+    // listou a turma — é essa posição que vira a coluna da grade semanal.
+    expect(tx.matricula.createMany.mock.calls[0][0].data).toEqual([
+      { userId: 'user-1', turmaId: 'turma-MATA37-01', ordem: 0 },
+      { userId: 'user-1', turmaId: 'turma-sem-codigo-02', ordem: 1 },
     ]);
   });
 

@@ -202,9 +202,8 @@ export default function HomeTab(): JSX.Element {
   useEffect(() => {
     if (accessToken) {
       loadSchedule();
-      void carregarPontos();
     }
-  }, [sigaaLink.status, accessToken, loadSchedule, carregarPontos]);
+  }, [sigaaLink.status, accessToken, loadSchedule]);
 
   // Criar, editar, apagar e corrigir um ponto de atenção acontecem em telas
   // empilhadas por cima desta, que volta via router.back() para uma Home já

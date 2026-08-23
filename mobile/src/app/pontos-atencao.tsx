@@ -204,7 +204,11 @@ export default function PontosAtencaoScreen(): JSX.Element {
       setEstado({ status: "erro", mensagem: "Faça login para ver os pontos de atenção." });
       return;
     }
-    setEstado({ status: "loading" });
+    // Só a primeira carga (ou uma nova tentativa depois de erro) mostra o
+    // spinner de tela cheia: como isto roda a cada foco, voltar de criar,
+    // editar ou apagar apagaria a lista inteira por um instante em vez de
+    // atualizá-la no lugar.
+    setEstado((atual) => (atual.status === "ready" ? atual : { status: "loading" }));
     try {
       const pontos = await getPontosAtencao(accessToken, { incluirVencidos: true });
       if (!ativoRef.current) return;

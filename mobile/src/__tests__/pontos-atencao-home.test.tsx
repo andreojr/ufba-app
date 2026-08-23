@@ -222,6 +222,10 @@ async function renderHome({
 }
 
 describe("PontosAtencaoSection na home", () => {
+  beforeEach(() => {
+    mockedGetPontosAtencao.mockClear();
+  });
+
   afterEach(() => {
     jest.useRealTimers();
   });
@@ -282,6 +286,17 @@ describe("PontosAtencaoSection na home", () => {
     const corEsperada = SCHEDULE_PALETTE[0].bar;
     const bolinha = getByTestId("pontos-atencao-hero-cor");
     expect(bolinha.props.style).toEqual(expect.objectContaining({ backgroundColor: corEsperada }));
+  });
+
+  it("busca os pontos uma única vez na montagem", async () => {
+    await renderHome({ pontos: [pontoFalso({ id: "p1" })] });
+
+    // Deixa qualquer efeito pendente rodar antes de contar: se a montagem
+    // voltasse a disparar o carregamento no useEffect *e* no useFocusEffect,
+    // seriam dois GET /pontos-atencao idênticos por montagem.
+    await act(async () => {});
+
+    expect(mockedGetPontosAtencao).toHaveBeenCalledTimes(1);
   });
 
   it("refaz a busca dos pontos quando a Home volta ao foco, sem refazer o horário", async () => {
