@@ -45,7 +45,8 @@
         {
           "userInterfaceStyle": "automatic"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
