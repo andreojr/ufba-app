@@ -5,8 +5,10 @@ import type {
   ComponentePendente,
   MarcoSemestre,
   MarcosSemestralizacao,
+  ProjecaoTrajetoria,
   ResumoCargaHoraria,
   Ritmo,
+  SemestreProjetado,
 } from "./types";
 
 export interface PeriodoTrajetoria {
@@ -133,58 +135,50 @@ export function rotuloSituacao(situacao: string): string | null {
   return ROTULOS_SITUACAO[situacao] ?? situacao;
 }
 
-/** What the planner may offer: pending, not already enrolled, actually curricular. */
-export function poolPlanejavel(pendentes: ComponentePendente[]): ComponentePendente[] {
-  return pendentes.filter((p) => !p.matriculado && p.codigo !== CODIGO_ENADE);
-}
-
 /**
- * How many obligatory components are still missing — unlike `poolPlanejavel`,
- * this counts a component the student is already taking too: the planner
- * shouldn't offer to move something already placed, but "how many left" isn't
- * done just because it's enrolled and waiting on a grade.
+ * How many obligatory components are still missing — doesn't count just those
+ * not yet enrolled: includes components the student is already taking too,
+ * because an enrolled-but-ungraded component is still not done.
  */
 export function contarFaltantes(pendentes: ComponentePendente[]): number {
   return pendentes.filter((p) => p.codigo !== CODIGO_ENADE).length;
 }
 
-/**
- * The terms the planner offers as drop zones: the ones after the current term,
- * capped at `limite` and never past the conclusion deadline the transcript
- * states. SIGAA terms run `.1` then `.2` within a year.
- */
-export function zonasDePlanejamento(
-  semestreAtual: string,
-  prazoMaximo: string,
-  limite: number,
-): string[] {
-  const proximo = (semestre: string): string => {
-    const [ano, periodo] = semestre.split(".").map(Number);
-    return periodo === 1 ? `${ano}.2` : `${ano + 1}.1`;
-  };
-
-  const zonas: string[] = [];
-  let atual = proximo(semestreAtual);
-  while (zonas.length < limite && atual.localeCompare(prazoMaximo) <= 0) {
-    zonas.push(atual);
-    atual = proximo(atual);
-  }
-  return zonas;
-}
-
 export interface AnoTrajetoria {
   ano: string;
   periodos: PeriodoTrajetoria[];
+  /** Os semestres que ainda não aconteceram, no mesmo ano. */
+  projetados: SemestreProjetado[];
 }
 
-/** Groups already-ordered periods by the year in their "AAAA.N" semestre. */
-export function agruparPorAno(periodos: PeriodoTrajetoria[]): AnoTrajetoria[] {
-  const porAno = new Map<string, PeriodoTrajetoria[]>();
+/**
+ * Passado e futuro no mesmo eixo de anos. Um ano pode ter os dois — o ano
+ * corrente costuma ter o semestre em curso e o seguinte já projetado — então
+ * agrupar os dois separadamente e concatenar produziria "2026" duas vezes.
+ */
+export function anosDaProjecao(
+  periodos: PeriodoTrajetoria[],
+  projecao: ProjecaoTrajetoria | null,
+): AnoTrajetoria[] {
+  const anos = new Map<string, AnoTrajetoria>();
+  const doAno = (semestre: string): AnoTrajetoria => {
+    const ano = semestre.slice(0, 4);
+    const existente = anos.get(ano);
+    if (existente) {
+      return existente;
+    }
+    const criado: AnoTrajetoria = { ano, periodos: [], projetados: [] };
+    anos.set(ano, criado);
+    return criado;
+  };
+
   for (const periodo of periodos) {
-    const ano = periodo.semestre.slice(0, 4);
-    porAno.set(ano, [...(porAno.get(ano) ?? []), periodo]);
+    doAno(periodo.semestre).periodos.push(periodo);
   }
-  return [...porAno.entries()].map(([ano, periodos]) => ({ ano, periodos }));
+  for (const semestre of projecao?.semestres ?? []) {
+    doAno(semestre.semestre).projetados.push(semestre);
+  }
+  return [...anos.values()];
 }
 
 /**

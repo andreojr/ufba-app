@@ -1,16 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TrajetoriaTab from "@/screens/TrajetoriaTab";
-import { ApiError, getTrajetoria } from "@/lib/api";
+import { ApiError, getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type {
   ComponenteCursado,
-  ComponentePendente,
   Historico,
   MarcosSemestralizacao,
+  ProjecaoTrajetoria,
+  SemestreProjetado,
   TrajetoriaResponse,
 } from "@/lib/types";
 
@@ -23,6 +24,7 @@ jest.mock("@/lib/sync-freshness-context", () => ({
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getTrajetoria: jest.fn(),
+  putPlano: jest.fn(),
 }));
 // Mocked rather than left to SecureStore: the term's end date is what decides
 // whether the staleness nudge fires, so every test has to state it.
@@ -58,20 +60,80 @@ jest.mock("@expo/vector-icons", () => {
 // same for the components the home screen uses. This screen needs Typography,
 // Menu, Button, Tabs and useThemeColor.
 jest.mock("heroui-native", () => {
-  const { createContext, useContext } = jest.requireActual("react");
+  const React = jest.requireActual("react");
+  const { createContext, useContext, useState, cloneElement } = React;
   const { Text, View, TouchableOpacity } = jest.requireActual("react-native");
 
-  const Menu = Object.assign(({ children }: any) => <View>{children}</View>, {
-    Trigger: ({ children }: any) => <View>{children}</View>,
-    Portal: ({ children }: any) => <View>{children}</View>,
-    Overlay: () => null,
-    Content: ({ children }: any) => <View>{children}</View>,
-    Label: ({ children }: any) => <Text>{children}</Text>,
-    Item: ({ children, onPress }: any) => (
-      <TouchableOpacity onPress={onPress}>{children}</TouchableOpacity>
-    ),
-    ItemTitle: ({ children }: any) => <Text>{children}</Text>,
+  // A real toggle, not a pass-through: Menu.Trigger has to actually open the
+  // menu on press and Menu.Content has to actually stay hidden until it
+  // does, or a test pressing a "destino" item would pass without ever
+  // proving the student can reach it in the first place.
+  const MenuContext = createContext({
+    open: false,
+    setOpen: (_open: boolean) => {},
   });
+
+  // Declared as named, capitalised functions and only then hung on `Menu`:
+  // an anonymous arrow assigned to `Menu.Trigger` is not a component name any
+  // linter can see, so every `useContext` in one reads as a hook called
+  // outside a component (react-hooks/rules-of-hooks) and every one of them
+  // trips react/display-name.
+  function Menu({ children }: any) {
+    const [open, setOpen] = useState(false);
+    return <MenuContext.Provider value={{ open, setOpen }}>{children}</MenuContext.Provider>;
+  }
+  function MenuTrigger({ children, asChild }: any) {
+    const ctx = useContext(MenuContext);
+    const toggle = () => ctx.setOpen(!ctx.open);
+    if (asChild) {
+      const child = React.Children.only(children);
+      return cloneElement(child, {
+        onPress: (...args: unknown[]) => {
+          child.props.onPress?.(...args);
+          toggle();
+        },
+      });
+    }
+    return <TouchableOpacity onPress={toggle}>{children}</TouchableOpacity>;
+  }
+  function MenuPortal({ children }: any) {
+    const ctx = useContext(MenuContext);
+    return ctx.open ? <View>{children}</View> : null;
+  }
+  function MenuOverlay() {
+    const ctx = useContext(MenuContext);
+    return <TouchableOpacity onPress={() => ctx.setOpen(false)} />;
+  }
+  function MenuContent({ children }: any) {
+    return <View>{children}</View>;
+  }
+  function MenuLabel({ children }: any) {
+    return <Text>{children}</Text>;
+  }
+  function MenuItem({ children, onPress, testID }: any) {
+    const ctx = useContext(MenuContext);
+    return (
+      <TouchableOpacity
+        testID={testID}
+        onPress={() => {
+          onPress?.();
+          ctx.setOpen(false);
+        }}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  }
+  function MenuItemTitle({ children }: any) {
+    return <Text>{children}</Text>;
+  }
+  Menu.Trigger = MenuTrigger;
+  Menu.Portal = MenuPortal;
+  Menu.Overlay = MenuOverlay;
+  Menu.Content = MenuContent;
+  Menu.Label = MenuLabel;
+  Menu.Item = MenuItem;
+  Menu.ItemTitle = MenuItemTitle;
 
   // A minimal stand-in for the real compound component: just enough context
   // to let a Trigger press flip which Content is shown, which is all the
@@ -140,13 +202,6 @@ const MATRICULADO: ComponenteCursado = {
   docente: null,
 };
 
-const BANCO_DE_DADOS: ComponentePendente = {
-  codigo: "MATA60",
-  nome: "BANCO DE DADOS",
-  cargaHoraria: 68,
-  matriculado: false,
-};
-
 function trajetoria(
   historico: Partial<Historico>,
   marcos: MarcosSemestralizacao | null = null,
@@ -155,6 +210,7 @@ function trajetoria(
     fetchedAt: "2026-08-19T03:35:00.000Z",
     plano: [],
     marcos,
+    projecao: null,
     historico: {
       indices: { cr: null, iap: null },
       cursados: [],
@@ -166,6 +222,26 @@ function trajetoria(
       ...historico,
     } as Historico,
   };
+}
+
+/** Assembles a full TrajetoriaResponse from just the projected semestres, so
+ * the projeção-focused tests below don't each repeat the whole fixture. */
+function comProjecao(
+  semestres: SemestreProjetado[],
+  extras: Partial<ProjecaoTrajetoria> = {},
+): TrajetoriaResponse {
+  return {
+    ...trajetoria({ cursados: [MATRICULADO] }),
+    projecao: {
+      semestres,
+      teto: 300,
+      atrasadas: 0,
+      conclusaoProjetada: semestres[semestres.length - 1]?.semestre ?? "2026.2",
+      semestresAlemDoPrevisto: 0,
+      alemDoPrazoMaximo: false,
+      ...extras,
+    },
+  } as TrajetoriaResponse;
 }
 
 beforeEach(() => {
@@ -345,19 +421,304 @@ describe("Trajetória", () => {
     expect(screen.getByText("equivale a NOVA2")).toBeTruthy();
   });
 
-  it("warns that planner placements are not saved yet", async () => {
-    // The planner is session-only state (`movimentos`), and nothing writes it
-    // back — but now that the periods, grades and coefficient around it are
-    // the student's real transcript, a moved card reads as saved unless the
-    // screen says otherwise.
+  it("desenha os semestres projetados depois dos cursados", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue({
+      ...trajetoria({ cursados: [MATRICULADO] }),
+      projecao: {
+        semestres: [
+          {
+            semestre: "2026.2",
+            componentes: [
+              {
+                codigo: "MATA60",
+                nome: "BANCO DE DADOS",
+                cargaHoraria: 68,
+                periodo: 4,
+                atrasada: false,
+                manual: false,
+                preRequisitoNaoVerificado: false,
+              },
+            ],
+            horasOptativas: 0,
+            horasComplementares: 0,
+          },
+        ],
+        teto: 300,
+        atrasadas: 0,
+        conclusaoProjetada: "2026.2",
+        semestresAlemDoPrevisto: 0,
+        alemDoPrazoMaximo: false,
+      },
+    } as TrajetoriaResponse);
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText("MATA60")).toBeTruthy();
+    // O balde morreu: nada mais fora da linha do tempo.
+    expect(screen.queryByText("Sem período")).toBeNull();
+    expect(screen.queryByText(/Ainda não salva/i)).toBeNull();
+  });
+
+  it("marca a atrasada com o período de origem dela", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
+      comProjecao([
+        {
+          semestre: "2026.2",
+          componentes: [
+            {
+              codigo: "MATA60",
+              nome: "BANCO DE DADOS",
+              cargaHoraria: 68,
+              periodo: 3,
+              atrasada: true,
+              manual: false,
+              preRequisitoNaoVerificado: false,
+            },
+          ],
+          horasOptativas: 0,
+          horasComplementares: 0,
+        },
+      ]),
     );
 
     await render(<TrajetoriaTab />);
 
-    expect(await screen.findByText(/Ainda não salva/i)).toBeTruthy();
-    expect(screen.getByText(/volta para onde estava/i)).toBeTruthy();
+    // O selo viaja junto do card: espalhar o atraso não pode escondê-lo.
+    expect(await screen.findByText("atrasada · 3º período")).toBeTruthy();
+  });
+
+  it("resume o atraso acima da linha do tempo", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([], {
+        atrasadas: 5,
+        conclusaoProjetada: "2028.2",
+        semestresAlemDoPrevisto: 2,
+      }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText(/5 obrigatórias atrasadas/)).toBeTruthy();
+    // Duas ocorrências agora, e as duas propositais: a frase de resumo e a
+    // linha de chegada, que passou a marcar o semestre.
+    expect(screen.getAllByText(/2028\.2/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/2 semestres além do previsto/)).toBeTruthy();
+    expect(screen.getByTestId("conclusao-projetada").props.children).toBe("2028.2");
+  });
+
+  it("diz quando o aluno em dia conclui, sem nenhuma atrasada na tela", async () => {
+    // O caso que não aparecia em lugar nenhum: 0 atrasadas escondia a frase de
+    // resumo inteira, e o card da bandeira só dizia "Linha de chegada".
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([], { atrasadas: 0, conclusaoProjetada: "2029.1" }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText(/Neste ritmo você conclui em 2029\.1/)).toBeTruthy();
+    expect(screen.getByTestId("conclusao-projetada").props.children).toBe("2029.1");
+    expect(screen.queryByText(/atrasada/)).toBeNull();
+  });
+
+  it("mostra as horas genéricas como bloco, não como card", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([
+        {
+          semestre: "2026.2",
+          componentes: [],
+          horasOptativas: 120,
+          horasComplementares: 60,
+        },
+      ]),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText("120 h de optativas")).toBeTruthy();
+    // Complementar é estágio/monitoria: nunca vai ser escolhível numa lista, e
+    // chamá-la de optativa prometeria uma tela de escolha que não vai existir.
+    expect(screen.getByText("60 h de atividades complementares")).toBeTruthy();
+    // Não é matéria, então não é card — o único materia-card na tela continua
+    // sendo o da matéria cursada que o fixture já trazia (MATA55).
+    expect(screen.queryAllByTestId(/^materia-card-/)).toHaveLength(1);
+  });
+
+  it("avisa quando a projeção passa do prazo máximo", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([], { alemDoPrazoMaximo: true, conclusaoProjetada: "2031.1" }),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText(/prazo máximo/i)).toBeTruthy();
+  });
+
+  const BANCO_PROJETADO = {
+    codigo: "MATA60",
+    nome: "BANCO DE DADOS",
+    cargaHoraria: 68,
+    periodo: 4,
+    atrasada: false,
+    manual: false,
+    preRequisitoNaoVerificado: false,
+  };
+
+  /** MATA60 em `semestre`, e sempre dois semestres para haver destino de menu. */
+  function comBancoEm(semestre: "2026.2" | "2027.1"): TrajetoriaResponse {
+    return comProjecao([
+      {
+        semestre: "2026.2",
+        componentes: semestre === "2026.2" ? [BANCO_PROJETADO] : [],
+        horasOptativas: 0,
+        horasComplementares: 0,
+      },
+      {
+        semestre: "2027.1",
+        componentes: semestre === "2027.1" ? [{ ...BANCO_PROJETADO, manual: true }] : [],
+        horasOptativas: 0,
+        horasComplementares: 0,
+      },
+    ]);
+  }
+
+  it("mover uma matéria salva a posição e aplica a trajetória que volta", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+    jest.mocked(putPlano).mockResolvedValue(comBancoEm("2027.1"));
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    // The card body and the "mover" icon are two separate Pressables now —
+    // opening the menu is its own step, not implied by the destino being on
+    // screen. Only after that does the destino become pressable — and it has
+    // its own testID because "2027.1" is now written in three places on this
+    // screen: the semestre header, the menu option, and the linha de chegada.
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
+    // Pressing the icon must not also fire the card's own onPress — the two
+    // gestures used to be the same Pressable, which opened the menu and
+    // navigated to the árvore de dependências in the same tap.
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("destino-MATA60-2027.1"));
+    });
+
+    expect(jest.mocked(putPlano)).toHaveBeenCalledWith("token", [
+      { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 68, semestre: "2027.1" },
+    ]);
+  });
+
+  it("oferece tirar do plano a matéria que o aluno moveu, mandando semestre null", async () => {
+    // O ramo `semestre: null` do PUT existe, está testado no backend e era
+    // inalcançável pelo app: sem esta opção a matéria fica manual para sempre.
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2027.1"));
+    jest.mocked(putPlano).mockResolvedValue(comBancoEm("2026.2"));
+
+    await render(<TrajetoriaTab />);
+    // MATA60 está em 2027.1, e só o ano do período em curso (2026) abre
+    // sozinho — o card só existe depois de expandir 2027.
+    await act(async () => {
+      fireEvent.press(await screen.findByTestId("ano-2027"));
+    });
+    await screen.findByText("MATA60");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("tirar-do-plano-MATA60"));
+    });
+
+    expect(jest.mocked(putPlano)).toHaveBeenCalledWith("token", [
+      { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 68, semestre: null },
+    ]);
+  });
+
+  it("não oferece tirar do plano o que o plano nunca pôs", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
+
+    // O menu abriu — o destino está lá — e mesmo assim não há o que desfazer.
+    expect(screen.getByTestId("destino-MATA60-2027.1")).toBeTruthy();
+    expect(screen.queryByTestId("tirar-do-plano-MATA60")).toBeNull();
+  });
+
+  it("toque no corpo do card projetado abre a árvore de dependências", async () => {
+    // O lado positivo da separação dos gestos: o teste do "mover" prova que o
+    // ícone não navega, este prova que o corpo do card ainda navega.
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("card-projetado-MATA60"));
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/arvore-dependencias",
+      params: { codigo: "MATA60", nome: "BANCO DE DADOS" },
+    });
+  });
+
+  it("não colide com o card cursado quando a mesma matéria aparece nos dois", async () => {
+    // Uma reprovada está no histórico e nas pendentes ao mesmo tempo: com o
+    // prefixo de testID compartilhado, getByTestId("materia-card-MATA55")
+    // passava a lançar por duplicidade.
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([
+        {
+          semestre: "2026.2",
+          componentes: [
+            {
+              codigo: "MATA55",
+              nome: "SISTEMAS OPERACIONAIS",
+              cargaHoraria: 68,
+              periodo: 4,
+              atrasada: false,
+              manual: false,
+              preRequisitoNaoVerificado: false,
+            },
+          ],
+          horasOptativas: 0,
+          horasComplementares: 0,
+        },
+      ]),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByTestId("materia-card-MATA55")).toBeTruthy();
+    expect(screen.getByTestId("card-projetado-MATA55")).toBeTruthy();
+  });
+
+  it("mostra o erro quando o salvamento falha, sem perder a trajetória carregada", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+    jest.mocked(putPlano).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("mover-MATA60"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("destino-MATA60-2027.1"));
+    });
+
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+    // The trajectory itself must still be there — a failed move is an inline
+    // warning, not a full-page error that throws away what was loaded.
+    expect(screen.getByText("MATA60")).toBeTruthy();
+    consoleWarn.mockRestore();
   });
 
   it("shows the error card with a retry that reloads when the fetch fails", async () => {
@@ -406,39 +767,6 @@ describe("Trajetória", () => {
     expect(screen.queryByText("Em curso")).toBeNull();
   });
 
-  it("lists a pending component under the term the saved plan put it in", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue({
-      ...trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
-      plano: [{ ...BANCO_DE_DADOS, semestre: "2026.2" }],
-    } as TrajetoriaResponse);
-
-    await render(<TrajetoriaTab />);
-
-    // 2026.1 is in progress, so the planner offers 2026.2 and 2027.1 — and the
-    // saved plan is what decides which of them holds the component.
-    expect(await screen.findByText("1 matéria")).toBeTruthy();
-    expect(screen.getByText("Tudo planejado.")).toBeTruthy();
-  });
-
-  it("moves a pending component to another term from its menu", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(
-      trajetoria({ cursados: [MATRICULADO], pendentesObrigatorios: [BANCO_DE_DADOS] }),
-    );
-
-    await render(<TrajetoriaTab />);
-    expect(await screen.findByText("a cursar · 1")).toBeTruthy();
-
-    // The zone header and the menu option share the term's name; the option is
-    // the later of the two, inside the component's own card.
-    const opcoes = screen.getAllByText("2026.2");
-    await act(async () => {
-      fireEvent.press(opcoes[opcoes.length - 1]);
-    });
-
-    expect(screen.getByText("1 matéria")).toBeTruthy();
-    expect(screen.getByText("Tudo planejado.")).toBeTruthy();
-  });
-
   const LOGICA: ComponenteCursado = {
     semestre: "2025.1",
     natureza: "OB",
@@ -462,6 +790,48 @@ describe("Trajetória", () => {
     expect(screen.queryByText("MATA37")).toBeNull();
     // Fechado, o ano ainda diz o que está escondendo.
     expect(screen.getByText("1 matéria")).toBeTruthy();
+  });
+
+  it("abre o ano do histórico, não o ano projetado, quando não há nada em curso", async () => {
+    // LOGICA fecha 2025 já concluído — nada `emCurso` em todo o histórico —
+    // e a projeção acrescenta um ano futuro (2027). Sem a correção, o ano
+    // aberto por padrão seria o último da lista (2027, só projetado) em vez
+    // do último ano com períodos (2025).
+    jest.mocked(getTrajetoria).mockResolvedValue({
+      ...trajetoria({ cursados: [LOGICA] }),
+      projecao: {
+        semestres: [
+          {
+            semestre: "2027.1",
+            componentes: [
+              {
+                codigo: "MATA60",
+                nome: "BANCO DE DADOS",
+                cargaHoraria: 68,
+                periodo: 4,
+                atrasada: false,
+                manual: false,
+                preRequisitoNaoVerificado: false,
+              },
+            ],
+            horasOptativas: 0,
+            horasComplementares: 0,
+          },
+        ],
+        teto: 300,
+        atrasadas: 0,
+        conclusaoProjetada: "2027.1",
+        semestresAlemDoPrevisto: 0,
+        alemDoPrazoMaximo: false,
+      },
+    } as TrajetoriaResponse);
+
+    await render(<TrajetoriaTab />);
+
+    // O ano do histórico (2025) está aberto: sua matéria aparece direto.
+    expect(await screen.findByText("MATA37")).toBeTruthy();
+    // O ano só-projetado (2027) começa fechado.
+    expect(screen.queryByText("MATA60")).toBeNull();
   });
 
   it("expande um ano colapsado ao tocar no cabeçalho", async () => {

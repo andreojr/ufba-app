@@ -3,6 +3,7 @@ import type {
   DocentePerfil,
   DocenteResumo,
   GoogleUserInfo,
+  ItemPlano,
   ScheduleResponse,
   SigaaCredentials,
   SigaaWebSession,
@@ -75,7 +76,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const SIGAA_DOCUMENT_TIMEOUT_MS = 45_000;
 
 interface RequestOptions {
-  method: "GET" | "POST" | "DELETE";
+  method: "GET" | "POST" | "DELETE" | "PUT";
   body?: unknown;
   accessToken?: string;
   /** Overrides the default timeout; the SIGAA scrape endpoints need far longer. */
@@ -443,4 +444,16 @@ export async function getVizinhosCurriculares(
     `/curriculo/meu-curso/componentes/${encodeURIComponent(codigo)}/vizinhos?curso=${encodeURIComponent(curso)}`,
     { method: "GET", accessToken, timeoutMs: VIZINHOS_CURRICULARES_TIMEOUT_MS },
   );
+}
+
+/** Saves the positions the student chose and returns the re-projected trajectory. */
+export async function putPlano(
+  accessToken: string,
+  itens: ItemPlano[],
+): Promise<TrajetoriaResponse> {
+  return request<TrajetoriaResponse>("/trajetoria/plano", {
+    method: "PUT",
+    accessToken,
+    body: { itens },
+  });
 }

@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { HistoricoRepository, TrajetoriaSalva } from './historico.repository';
+import type { HistoricoRepository, ItemPlano, TrajetoriaSalva } from './historico.repository';
 import { SITUACOES_INTEGRALIZADAS, type Historico } from './parsers/historico';
 import type { ItemTexto } from './parsers/historico-texto';
 
@@ -66,5 +66,10 @@ export class HistoricoService {
   /** Null means the user has never synced — the screen's fallback state. */
   async getTrajetoria(userId: string): Promise<TrajetoriaSalva | null> {
     return this.repository.buscar(userId);
+  }
+
+  /** Repasse direto: posicionar matéria não toca no SIGAA nem no histórico. */
+  async salvarPlano(userId: string, itens: ItemPlano[]): Promise<void> {
+    await this.repository.salvarPlano(userId, itens);
   }
 }

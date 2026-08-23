@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { HistoricoService } from './historico.service';
-import type { HistoricoRepository, TrajetoriaSalva } from './historico.repository';
+import type { HistoricoRepository, ItemPlano, TrajetoriaSalva } from './historico.repository';
 import type { Historico } from './parsers/historico';
 
 const CREDENCIAIS = { login: '209900011', senha: 'segredo' };
@@ -71,6 +71,7 @@ function repositorioFalso(): jest.Mocked<HistoricoRepository> {
     salvar: jest.fn<Promise<void>, [string, Historico]>(async () => undefined),
     buscar: jest.fn<Promise<TrajetoriaSalva | null>, [string]>(async () => null),
     reconciliarPlano: jest.fn<Promise<void>, [string, string[]]>(async () => undefined),
+    salvarPlano: jest.fn<Promise<void>, [string, ItemPlano[]]>(async () => undefined),
   };
 }
 
@@ -147,5 +148,22 @@ describe('HistoricoService', () => {
     );
 
     await expect(service.getTrajetoria('user-1')).resolves.toBeNull();
+  });
+
+  it('salvarPlano repassa direto ao repositório, sem tocar no SIGAA', async () => {
+    const repositorio = repositorioFalso();
+    const service = new HistoricoService(
+      { fetchHistorico: jest.fn() },
+      jest.fn(async () => []),
+      jest.fn(() => historicoFalso()),
+      repositorio,
+    );
+    const itens: ItemPlano[] = [
+      { codigo: 'MATA55', nome: 'SO', cargaHoraria: 68, semestre: '2027.1' },
+    ];
+
+    await service.salvarPlano('user-1', itens);
+
+    expect(repositorio.salvarPlano).toHaveBeenCalledWith('user-1', itens);
   });
 });
