@@ -61,7 +61,7 @@ export function MoodleLinkProvider({ children }: PropsWithChildren): JSX.Element
     );
     if (result.status === "success") {
       await saveMoodleSession(result.session);
-      void Promise.resolve(rememberMoodleWasLinked()).catch((error: unknown) => {
+      void rememberMoodleWasLinked().catch((error: unknown) => {
         console.warn("Failed to record Moodle link", error);
       });
       setState({ status: "linked", session: result.session, expired: false });

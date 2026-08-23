@@ -2,7 +2,7 @@ import { act, render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 
 import { startMoodleLogin } from "./moodle-auth";
-import { getSiteInfo } from "./moodle-api";
+import { getSiteInfo, onMoodleTokenVerdict } from "./moodle-api";
 import { MoodleLinkProvider, useMoodleLink } from "./moodle-link-context";
 import {
   clearMoodleSession,
@@ -16,18 +16,25 @@ jest.mock("./moodle-auth");
 jest.mock("./moodle-api", () => ({
   ...jest.requireActual("./moodle-api"),
   getSiteInfo: jest.fn(),
+  onMoodleTokenVerdict: jest.fn(),
 }));
 
 const mockGetSession = getMoodleSession as jest.Mock;
 const mockSave = saveMoodleSession as jest.Mock;
+const mockClear = clearMoodleSession as jest.Mock;
 const mockStart = startMoodleLogin as jest.Mock;
+const mockOnVerdict = onMoodleTokenVerdict as jest.Mock;
 
 function Probe(): JSX.Element {
   const link = useMoodleLink();
   return <Text testID="status">{link.status}</Text>;
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  (rememberMoodleWasLinked as jest.Mock).mockResolvedValue(undefined);
+  mockOnVerdict.mockReturnValue(jest.fn());
+});
 
 it("hydrates to unlinked when there is no stored session", async () => {
   mockGetSession.mockResolvedValueOnce(null);
@@ -76,6 +83,59 @@ it("link() saves the session on success", async () => {
   expect(mockSave).toHaveBeenCalledWith({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 });
   expect(rememberMoodleWasLinked).toHaveBeenCalled();
   await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
-  void clearMoodleSession;
   void getSiteInfo;
+});
+
+it("unlink() clears the stored session and reports unlinked", async () => {
+  mockGetSession.mockResolvedValueOnce({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 });
+
+  let unlinkFn: () => Promise<void> = async () => undefined;
+  function Capture(): JSX.Element {
+    const ctx = useMoodleLink();
+    unlinkFn = ctx.unlink;
+    return <Text testID="status">{ctx.status}</Text>;
+  }
+  const screen = await render(
+    <MoodleLinkProvider>
+      <Capture />
+    </MoodleLinkProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
+
+  await act(async () => {
+    await unlinkFn();
+  });
+
+  expect(mockClear).toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
+});
+
+it("flips expired to true when the token verdict listener reports expired", async () => {
+  mockGetSession.mockResolvedValueOnce({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 });
+
+  let verdictListener: (verdict: "valid" | "expired") => void = () => undefined;
+  mockOnVerdict.mockImplementation((listener: (verdict: "valid" | "expired") => void) => {
+    verdictListener = listener;
+    return jest.fn();
+  });
+
+  let latestExpired: boolean | undefined;
+  function Capture(): JSX.Element {
+    const ctx = useMoodleLink();
+    if (ctx.status === "linked") latestExpired = ctx.expired;
+    return <Text testID="status">{ctx.status}</Text>;
+  }
+  const screen = await render(
+    <MoodleLinkProvider>
+      <Capture />
+    </MoodleLinkProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("linked"));
+  expect(latestExpired).toBe(false);
+
+  await act(async () => {
+    verdictListener("expired");
+  });
+
+  expect(latestExpired).toBe(true);
 });
