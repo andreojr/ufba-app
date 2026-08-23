@@ -1,6 +1,6 @@
 import { avaliarPreRequisito } from './avaliador-prerequisito';
 import type { ItemFila } from './fila-de-pendentes';
-import { proximoSemestre } from './semestre';
+import { compararSemestres, proximoSemestre } from './semestre';
 
 export interface ComponenteProjetado {
   codigo: string;
@@ -66,12 +66,17 @@ export function alocar(
     let capacidade = teto;
 
     // Posições fixas primeiro: o aluno já decidiu, e elas cobram o teto antes
-    // de o projetor escolher qualquer coisa.
-    for (let i = fixadas.length - 1; i >= 0; i -= 1) {
-      if (fixos.get(fixadas[i].codigo) === semestre) {
+    // de o projetor escolher qualquer coisa. "Já venceu ou é agora" em vez de
+    // igualdade exata: um override para um semestre que a sequência nunca
+    // gera (ex.: um PlanoItem que envelheceu e aponta para o passado) precisa
+    // ser alcançado assim que o laço o ultrapassa, senão `fixadas` nunca
+    // esvazia e o `while` gira para sempre.
+    for (let i = 0; i < fixadas.length; i += 1) {
+      if (compararSemestres(fixos.get(fixadas[i].codigo)!, semestre) <= 0) {
         componentes.push(projetar(fixadas[i], { manual: true, naoVerificado: false }));
         capacidade -= fixadas[i].cargaHoraria;
         fixadas.splice(i, 1);
+        i -= 1;
       }
     }
 

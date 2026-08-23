@@ -103,6 +103,20 @@ describe('alocar', () => {
     expect(semestres[2].componentes.map((c) => c.codigo)).toEqual(['A']);
   });
 
+  it('aloca a posição fixa vencida no primeiro semestre em vez de girar para sempre', () => {
+    // O aluno planejou 'A' para 2026.1, o tempo passou e o item continua
+    // pendente: o override aponta para um semestre que a sequência a partir
+    // de 2026.2 nunca gera. "Já venceu" precisa cair no primeiro semestre.
+    const fila = [item('A')];
+    const fixos = new Map([['A', '2026.1']]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 600);
+
+    expect(semestres).toHaveLength(1);
+    expect(semestres[0].semestre).toBe('2026.2');
+    expect(semestres[0].componentes.map((c) => c.codigo)).toEqual(['A']);
+    expect(semestres[0].componentes[0].manual).toBe(true);
+  });
+
   it('devolve lista vazia quando não há nada pendente', () => {
     expect(alocar([], SEM_FIXOS, new Set(), '2026.2', 300)).toEqual([]);
   });
