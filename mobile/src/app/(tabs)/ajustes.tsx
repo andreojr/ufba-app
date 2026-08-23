@@ -787,6 +787,11 @@ export default function AjustesTab(): JSX.Element {
               <ListGroup.ItemSuffix>
                 {moodle.status === "linked" ? (
                   <Chip variant="secondary" size="sm">
+                    {/* moodle.expired só vira true via veredito de token dentro de
+                        link()/getSiteInfo — nesta build somente-conexão nada mais
+                        dispara esse veredito, então "Reconectar" é inalcançável
+                        na prática. Uma ação de reconexão real fica para o
+                        trabalho de turma virtual (leitura de conteúdo). */}
                     {moodle.expired ? "Reconectar" : "Conectado"}
                   </Chip>
                 ) : null}
