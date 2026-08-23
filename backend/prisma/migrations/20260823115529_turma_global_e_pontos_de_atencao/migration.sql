@@ -10,6 +10,14 @@ ALTER TABLE "cached_turma" DROP CONSTRAINT "cached_turma_schedule_user_id_fkey";
 -- DropTable
 DROP TABLE "cached_turma";
 
+-- A turma associada a cada CachedSchedule acabou de ser apagada acima e não é
+-- derivável retroativamente (falta "numero"). Um CachedSchedule órfão sem
+-- turmas faria buscar() devolver `{ turmas: [] }` em vez de `null`, o que o
+-- cliente lê como "sincronizado e matriculado em nada" em vez de "nunca
+-- sincronizado" — uma sincronização falsa é pior do que nenhuma. Zera o cache
+-- para que todo mundo caia em `unsynced` até o próximo sync real.
+DELETE FROM "cached_schedule";
+
 -- CreateTable
 CREATE TABLE "turmas" (
     "id" TEXT NOT NULL,
