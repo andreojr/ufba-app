@@ -64,6 +64,10 @@ export class PrismaScheduleRepository implements ScheduleRepository {
       turmas: registro.turmas.map((t): Turma => ({
         codigo: t.codigo,
         nome: t.nome,
+        // A coluna "numero" ainda não existe no schema — chega numa task
+        // posterior desta feature, junto da migração que persiste a turma
+        // compartilhada.
+        numero: '',
         docente: t.docente,
         slots: t.slots as unknown as TurmaSlot[],
         vigencia: { inicio: t.vigenciaInicio, fim: t.vigenciaFim },

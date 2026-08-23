@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio';
-import { buildTurmaSlots, Turma } from './turma';
+import { buildTurmaSlots, TurmaPortal } from './turma';
 
 const SEMESTER_HEADER_PATTERN = /^\d{4}\.\d$/;
 // A turma can have more than one schedule code in the same cell (e.g. a
@@ -28,9 +28,9 @@ function splitCodigoNome(componente: string): {
  * it reads a page every session already fetches, so it still works when the
  * atestado postback doesn't.
  */
-export function parseTurmasHorario(html: string): Turma[] {
+export function parseTurmasHorario(html: string): TurmaPortal[] {
   const $ = cheerio.load(html);
-  const turmas: Turma[] = [];
+  const turmas: TurmaPortal[] = [];
 
   let currentSemester = '';
 

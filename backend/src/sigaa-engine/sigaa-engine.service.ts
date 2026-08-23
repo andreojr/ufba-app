@@ -79,7 +79,12 @@ export class SigaaEngineService {
     }
 
     return {
-      turmas: parseTurmasHorario(portalHtml),
+      // A home não tem a coluna "Turma": não dá pra identificar uma turma
+      // compartilhada por esse fallback, então numero fica vazio.
+      turmas: parseTurmasHorario(portalHtml).map((turma) => ({
+        ...turma,
+        numero: '',
+      })),
       perfil,
       periodoLetivo: null,
     };

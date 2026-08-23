@@ -128,6 +128,7 @@ export function parseAtestadoTurmas(html: string): {
     turmas.push({
       codigo: codigo || null,
       nome: cell.find('span.componente').text().trim(),
+      numero: cell.find('td.turma').text().trim(),
       docente: docente || null,
       slots: buildTurmaSlots(codesText, readLocal(cell)),
       vigencia: { inicio, fim },

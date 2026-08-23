@@ -24,6 +24,7 @@ function turmasFalsas(): Turma[] {
     {
       codigo: 'MATA37',
       nome: 'CÁLCULO A',
+      numero: '01',
       docente: 'DR. ALGUEM',
       slots: [],
       vigencia: { inicio: '2026-08-19', fim: '2026-12-19' },

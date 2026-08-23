@@ -4,10 +4,13 @@ import type { PeriodoLetivo } from '../sigaa-engine/parsers/atestado-turmas';
 import type { Turma } from '../sigaa-engine/parsers/turma';
 
 function turmasFalsas(): Turma[] {
+  // numero fica vazio porque o schema do cachedTurma ainda não tem essa
+  // coluna — chega junto da migração de uma task posterior desta feature.
   return [
     {
       codigo: 'MATA37',
       nome: 'CÁLCULO A',
+      numero: '',
       docente: 'DR. ALGUEM',
       slots: [
         {
@@ -25,6 +28,7 @@ function turmasFalsas(): Turma[] {
     {
       codigo: null,
       nome: 'REDES DE COMPUTADORES',
+      numero: '',
       docente: null,
       slots: [],
       vigencia: { inicio: '2026-08-19', fim: '2026-12-19' },

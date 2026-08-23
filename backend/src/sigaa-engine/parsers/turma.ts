@@ -20,6 +20,12 @@ export interface Turma {
   nome: string;
   /** Only the atestado de matrícula carries this — null when parsed off the portal home. */
   docente: string | null;
+  /**
+   * A coluna "Turma" do atestado ("02", "16"). Junto com semestre e código,
+   * identifica a turma em toda a UFBA — é a chave natural que permite dois
+   * alunos da mesma turma compartilharem um registro.
+   */
+  numero: string;
   slots: TurmaSlot[];
   vigencia: Vigencia;
   semestre: string;
@@ -63,3 +69,10 @@ export function buildTurmaSlots(codesText: string, local: string): TurmaSlot[] {
 
   return slots;
 }
+
+/**
+ * O que a "Minhas Turmas" da home do portal consegue dizer. Não tem a coluna
+ * "Turma", então não identifica uma turma compartilhada — desde a v1 dos
+ * pontos de atenção este parser é só diagnóstico, nunca fonte de horário.
+ */
+export type TurmaPortal = Omit<Turma, 'numero'>;

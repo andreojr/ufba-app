@@ -151,4 +151,22 @@ describe('parseAtestadoTurmas', () => {
       parseAtestadoTurmas('<html><body>Sessão expirada</body></html>'),
     ).toEqual({ turmas: [], periodoLetivo: null });
   });
+
+  it('lê o número da turma da coluna "Turma"', () => {
+    const { turmas } = parseAtestadoTurmas(html);
+
+    // ENGG54 é a linha MATRICULADO do fixture; ECOB40 está INDEFERIDO e é filtrada.
+    const engg54 = turmas.find((t) => t.codigo === 'ENGG54');
+    expect(engg54?.numero).toBe('02');
+  });
+
+  it('devolve string vazia quando a coluna "Turma" não existe no HTML', () => {
+    // Um deploy sem essa coluna não pode derrubar o parser — quem rejeita a
+    // sincronização é o engine service (Task 2), com uma mensagem própria.
+    const semColuna = html.replace(/<td class="turma">[^<]*<\/td>/g, '');
+
+    const { turmas } = parseAtestadoTurmas(semColuna);
+
+    expect(turmas[0].numero).toBe('');
+  });
 });
