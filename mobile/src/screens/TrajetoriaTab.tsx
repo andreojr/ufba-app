@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
-import { Button, Typography, useThemeColor } from "heroui-native";
+import { Button, Menu, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { LinearTransition } from "react-native-reanimated";
 
 import { AppIcon } from "@/components/AppIcon";
 import { describeApiError } from "@/lib/api-errors";
-import { getTrajetoria } from "@/lib/api";
+import { getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -126,6 +126,36 @@ export default function TrajetoriaTab(): JSX.Element {
     }
   }, [sigaaLink.status, accessToken, carregar]);
 
+  /**
+   * Mover é override puro: grava a posição e aplica a trajetória reprojetada
+   * que o servidor devolve. Deliberadamente sem otimismo local — a resposta
+   * pode reordenar outros semestres por causa de pré-requisito, e uma tela
+   * que se corrige sozinha meio segundo depois é pior que uma que espera.
+   */
+  const moverComponente = useCallback(
+    async (componente: ComponenteProjetado, semestre: string) => {
+      if (!accessToken) {
+        return;
+      }
+      try {
+        aplicar(
+          await putPlano(accessToken, [
+            {
+              codigo: componente.codigo,
+              nome: componente.nome,
+              cargaHoraria: componente.cargaHoraria,
+              semestre,
+            },
+          ]),
+        );
+      } catch (error) {
+        console.warn("Failed to save plano", error);
+        setState({ status: "error", message: describeApiError(error) });
+      }
+    },
+    [accessToken, aplicar],
+  );
+
   return (
     <View className="flex-1 bg-background">
       <ScrollView
@@ -180,6 +210,7 @@ export default function TrajetoriaTab(): JSX.Element {
             onAbrirVizinhos={(codigo, nome) =>
               router.push({ pathname: "/arvore-dependencias", params: { codigo, nome } })
             }
+            onMover={moverComponente}
           />
         ) : null}
       </ScrollView>
@@ -194,6 +225,7 @@ function ReadyTrajetoria({
   projecao,
   mutedColor,
   onAbrirVizinhos,
+  onMover,
 }: {
   historico: Historico;
   fimDoPeriodo: string | null;
@@ -201,6 +233,7 @@ function ReadyTrajetoria({
   projecao: ProjecaoTrajetoria | null;
   mutedColor: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string) => void;
 }): JSX.Element {
   const periodos = agruparPorSemestre(historico.cursados);
   const anos = anosDaProjecao(periodos, projecao);
@@ -243,7 +276,9 @@ function ReadyTrajetoria({
         anos={anos}
         desatualizado={desatualizado}
         marcos={marcos}
+        semestresProjetados={projecao?.semestres.map((semestre) => semestre.semestre) ?? []}
         onAbrirVizinhos={onAbrirVizinhos}
+        onMover={onMover}
       />
     </>
   );
@@ -264,12 +299,16 @@ function LinhaDoTempo({
   anos,
   desatualizado,
   marcos,
+  semestresProjetados,
   onAbrirVizinhos,
+  onMover,
 }: {
   anos: AnoTrajetoria[];
   desatualizado: boolean;
   marcos: MarcosSemestralizacao | null;
+  semestresProjetados: string[];
   onAbrirVizinhos: (codigo: string, nome: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
@@ -407,7 +446,9 @@ function LinhaDoTempo({
                       <CardProjetado
                         key={`${semestre.semestre}-${componente.codigo}`}
                         componente={componente}
+                        destinos={semestresProjetados.filter((destino) => destino !== semestre.semestre)}
                         onAbrirVizinhos={onAbrirVizinhos}
+                        onMover={onMover}
                       />
                     ))}
                     {semestre.horasOptativas > 0 ? (
@@ -452,10 +493,14 @@ function LinhaDoTempo({
  */
 function CardProjetado({
   componente,
+  destinos,
   onAbrirVizinhos,
+  onMover,
 }: {
   componente: ComponenteProjetado;
+  destinos: string[];
   onAbrirVizinhos: (codigo: string, nome: string) => void;
+  onMover: (componente: ComponenteProjetado, semestre: string) => void;
 }): JSX.Element {
   return (
     <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
@@ -466,27 +511,48 @@ function CardProjetado({
           </Typography.Paragraph>
         </View>
       ) : null}
-      <Pressable
-        testID={`materia-card-${componente.codigo}`}
-        onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
-        className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
-          componente.atrasada && componente.periodo !== null
-            ? "rounded-t-md rounded-b-2xl"
-            : "rounded-2xl"
-        }`}
-      >
-        <View className="gap-0.5">
-          <View className="flex-row items-baseline gap-1.5">
-            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-              {componente.codigo}
-            </Typography.Paragraph>
-            <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
-              · {componente.cargaHoraria} h
-            </Typography.Paragraph>
-          </View>
-          <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
-        </View>
-      </Pressable>
+      {/* A tap opens the árvore de dependências, same as a cursado card; a
+          long-press — the Menu's own trigger gesture — offers "Mover para"
+          instead of stealing the tap. Only offered when there is another
+          projected semestre to move it into. */}
+      <Menu>
+        <Menu.Trigger asChild>
+          <Pressable
+            testID={`materia-card-${componente.codigo}`}
+            onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
+            className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
+              componente.atrasada && componente.periodo !== null
+                ? "rounded-t-md rounded-b-2xl"
+                : "rounded-2xl"
+            }`}
+          >
+            <View className="gap-0.5">
+              <View className="flex-row items-baseline gap-1.5">
+                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                  {componente.codigo}
+                </Typography.Paragraph>
+                <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
+                  · {componente.cargaHoraria} h
+                </Typography.Paragraph>
+              </View>
+              <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
+            </View>
+          </Pressable>
+        </Menu.Trigger>
+        {destinos.length > 0 ? (
+          <Menu.Portal>
+            <Menu.Overlay />
+            <Menu.Content presentation="popover" width={220}>
+              <Menu.Label>Mover para</Menu.Label>
+              {destinos.map((destino) => (
+                <Menu.Item key={destino} onPress={() => onMover(componente, destino)}>
+                  <Menu.ItemTitle>{destino}</Menu.ItemTitle>
+                </Menu.Item>
+              ))}
+            </Menu.Content>
+          </Menu.Portal>
+        ) : null}
+      </Menu>
     </View>
   );
 }

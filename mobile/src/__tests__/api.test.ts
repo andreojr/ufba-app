@@ -495,7 +495,14 @@ describe("putPlano", () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/trajetoria/plano"),
-      expect.objectContaining({ method: "PUT" }),
+      expect.objectContaining({
+        method: "PUT",
+        // The envelope matters: the endpoint expects `{ itens }`, not the
+        // bare array — a regression here would silently ship a 400.
+        body: JSON.stringify({
+          itens: [{ codigo: "MATA55", nome: "SO", cargaHoraria: 68, semestre: "2027.1" }],
+        }),
+      }),
     );
   });
 });

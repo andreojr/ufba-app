@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 import TrajetoriaTab from "@/screens/TrajetoriaTab";
-import { ApiError, getTrajetoria } from "@/lib/api";
+import { ApiError, getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
@@ -24,6 +24,7 @@ jest.mock("@/lib/sync-freshness-context", () => ({
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getTrajetoria: jest.fn(),
+  putPlano: jest.fn(),
 }));
 // Mocked rather than left to SecureStore: the term's end date is what decides
 // whether the staleness nudge fires, so every test has to state it.
@@ -475,6 +476,70 @@ describe("Trajetória", () => {
     expect(await screen.findByText(/prazo máximo/i)).toBeTruthy();
   });
 
+  const BANCO_PROJETADO = {
+    codigo: "MATA60",
+    nome: "BANCO DE DADOS",
+    cargaHoraria: 68,
+    periodo: 4,
+    atrasada: false,
+    manual: false,
+    preRequisitoNaoVerificado: false,
+  };
+
+  /** MATA60 em `semestre`, e sempre dois semestres para haver destino de menu. */
+  function comBancoEm(semestre: "2026.2" | "2027.1"): TrajetoriaResponse {
+    return comProjecao([
+      {
+        semestre: "2026.2",
+        componentes: semestre === "2026.2" ? [BANCO_PROJETADO] : [],
+        horasOptativas: 0,
+        horasComplementares: 0,
+      },
+      {
+        semestre: "2027.1",
+        componentes: semestre === "2027.1" ? [{ ...BANCO_PROJETADO, manual: true }] : [],
+        horasOptativas: 0,
+        horasComplementares: 0,
+      },
+    ]);
+  }
+
+  it("mover uma matéria salva a posição e aplica a trajetória que volta", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+    jest.mocked(putPlano).mockResolvedValue(comBancoEm("2027.1"));
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    // O cabeçalho do semestre e a opção do menu compartilham o texto; a opção é
+    // a última das duas, dentro do card da própria matéria.
+    const opcoes = screen.getAllByText("2027.1");
+    await act(async () => {
+      fireEvent.press(opcoes[opcoes.length - 1]);
+    });
+
+    expect(jest.mocked(putPlano)).toHaveBeenCalledWith("token", [
+      { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 68, semestre: "2027.1" },
+    ]);
+  });
+
+  it("mostra o erro quando o salvamento falha", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+    jest.mocked(putPlano).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    const opcoes = screen.getAllByText("2027.1");
+    await act(async () => {
+      fireEvent.press(opcoes[opcoes.length - 1]);
+    });
+
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+    consoleWarn.mockRestore();
+  });
+
   it("shows the error card with a retry that reloads when the fetch fails", async () => {
     jest.mocked(getTrajetoria).mockRejectedValueOnce(new ApiError("Unauthorized", 401));
     const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -544,6 +609,48 @@ describe("Trajetória", () => {
     expect(screen.queryByText("MATA37")).toBeNull();
     // Fechado, o ano ainda diz o que está escondendo.
     expect(screen.getByText("1 matéria")).toBeTruthy();
+  });
+
+  it("abre o ano do histórico, não o ano projetado, quando não há nada em curso", async () => {
+    // LOGICA fecha 2025 já concluído — nada `emCurso` em todo o histórico —
+    // e a projeção acrescenta um ano futuro (2027). Sem a correção, o ano
+    // aberto por padrão seria o último da lista (2027, só projetado) em vez
+    // do último ano com períodos (2025).
+    jest.mocked(getTrajetoria).mockResolvedValue({
+      ...trajetoria({ cursados: [LOGICA] }),
+      projecao: {
+        semestres: [
+          {
+            semestre: "2027.1",
+            componentes: [
+              {
+                codigo: "MATA60",
+                nome: "BANCO DE DADOS",
+                cargaHoraria: 68,
+                periodo: 4,
+                atrasada: false,
+                manual: false,
+                preRequisitoNaoVerificado: false,
+              },
+            ],
+            horasOptativas: 0,
+            horasComplementares: 0,
+          },
+        ],
+        teto: 300,
+        atrasadas: 0,
+        conclusaoProjetada: "2027.1",
+        semestresAlemDoPrevisto: 0,
+        alemDoPrazoMaximo: false,
+      },
+    } as TrajetoriaResponse);
+
+    await render(<TrajetoriaTab />);
+
+    // O ano do histórico (2025) está aberto: sua matéria aparece direto.
+    expect(await screen.findByText("MATA37")).toBeTruthy();
+    // O ano só-projetado (2027) começa fechado.
+    expect(screen.queryByText("MATA60")).toBeNull();
   });
 
   it("expande um ano colapsado ao tocar no cabeçalho", async () => {
