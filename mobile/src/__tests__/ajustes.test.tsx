@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 import { useUniwind } from "uniwind";
 
@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
+import { useMoodleLink } from "@/lib/moodle-link-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
 import {
@@ -26,6 +27,7 @@ import type { PeriodoLetivo, Turma } from "@/lib/types";
 import AjustesTab from "@/app/(tabs)/ajustes";
 
 jest.mock("@/lib/auth-context");
+jest.mock("@/lib/moodle-link-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
 jest.mock("@/lib/periodo-cache", () => ({
@@ -214,6 +216,7 @@ jest.mock("react-native-svg", () => {
 const mockedUseAuth = jest.mocked(useAuth);
 const mockSignOut = jest.fn();
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
+const mockedUseMoodleLink = jest.mocked(useMoodleLink);
 const mockedGetSigaaCredentials = jest.mocked(getSigaaCredentials);
 const mockedGetSchedule = jest.mocked(getSchedule);
 const mockedPostScheduleSync = jest.mocked(postScheduleSync);
@@ -279,7 +282,59 @@ describe("AjustesTab", () => {
     mockUniwindSetTheme.mockClear();
     mockedSaveThemePreference.mockClear();
     mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
+    mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() } as any);
     mockSignedIn();
+  });
+
+  async function renderAjustes() {
+    return await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+  }
+
+  describe("vincular Moodle", () => {
+    it("enables the Moodle item and starts linking when tapped while unlinked", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      const link = jest.fn().mockResolvedValue({ status: "cancelled" });
+      mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link, unlink: jest.fn() } as any);
+
+      const screen = await renderAjustes();
+
+      const item = await screen.findByTestId("link-moodle-item");
+      expect(item.props.accessibilityState?.disabled).toBeFalsy();
+      expect(within(item).queryByText("Em breve")).toBeNull();
+
+      await act(async () => {
+        fireEvent.press(item);
+      });
+      expect(link).toHaveBeenCalled();
+    });
+
+    it("shows 'Conectado' and offers unlink when already linked", async () => {
+      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      const unlink = jest.fn().mockResolvedValue(undefined);
+      mockedUseMoodleLink.mockReturnValue({
+        status: "linked",
+        expired: false,
+        session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 },
+        link: jest.fn(),
+        unlink,
+      } as any);
+
+      const screen = await renderAjustes();
+      const item = await screen.findByTestId("link-moodle-item");
+      expect(within(item).getByText("Conectado")).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(item);
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByText("Desvincular"));
+      });
+      expect(unlink).toHaveBeenCalled();
+    });
   });
 
   it("shows the signed-in user's name and email", async () => {
