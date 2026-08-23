@@ -7,8 +7,9 @@ import {
   useFonts,
 } from "@expo-google-fonts/poppins";
 import { SourceCodePro_400Regular } from "@expo-google-fonts/source-code-pro";
-import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
+// expo-router 57 dropped its dependency on @react-navigation and vendored the
+// pieces it still needs, re-exporting the theming API from its own entry point.
+import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider, useThemeColor } from "heroui-native";
