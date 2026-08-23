@@ -7,6 +7,7 @@ build/
 *.log
 .DS_Store
 .claude/worktrees/
+.claude/settings.local.json
 
 # Scratch do subagent-driven-development (ledger, briefs, review packages)
 .superpowers/
