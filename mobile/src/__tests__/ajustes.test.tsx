@@ -80,7 +80,11 @@ jest.mock("heroui-native", () => {
 
   // Minimal stand-in for the real compound Tabs: a context carries the
   // controlled value/onValueChange down to each Trigger, which fires it on press.
-  const TabsContext = React.createContext<{ value?: string; onValueChange?: (value: string) => void }>({});
+  // Type argument moved into the value: `React` here comes from jest.requireActual,
+  // so it is untyped and TS refuses type arguments on the call itself.
+  const TabsContext = React.createContext(
+    {} as { value?: string; onValueChange?: (value: string) => void },
+  );
 
   const Tabs = Object.assign(
     ({ children, value, onValueChange }: any) => (

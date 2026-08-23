@@ -22,6 +22,7 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-cookies/cookies": "^6.2.1",
     "@react-native-google-signin/google-signin": "^16.1.4",
+    "@react-navigation/native": "^7.1.8",
     "cpf-cnpj-validator": "^2.1.2",
     "expo": "~54.0.0",
     "expo-calendar": "~15.0.8",
