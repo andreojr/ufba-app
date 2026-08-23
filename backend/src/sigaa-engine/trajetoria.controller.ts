@@ -7,6 +7,8 @@ import {
   Post,
   Put,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -56,6 +58,7 @@ export type TrajetoriaResponse =
 
 @Controller()
 @UseGuards(JwtAuthGuard)
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class TrajetoriaController {
   private readonly logger = new Logger(TrajetoriaController.name);
 

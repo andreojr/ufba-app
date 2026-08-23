@@ -1,6 +1,9 @@
+import type { ArgumentMetadata } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { TrajetoriaController } from './trajetoria.controller';
 import type { HistoricoService } from './historico.service';
 import type { TrajetoriaSalva } from './historico.repository';
+import { SalvarPlanoDto } from './plano.dto';
 import type { CurriculoService } from '../curriculo/curriculo.service';
 import { CursoDesconhecidoError } from '../curriculo/curriculo.service';
 import type { EstruturaCurricularSalva } from '../curriculo/curriculo.repository';
@@ -240,5 +243,41 @@ describe('TrajetoriaController', () => {
 
     expect(service.salvarPlano).toHaveBeenCalledWith('user-1', itens);
     expect('historico' in resposta).toBe(true);
+  });
+
+  // O controller declara @UsePipes(new ValidationPipe(...)) — este teste prova
+  // que o pipe de fato roda em cima do DTO, não só que ele existe no código.
+  // Sem @UsePipes, o Nest passaria o JSON cru para salvarPlano, e um semestre
+  // fora do formato "AAAA.N" chegaria intacto até a aritmética do projetor.
+  it('o ValidationPipe do controller rejeita um semestre fora do formato AAAA.N', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    await expect(
+      pipe.transform(
+        {
+          itens: [
+            { codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: 'lixo' },
+          ],
+        },
+        metadata,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('o ValidationPipe do controller aceita um semestre bem formado', async () => {
+    const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const metadata: ArgumentMetadata = { type: 'body', metatype: SalvarPlanoDto };
+
+    const resultado = await pipe.transform(
+      {
+        itens: [
+          { codigo: 'X', nome: 'Y', cargaHoraria: 1, semestre: '2027.1' },
+        ],
+      },
+      metadata,
+    );
+
+    expect(resultado.itens[0].semestre).toBe('2027.1');
   });
 });
