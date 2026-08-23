@@ -6,7 +6,7 @@
 
 **Architecture:** O backend expõe `GET /app/version`, público e alimentado por variáveis de ambiente do Railway — apontar essas variáveis é o ato de "lançar". O mobile compara essa resposta com a própria `expo.version`, decide em lógica pura, e a UI só consome o resultado. A instalação usa a API moderna do `expo-file-system` (download pro cache + `File#contentUri`) e `expo-intent-launcher` (intent de instalação). Nada de OTA — ver a spec.
 
-**Tech Stack:** NestJS + `@nestjs/config` (backend); Expo SDK 54, React Native 0.81, expo-constants, expo-secure-store, expo-file-system 19, expo-intent-launcher, heroui-native, Jest + jest-expo + RTL v14 (mobile).
+**Tech Stack:** NestJS + `@nestjs/config` (backend); Expo SDK 57, React Native 0.86, expo-constants, expo-secure-store, expo-file-system 57, expo-intent-launcher, heroui-native, Jest + jest-expo + RTL v14 (mobile).
 
 **Spec:** [`docs/superpowers/specs/2026-08-22-distribuicao-e-atualizacao-design.md`](../specs/2026-08-22-distribuicao-e-atualizacao-design.md)
 
@@ -16,7 +16,8 @@
 - **Idioma:** copy de interface em português do Brasil; **comentários e nomes de teste em inglês**, como o resto do código. Docs e specs em português.
 - **Chaves de SecureStore** usam o prefixo `gradline.`, como `gradline.theme-preference`.
 - **Mensagens de exceção do backend em inglês**, como `No cached profile for siape ...`.
-- **`expo-file-system`: usar só a API nova, nunca o subpath `legacy`.** O legacy está marcado pra remoção na SDK 55. A v19.0.24 instalada já tem a propriedade `File#contentUri` (Android, adicionada na 19.0.19), que substitui o `getContentUriAsync` do legacy. O que a API nova não tem é callback de progresso no download — por isso o progresso é **indeterminado**, e não uma porcentagem.
+- **Pré-requisito: SDK 57.** Este plano assume o upgrade feito (branch `upgrade-sdk-57`). Verificar antes de começar que `mobile/package.json` traz `expo` na faixa `^57`.
+- **`expo-file-system`: usar só a API moderna, nunca o subpath `legacy`.** O legacy está depreciado, e desde a 56 a API moderna cobre tudo que esta entrega precisa. Confirmado na 57.0.5 instalada: `File.downloadFileAsync(url, destino, { headers, idempotent, onProgress, signal })`, `DownloadProgress { bytesWritten, totalBytes }` (com `totalBytes: -1` quando não há `Content-Length`), `File#contentUri` (Android, herdado de `FileSystemFile`), `file.delete()` e `Paths.cache`.
 - **`app.json` é a fonte da versão.** `expo.version` (semver) e `expo.android.versionCode` (inteiro) sobem **sempre juntos**.
 - **Nunca linkar artefato do EAS Build direto** — aquelas URLs expiram. O APK vai pro GitHub Releases.
 - **Toda task termina com commit.** Rodar `npm run typecheck` e `npm test` (no diretório do lado alterado) antes de cada commit.
@@ -961,43 +962,49 @@ git commit -m "chore(mobile): declare versionCode and the install-packages permi
 - Test: `mobile/src/lib/app-update-install.test.ts`
 
 **Interfaces:**
-- Consumes: `expo-file-system` (API nova), `expo-intent-launcher`.
-- Produces: `baixarEInstalar(downloadUrl: string, versao: string): Promise<void>`, que rejeita com `InstalacaoIndisponivelError` quando a intent não pode ser disparada. A Task 8 consome ambos.
+- Consumes: `expo-file-system` (API moderna), `expo-intent-launcher`.
+- Produces: `baixarEInstalar(downloadUrl: string, versao: string, onProgresso: (fracao: number | null) => void): Promise<void>`, que rejeita com `InstalacaoIndisponivelError` quando a intent não pode ser disparada. A Task 8 consome os dois.
 
-Sem callback de progresso: a API nova do `expo-file-system` não oferece um, e o subpath `legacy` que ofereceria será removido na SDK 55. O card mostra estado indeterminado.
+`onProgresso` recebe `null` quando não há fração calculável — o servidor não mandou `Content-Length` e o `totalBytes` chega como `-1`. A Task 8 renderiza estado indeterminado nesse caso, em vez de inventar um número.
 
 - [ ] **Step 1: Write the failing test**
 
 Create `mobile/src/lib/app-update-install.test.ts`:
 
 ```ts
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 
 import { baixarEInstalar, InstalacaoIndisponivelError } from "./app-update-install";
 
 jest.mock("expo-file-system", () => {
-  const downloadFileAsync = jest.fn();
   class FileFake {
-    static downloadFileAsync = downloadFileAsync;
+    static downloadFileAsync = jest.fn();
     contentUri = "content://gradline/gradline-1.1.0.apk";
     delete = jest.fn();
+    constructor(...uris: unknown[]) {
+      (FileFake as unknown as { ultimaConstrucao: unknown[] }).ultimaConstrucao = uris;
+    }
   }
-  return { File: FileFake, Paths: { cache: { uri: "file:///cache/" } } };
+  return { File: FileFake, Directory: class {}, Paths: { cache: { uri: "file:///cache/" } } };
 });
 jest.mock("expo-intent-launcher", () => ({
   startActivityAsync: jest.fn().mockResolvedValue({ resultCode: 0 }),
 }));
 
 const mockedIntent = jest.mocked(IntentLauncher);
+const FileFake = File as unknown as {
+  downloadFileAsync: jest.Mock;
+  ultimaConstrucao: unknown[];
+};
 
-/** The File instance the download resolves to, so a test can inspect it. */
-function baixado() {
+/** The File the download resolves to, so a test can inspect contentUri/delete. */
+function baixado(): { contentUri: string; delete: jest.Mock } {
   const arquivo = new (File as unknown as new () => {
     contentUri: string;
     delete: jest.Mock;
   })();
-  jest.mocked(File.downloadFileAsync).mockResolvedValue(arquivo as unknown as File);
+  FileFake.downloadFileAsync.mockResolvedValue(arquivo);
   return arquivo;
 }
 
@@ -1009,20 +1016,43 @@ describe("baixarEInstalar", () => {
   it("downloads into the cache directory under a version-stamped name", async () => {
     baixado();
 
-    await baixarEInstalar("https://example.com/app.apk", "1.1.0");
+    await baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {});
 
-    expect(File.downloadFileAsync).toHaveBeenCalledWith(
+    expect(FileFake.ultimaConstrucao[1]).toBe("gradline-1.1.0.apk");
+    expect(FileFake.downloadFileAsync).toHaveBeenCalledWith(
       "https://example.com/app.apk",
       expect.anything(),
+      expect.objectContaining({ idempotent: true }),
     );
-    const destino = jest.mocked(File.downloadFileAsync).mock.calls[0][1];
-    expect(String(destino)).toContain("gradline-1.1.0.apk");
+  });
+
+  it("reports progress as a 0..1 fraction", async () => {
+    baixado();
+    const progresso: (number | null)[] = [];
+
+    await baixarEInstalar("https://example.com/app.apk", "1.1.0", (f) => progresso.push(f));
+
+    const { onProgress } = FileFake.downloadFileAsync.mock.calls[0][2];
+    onProgress({ bytesWritten: 50, totalBytes: 200 });
+    expect(progresso).toContain(0.25);
+  });
+
+  it("reports null when the server sends no Content-Length", async () => {
+    baixado();
+    const progresso: (number | null)[] = [];
+
+    await baixarEInstalar("https://example.com/app.apk", "1.1.0", (f) => progresso.push(f));
+
+    const { onProgress } = FileFake.downloadFileAsync.mock.calls[0][2];
+    // expo-file-system reports totalBytes as -1 in that case.
+    onProgress({ bytesWritten: 50, totalBytes: -1 });
+    expect(progresso).toContain(null);
   });
 
   it("fires the install intent with the file's content uri and read permission", async () => {
     baixado();
 
-    await baixarEInstalar("https://example.com/app.apk", "1.1.0");
+    await baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {});
 
     expect(mockedIntent.startActivityAsync).toHaveBeenCalledWith(
       "android.intent.action.INSTALL_PACKAGE",
@@ -1036,7 +1066,7 @@ describe("baixarEInstalar", () => {
   it("deletes the downloaded apk after handing it to the installer", async () => {
     const arquivo = baixado();
 
-    await baixarEInstalar("https://example.com/app.apk", "1.1.0");
+    await baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {});
 
     expect(arquivo.delete).toHaveBeenCalled();
   });
@@ -1046,16 +1076,16 @@ describe("baixarEInstalar", () => {
     mockedIntent.startActivityAsync.mockRejectedValue(new Error("no activity"));
 
     await expect(
-      baixarEInstalar("https://example.com/app.apk", "1.1.0"),
+      baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {}),
     ).rejects.toBeInstanceOf(InstalacaoIndisponivelError);
     expect(arquivo.delete).toHaveBeenCalled();
   });
 
   it("propagates a failed download without touching the installer", async () => {
-    jest.mocked(File.downloadFileAsync).mockRejectedValue(new Error("network"));
+    FileFake.downloadFileAsync.mockRejectedValue(new Error("network"));
 
     await expect(
-      baixarEInstalar("https://example.com/app.apk", "1.1.0"),
+      baixarEInstalar("https://example.com/app.apk", "1.1.0", () => {}),
     ).rejects.toThrow("network");
     expect(mockedIntent.startActivityAsync).not.toHaveBeenCalled();
   });
@@ -1072,19 +1102,16 @@ Expected: FAIL — `Cannot find module './app-update-install'`.
 Create `mobile/src/lib/app-update-install.ts`:
 
 ```ts
-import { Directory, File, Paths } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 
 /**
  * Downloads the published APK and hands it to Android's package installer.
  *
  * Deliberately on the modern expo-file-system API, never `expo-file-system/legacy`:
- * the legacy surface is slated for removal in SDK 55, and `File#contentUri`
- * (Android, since 19.0.19) already covers the one thing it was needed for —
- * wrapping the file in the FileProvider `content://` URI the installer requires.
- *
- * The trade-off is that the modern API reports no download progress, so the
- * caller shows an indeterminate state rather than a percentage.
+ * the legacy surface is deprecated, and since SDK 56 the modern one covers both
+ * things this needs — `onProgress` on the download, and `File#contentUri`
+ * (Android), which is the FileProvider `content://` URI the installer requires.
  *
  * The file lands in the cache directory, not Downloads: invisible to the file
  * manager, deletable by the system under storage pressure, and deleted here as
@@ -1104,11 +1131,24 @@ export class InstalacaoIndisponivelError extends Error {
   }
 }
 
-export async function baixarEInstalar(downloadUrl: string, versao: string): Promise<void> {
-  const destino = new File(Paths.cache as unknown as Directory, `gradline-${versao}.apk`);
+export async function baixarEInstalar(
+  downloadUrl: string,
+  versao: string,
+  onProgresso: (fracao: number | null) => void,
+): Promise<void> {
+  const destino = new File(Paths.cache, `gradline-${versao}.apk`);
 
   // A failed download leaves nothing worth cleaning up and nothing to install.
-  const arquivo = await File.downloadFileAsync(downloadUrl, destino);
+  // `idempotent` so a retry after a partial download overwrites instead of throwing.
+  const arquivo = await File.downloadFileAsync(downloadUrl, destino, {
+    idempotent: true,
+    onProgress: ({ bytesWritten, totalBytes }) => {
+      // totalBytes is -1 when the server sent no Content-Length. There is no
+      // fraction to report then, and the card shows an indeterminate state
+      // rather than a number the download cannot back up.
+      onProgresso(totalBytes > 0 ? bytesWritten / totalBytes : null);
+    },
+  });
 
   try {
     await IntentLauncher.startActivityAsync(ACTION_INSTALL_PACKAGE, {
@@ -1130,16 +1170,20 @@ export async function baixarEInstalar(downloadUrl: string, versao: string): Prom
 }
 ```
 
-If the `Paths.cache` cast above is unnecessary once TypeScript sees the real types, drop it — `new File(Paths.cache, name)` is the documented form.
-
 - [ ] **Step 4: Run the tests — they pass**
 
 Run: `cd mobile && npx jest src/lib/app-update-install.test.ts`
-Expected: PASS, 5 tests.
+Expected: PASS, 7 tests.
+
+O trecho de `expo-file-system` da implementação acima já foi typechecado contra a
+API real da 57.0.5 instalada — construtor de `File`, `Paths.cache`, o objeto de
+opções com `idempotent`/`onProgress`, `arquivo.contentUri` e `arquivo.delete()`.
+Se o `tsc` reclamar de algum desses, a causa é uma versão diferente do pacote,
+não o código.
 
 - [ ] **Step 5: Verify the content URI on a real device**
 
-Unit tests cannot catch this one: `getContentUriAsync` in the legacy API shipped broken on SDK 54 for some apps (`Couldn't find meta-data for provider with authority <package>.FileSystemFileProvider`, expo/expo#39056), and the FileProvider it depends on is the same machinery behind `File#contentUri`.
+Unit tests cannot catch this one. `File#contentUri` depends on the FileProvider the Expo module registers, and a broken FileProvider surfaces only at runtime — the legacy `getContentUriAsync` shipped exactly that failure on SDK 54 for some apps (`Couldn't find meta-data for provider with authority <package>.FileSystemFileProvider`, expo/expo#39056).
 
 Run `npm run android`, trigger the update flow against a real published APK, and confirm the system install dialog opens. If it throws a FileProvider authority error, stop and report it — the fix is a native config question, not something to patch around in this task.
 
@@ -1251,8 +1295,38 @@ describe("UpdateCard", () => {
     fireEvent.press(screen.getByTestId("update-install"));
 
     await waitFor(() =>
-      expect(baixarEInstalar).toHaveBeenCalledWith(RELEASE.downloadUrl, "1.1.0"),
+      expect(baixarEInstalar).toHaveBeenCalledWith(
+        RELEASE.downloadUrl,
+        "1.1.0",
+        expect.any(Function),
+      ),
     );
+  });
+
+  it("renders the measured progress as a filled bar", async () => {
+    comAtualizacao();
+    jest.mocked(baixarEInstalar).mockImplementation(async (_url, _v, onProgresso) => {
+      onProgresso(0.4);
+    });
+
+    render(<UpdateCard />);
+    fireEvent.press(screen.getByTestId("update-install"));
+
+    const barra = await screen.findByTestId("update-progress-fill");
+    expect(barra.props.style).toEqual(expect.objectContaining({ width: "40%" }));
+  });
+
+  it("falls back to an indeterminate state when the size is unknown", async () => {
+    comAtualizacao();
+    jest.mocked(baixarEInstalar).mockImplementation(async (_url, _v, onProgresso) => {
+      onProgresso(null);
+    });
+
+    render(<UpdateCard />);
+    fireEvent.press(screen.getByTestId("update-install"));
+
+    expect(await screen.findByTestId("update-progress-indeterminate")).toBeTruthy();
+    expect(screen.queryByTestId("update-progress-fill")).toBeNull();
   });
 
   it("opens the site when the system installer cannot be reached", async () => {
@@ -1300,12 +1374,15 @@ import { useAppUpdate } from "@/lib/use-app-update";
  * The one place the app nags. Renders nothing at all unless a strictly newer
  * version is published and the user has not dismissed that exact version.
  *
- * The download reports no progress — the modern expo-file-system API has no
- * callback, and the legacy one that did is slated for removal in SDK 55 — so
- * this shows an indeterminate busy state rather than inventing a percentage.
+ * Unlike DownloadProgressBar — which paces a calibrated guess because the SIGAA
+ * download is an opaque POST — the bar here is measured: expo-file-system 57
+ * reports bytes written. When the server sends no Content-Length there is no
+ * fraction, and the card says so with a spinner instead of inventing one.
  */
 export function UpdateCard(): JSX.Element | null {
   const { release, temAtualizacao, dispensar } = useAppUpdate();
+  /** null = idle; a number = measured fraction; NaN-free "unknown" = -1. */
+  const [progresso, setProgresso] = useState<number | null>(null);
   const [baixando, setBaixando] = useState(false);
 
   const instalar = useCallback(async () => {
@@ -1313,8 +1390,9 @@ export function UpdateCard(): JSX.Element | null {
       return;
     }
     setBaixando(true);
+    setProgresso(null);
     try {
-      await baixarEInstalar(release.downloadUrl, release.latestVersion);
+      await baixarEInstalar(release.downloadUrl, release.latestVersion, setProgresso);
     } catch (erro) {
       // Whatever went wrong — no installer activity, permission refused, a
       // failed download — the manual path never stops existing.
@@ -1322,6 +1400,7 @@ export function UpdateCard(): JSX.Element | null {
         void Linking.openURL(release.downloadUrl);
       }
       setBaixando(false);
+      setProgresso(null);
     }
   }, [release]);
 
@@ -1339,8 +1418,20 @@ export function UpdateCard(): JSX.Element | null {
       )}
 
       {baixando ? (
-        <View testID="update-progress" className="flex-row items-center gap-3">
-          <Spinner size="sm" />
+        <View className="gap-2">
+          {progresso === null ? (
+            <View testID="update-progress-indeterminate" className="flex-row items-center gap-3">
+              <Spinner size="sm" />
+            </View>
+          ) : (
+            <View className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+              <View
+                testID="update-progress-fill"
+                className="h-full rounded-full bg-accent"
+                style={{ width: `${Math.round(progresso * 100)}%` }}
+              />
+            </View>
+          )}
           <Typography.Paragraph type="body-sm" color="muted">
             Baixando a atualização…
           </Typography.Paragraph>
@@ -1633,7 +1724,7 @@ git commit -m "docs: record the release checklist and the keystore custody rule"
 | Aviso na Home, dispensável por versão | 4, 5, 8 |
 | Versão explícita no Perfil | 9 |
 | Download + instalação dentro do app | 6, 7, 8 |
-| Sem dependência do subpath `legacy` (removido na SDK 55) | 7 |
+| Sem dependência do subpath `legacy` (depreciado) | 7 |
 | Fallback pro navegador | 8 |
 | Checagem 1×/hora, cold start + foreground | 5 |
 | Falha é silêncio | 5 (hook), 8 (card renderiza `null`), 9 (descrição vazia) |
@@ -1642,6 +1733,6 @@ git commit -m "docs: record the release checklist and the keystore custody rule"
 | `minSupportedVersion` fora de escopo | nenhuma task — correto |
 | OTA fora de escopo | nenhuma task — correto |
 
-**Correção à spec, aplicada aqui:** a spec dizia reusar `DownloadProgressBar`. Esse componente encena progresso calibrado a partir de estágios conhecidos do backend, que não existem no download de um APK. E a API moderna do `expo-file-system` não reporta bytes — o único caminho que reportava é o subpath `legacy`, marcado pra remoção na SDK 55. A Task 8 mostra estado indeterminado: honesto, e sem dívida de migração.
+**Correção à spec, aplicada aqui:** a spec dizia reusar `DownloadProgressBar`. Esse componente encena progresso calibrado a partir de estágios conhecidos do backend, que não existem no download de um APK. A Task 8 desenha a mesma linguagem visual, mas alimentada pelo `onProgress` do `expo-file-system` 57 — medição real — e cai num spinner indeterminado quando o servidor não manda `Content-Length`.
 
-**Consistência de tipos:** `AppRelease` tem os mesmos cinco campos no backend (Task 1) e no mobile (Task 3). `useAppUpdate` devolve `{ versaoInstalada, release, temAtualizacao, dispensar }` na Task 5 e é consumido com exatamente essas chaves nas Tasks 8 e 9. `baixarEInstalar(url, versao)` é definido na Task 7 e chamado com essa assinatura na Task 8.
+**Consistência de tipos:** `AppRelease` tem os mesmos cinco campos no backend (Task 1) e no mobile (Task 3). `useAppUpdate` devolve `{ versaoInstalada, release, temAtualizacao, dispensar }` na Task 5 e é consumido com exatamente essas chaves nas Tasks 8 e 9. `baixarEInstalar(url, versao, onProgresso)` é definido na Task 7 e chamado com essa assinatura na Task 8, onde `onProgresso` recebe `number | null`.
