@@ -999,10 +999,13 @@ export class PrismaPontoAtencaoRepository implements PontoAtencaoRepository {
     userId: string,
     incluirVencidos: boolean,
   ): Promise<PontoAtencaoLinha[]> {
-    // Hoje ao meio-dia UTC evita que o fuso do servidor esconda o item de
-    // hoje: a coluna é DATE, gravada como meia-noite UTC.
-    const hoje = new Date();
-    hoje.setUTCHours(0, 0, 0, 0);
+    // "Hoje" é o dia na Bahia, não em UTC: às 22h de Salvador já é o dia
+    // seguinte em UTC, e o prazo de hoje sumiria da home duas horas cedo.
+    // A coluna é DATE, gravada como meia-noite UTC — o alvo tem que casar.
+    const hojeNaBahia = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bahia',
+    }).format(new Date());
+    const hoje = new Date(`${hojeNaBahia}T00:00:00Z`);
 
     const registros = await this.prisma.pontoAtencao.findMany({
       where: {
@@ -1948,14 +1951,19 @@ git commit -m "feat(mobile): tipos e chamadas de API dos pontos de atenção"
 
 **Interfaces:**
 - Consumes: `PontoAtencao` (Task 9), `ScheduleBlock` de `lib/sigaa-schedule`.
-- Produces: `Urgencia`, `diasAte`, `classificarUrgencia`, `ItemDoDia`, `intercalarDia`.
+- Produces: `Urgencia`, `diasAte`, `classificarUrgencia`, `dataIsoLocal`, `ItemDoDia`, `intercalarDia`.
 
 - [ ] **Step 1: Write the failing test**
 
 `mobile/src/lib/pontos-atencao.test.ts`:
 
 ```typescript
-import { classificarUrgencia, diasAte, intercalarDia } from "./pontos-atencao";
+import {
+  classificarUrgencia,
+  dataIsoLocal,
+  diasAte,
+  intercalarDia,
+} from "./pontos-atencao";
 import type { PontoAtencao } from "./types";
 import type { ScheduleBlock } from "./sigaa-schedule";
 
@@ -2009,6 +2017,14 @@ describe("diasAte", () => {
 
   it("é negativo depois de vencido", () => {
     expect(diasAte("2026-08-21", AGORA)).toBe(-3);
+  });
+});
+
+describe("dataIsoLocal", () => {
+  it("usa os componentes locais, não UTC", () => {
+    // 23h de 24/08 em Salvador é 25/08 02:00 em UTC — toISOString daria o
+    // dia errado, e o prazo de hoje não casaria com o bloco de hoje.
+    expect(dataIsoLocal(new Date(2026, 7, 24, 23, 0))).toBe("2026-08-24");
   });
 });
 
@@ -2086,6 +2102,17 @@ export function diasAte(dataIso: string, agora: Date): number {
   const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
   const umDia = 24 * 60 * 60 * 1000;
   return Math.round((alvo.getTime() - hoje.getTime()) / umDia);
+}
+
+/**
+ * `YYYY-MM-DD` a partir dos componentes LOCAIS da data. `toISOString()` daria
+ * o dia seguinte em qualquer horário noturno no Brasil, e o prazo deixaria de
+ * casar com o dia selecionado na grade.
+ */
+export function dataIsoLocal(data: Date): string {
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${data.getFullYear()}-${mes}-${dia}`;
 }
 
 export function classificarUrgencia(diasRestantes: number): Urgencia {
@@ -2224,7 +2251,7 @@ Em `mobile/src/screens/HomeTab.tsx`:
 
 1. carregar os pontos junto do schedule, com o mesmo padrão de `LoadState` já usado — um `useState<PontoAtencao[]>([])` alimentado por `getPontosAtencao(accessToken, { incluirVencidos: false })` no mesmo `useEffect` que chama `loadSchedule`. Falha na busca de pontos **não** derruba a tela: `catch` que só loga e deixa a lista vazia, porque o horário é a razão principal da tela;
 2. renderizar `<PontosAtencaoSection>` como primeiro filho do `ScrollView`, antes do bloco "Sua semana";
-3. na lista do dia, trocar `daySchedule.map(...)` por `intercalarDia(daySchedule, pontosDoDia).map(...)`, onde `pontosDoDia` filtra por `ponto.data === days[selectedDay].iso` (se `getCurrentWeekDays()` não expõe a data ISO do dia, derivá-la de `day.date` com `toISOString().slice(0, 10)` ajustado ao fuso local, ou adicionar o campo lá);
+3. na lista do dia, trocar `daySchedule.map(...)` por `intercalarDia(daySchedule, pontosDoDia).map(...)`, onde `pontosDoDia = pontos.filter((p) => p.data === dataIsoLocal(days[selectedDay].date))`. `WeekDay` já expõe `date: Date` (local) — usar `dataIsoLocal` da Task 10, nunca `toISOString()`;
 4. o item `kind === "ponto"` renderiza um card com `testID={`ponto-do-dia-${ponto.id}`}`, mesma anatomia do card de aula (barra de 4px, coluna de 56px com a hora ou "prazo", título e código), com fundo `bg-danger-soft` e borda `border-danger/30`.
 
 - [ ] **Step 5: Run tests**
