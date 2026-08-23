@@ -1637,51 +1637,54 @@ git commit -m "feat(mobile): show the installed app version in Perfil"
 
 ---
 
-### Task 10: Landing page
+### Task 10: Landing page ✅ feita
+
+Implementada em `feat/distribuicao-app` (`cd011d8`). Ficou diferente do que esta
+task descrevia, e o desvio é deliberado — registrado aqui para o plano não
+mentir sobre o que existe.
 
 **Files:**
-- Create: `landing/index.html`
-- Create: `landing/style.css`
-- Create: `landing/README.md`
+- `landing/index.html`
+- `landing/styles.css` — compilado e **commitado**, não gerado no deploy
+- `landing/styles.src.css` — a fonte, só para reproduzir a compilação
+- `landing/README.md`
 
-**Interfaces:**
-- Consumes: nada.
-- Produces: nada consumido por código.
+**O que mudou em relação ao plano original**
 
-Sem teste automatizado — é uma página estática. A verificação é abrir no navegador.
+A task dizia "HTML e CSS puros". A página passou a usar as classes BEM do
+`@heroui/styles` — o mesmo design system do HeroUI Native que o app roda —
+com o mesmo override de `--accent` de `mobile/src/global.css`. Verificado no
+navegador: o botão sai em `rgb(100,120,209)`, que é o `#6478d1` do tema dark
+do app, sem nenhuma adaptação.
 
-- [ ] **Step 1: Write the page**
+O pacote publicado do HeroUI **não é CSS pronto**: tem `@apply` e exige
+Tailwind v4. Em vez de adotar essa toolchain permanentemente, o CSS é
+compilado uma vez e commitado (51 KB, ~7,5 KB gzipped). O deploy volta a ser
+copiar arquivos, e uma major do HeroUI — que está em beta — não pode quebrar a
+publicação de uma release do app no dia de publicá-la. O custo assumido: a
+página não acompanha sozinha uma mudança de tema no app; o README diz onde
+mexer.
 
-Create `landing/index.html` with, in this order:
+Duas pegadinhas do build, comentadas no `styles.src.css`: o `exports` do
+pacote recusa caminhos internos (use `@heroui/styles/css` ou os specifiers
+`components/*.css`), e `utilities` precisa vir antes dos componentes, senão o
+build morre em `Cannot apply unknown utility class 'no-highlight'`.
 
-- `<title>` e um `<h1>` com o nome do app.
-- Duas frases sobre o que ele é.
-- Um `<a class="download" href="...">Baixar o APK</a>` apontando pro asset do GitHub Release (deixar a URL da release atual; ela muda a cada lançamento).
-- Uma seção **"Como instalar"** com os passos: baixar, tocar no arquivo, e — quando o Android pedir — permitir a instalação de apps de fontes desconhecidas para o navegador usado. Descrever o caminho `Configurações › Apps › Acesso especial › Instalar apps desconhecidos`.
-- Uma seção **"Novidades"** com o changelog, mais recente no topo.
-- Uma seção **"E o iPhone?"** dizendo, sem rodeios, que não existe versão iOS porque distribuir fora da App Store exige uma conta paga de desenvolvedor, e que o app é um projeto sem fins lucrativos.
+**Desenho** — direção "C · Utilitário": a página é ferramenta de instalação,
+não vitrine. Botão primeiro; logo abaixo, o bloco que antecipa o aviso de
+"fontes desconhecidas" do Android, que é onde o aluno desiste. Tema escuro,
+mobile primeiro. Aviso de projeto independente acima da dobra, não no rodapé:
+o app se chama "UFBA" e a página não pode ler como serviço oficial da
+universidade.
 
-Escrever em português do Brasil. Sem framework, sem build: HTML e CSS puros.
+**Verificado** em 375px e 1280px: sem estouro horizontal; botão com 44px de
+altura no celular (mínimo de alvo de toque) e 40px no desktop, que é o
+comportamento do próprio `.button--lg` acima de 768px.
 
-- [ ] **Step 2: Write the styles**
-
-Create `landing/style.css` — uma coluna centrada com largura máxima legível, tipografia do sistema, e o botão de download em destaque. Sem dependências externas.
-
-- [ ] **Step 3: Document the deploy**
-
-Create `landing/README.md` explicando: a página é estática, é publicada em Cloudflare Pages ou GitHub Pages apontando pra este diretório, e o subdomínio é configurado no DNS do domínio já existente. Anotar qual das duas foi escolhida assim que estiver no ar.
-
-- [ ] **Step 4: Check it in a browser**
-
-Run: `cd landing && python3 -m http.server 8000`
-Abrir `http://localhost:8000` e conferir que o botão, as seções e o layout aparecem como esperado. Encerrar o servidor depois.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add landing
-git commit -m "feat(landing): add the static download page for the apk"
-```
+**Pendente**, e sem inventar nada: as lacunas entre colchetes no `index.html`
+(`[URL_DO_APK]`, `[VERSÃO]`, `[TAMANHO]`, `[DATA]`, changelog), o host
+escolhido, e o `<video>` das telas — que está comentado, depois do botão, à
+espera do MP4.
 
 ---
 
