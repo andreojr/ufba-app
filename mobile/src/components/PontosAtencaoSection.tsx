@@ -151,9 +151,7 @@ export function PontosAtencaoSection({
           <Typography.Paragraph type="body-sm" color="muted">
             Nenhuma prova ou trabalho cadastrado
           </Typography.Paragraph>
-          {/* AppIcon não tem um "+" no seu vocabulário (ver ICON_MAP em
-              AppIcon.tsx) — glifo de texto cru em vez de um ícone faltando. */}
-          <Typography.Heading type="h6">+</Typography.Heading>
+          <AppIcon name="IconPlus" size={20} color={mutedColor} />
         </Pressable>
       ) : (
         <View className="gap-0.5">

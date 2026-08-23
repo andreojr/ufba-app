@@ -130,6 +130,23 @@ describe("PontosAtencaoScreen (lista completa)", () => {
     });
   });
 
+  it("troca o voto para o oposto ao tocar no outro botão", async () => {
+    mockedPutVoto.mockResolvedValue(
+      pontoFalso({ id: "p1", meuVoto: "CONTESTA", confirmacoes: 0, contestacoes: 1 }),
+    );
+    const { getByTestId } = await renderLista({
+      pontos: [pontoFalso({ id: "p1", meuVoto: "CONFIRMA", confirmacoes: 1 })],
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("contestar-p1"));
+    });
+
+    await waitFor(() => {
+      expect(mockedPutVoto).toHaveBeenCalledWith("token", "p1", "CONTESTA");
+    });
+  });
+
   it("não mostra botões de voto num item vencido", async () => {
     const { getByTestId, queryByTestId } = await renderLista({
       pontos: [pontoFalso({ id: "p1", data: "2020-01-01" })],

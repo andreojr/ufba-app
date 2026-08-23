@@ -103,9 +103,13 @@ export function PontoAtencaoForm({
   );
   const [horaTexto, setHoraTexto] = useState(valorInicial?.hora ?? "");
   const [observacao, setObservacao] = useState(valorInicial?.observacao ?? "");
-  const [turmaSelecionada, setTurmaSelecionada] = useState<string | undefined>(turmas[0]?.id);
+  // Deliberadamente sem seleção inicial: pré-marcar a primeira turma faria
+  // um aluno que não reparar registrar o prazo contra a matéria errada — o
+  // que aparece nas home screens dos colegas errados. Ver Task 12, fix 1.
+  const [turmaSelecionada, setTurmaSelecionada] = useState<string | undefined>(undefined);
   const [erroTitulo, setErroTitulo] = useState(false);
   const [erroData, setErroData] = useState(false);
+  const [erroTurma, setErroTurma] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [accentForeground, mutedColor] = useThemeColor(["accent-foreground", "muted"]);
@@ -119,11 +123,14 @@ export function PontoAtencaoForm({
     const tituloValido = tituloLimpo.length > 0;
     const dataValida = dataIso !== null && dataIso >= hoje;
 
+    const turmaValida = turmaEscolhida !== undefined;
+
     setErroTitulo(!tituloValido);
     setErroData(!dataValida);
+    setErroTurma(!turmaValida);
     setErroEnvio(null);
 
-    if (!tituloValido || !dataValida || !turmaEscolhida || !dataIso) {
+    if (!tituloValido || !dataValida || !turmaValida || !turmaEscolhida || !dataIso) {
       return;
     }
 
@@ -170,6 +177,11 @@ export function PontoAtencaoForm({
               </Pressable>
             );
           })}
+          {erroTurma ? (
+            <Typography.Paragraph testID="erro-turma" type="body-xs" className="text-danger">
+              Escolha a turma
+            </Typography.Paragraph>
+          ) : null}
         </View>
       ) : null}
 

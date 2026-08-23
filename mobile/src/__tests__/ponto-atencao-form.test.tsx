@@ -80,7 +80,13 @@ function turmaFalsa(overrides: Partial<Turma> = {}): Turma {
   };
 }
 
-async function renderNovo({ turmaId }: { turmaId?: string }) {
+async function renderNovo({
+  turmaId,
+  turmas = [turmaFalsa()],
+}: {
+  turmaId?: string;
+  turmas?: Turma[];
+}) {
   mockParams = turmaId !== undefined ? { turmaId } : {};
   mockedUseAuth.mockReturnValue({
     status: "signedIn",
@@ -88,7 +94,7 @@ async function renderNovo({ turmaId }: { turmaId?: string }) {
     user: { id: "1", email: "a@ufba.br", name: "Ana", avatarUrl: null },
   } as any);
   mockedGetSchedule.mockResolvedValue({
-    turmas: [turmaFalsa()],
+    turmas,
     periodoLetivo: null,
     fetchedAt: "2026-08-24T10:00:00.000Z",
   });
@@ -153,5 +159,57 @@ describe("PontoAtencaoForm (rota novo)", () => {
 
     expect(mockedPostPontoAtencao).not.toHaveBeenCalled();
     expect(queryByTestId("erro-titulo")).toBeTruthy();
+  });
+
+  it("não deixa salvar sem escolher uma turma no seletor", async () => {
+    const { getByTestId, queryByTestId } = await renderNovo({});
+
+    await waitFor(() => expect(mockedGetSchedule).toHaveBeenCalled());
+    await waitFor(() => expect(getByTestId("seletor-turma")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.changeText(getByTestId("campo-titulo"), "Avaliação I");
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("campo-data"), "22/09/2026");
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("salvar-ponto"));
+    });
+
+    expect(mockedPostPontoAtencao).not.toHaveBeenCalled();
+    expect(queryByTestId("erro-turma")).toBeTruthy();
+  });
+
+  it("envia o id da turma escolhida no seletor", async () => {
+    const turmas = [
+      turmaFalsa({ id: "turma-1", codigo: "ENGG64" }),
+      turmaFalsa({ id: "turma-2", codigo: "MATA37", nome: "SISTEMAS OPERACIONAIS" }),
+    ];
+    const { getByTestId } = await renderNovo({ turmas });
+
+    await waitFor(() => expect(mockedGetSchedule).toHaveBeenCalled());
+    await waitFor(() => expect(getByTestId("turma-opcao-turma-2")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("turma-opcao-turma-2"));
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("campo-titulo"), "Avaliação I");
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("campo-data"), "22/09/2026");
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("salvar-ponto"));
+    });
+
+    await waitFor(() => {
+      expect(mockedPostPontoAtencao).toHaveBeenCalledWith(
+        "token",
+        "turma-2",
+        expect.objectContaining({ titulo: "Avaliação I" }),
+      );
+    });
   });
 });
