@@ -23,6 +23,7 @@
 @import "@heroui/styles/components/surface.css";
 @import "@heroui/styles/components/typography.css";
 @import "@heroui/styles/components/separator.css";
+@import "@heroui/styles/components/link.css";
 
 /*
  * Override do accent, idêntico ao de mobile/src/global.css — é o azul do
@@ -168,4 +169,48 @@ body {
   border-radius: 1.5rem;
   display: block;
   background: var(--surface);
+}
+
+/* ---- Plataforma ---- */
+
+/*
+ * O HTML traz os dois caminhos — download do APK e formulário do TestFlight —
+ * e o CSS decide qual aparece, a partir da classe que o script do <head>
+ * coloca no <html>.
+ *
+ * O default (nenhuma classe) mostra OS DOIS de propósito: é o que acontece sem
+ * JS, e ficar sem nenhum caminho seria pior que ver um a mais.
+ */
+.is-ios .platform--other,
+.is-other .platform--ios {
+  display: none;
+}
+
+.platform {
+  gap: 1.5rem;
+}
+
+/*
+ * O embed do formulário. Altura fixa porque um iframe cross-origin não conta
+ * a própria altura para fora — não há como o CSS daqui saber o tamanho do
+ * conteúdo do Notion, e o próprio iframe rola por dentro.
+ *
+ * O valor sobe no celular, não desce: com 375px de largura os campos do
+ * Notion empilham e o formulário fica mais alto, não mais baixo.
+ */
+.form-embed {
+  width: 100%;
+  height: 34rem;
+  border: 0;
+  border-radius: 1.5rem;
+  display: block;
+  /* Fundo próprio para o cantinho arredondado não vazar o branco do iframe
+     enquanto ele carrega. */
+  background: var(--surface);
+}
+
+@media (width < 48rem) {
+  .form-embed {
+    height: 40rem;
+  }
 }

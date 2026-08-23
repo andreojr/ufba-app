@@ -10,6 +10,25 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Source+Code+Pro:wght@400;600&display=swap">
 <link rel="stylesheet" href="./styles.css">
+<script>
+  /*
+   * Roda no <head>, síncrono e de propósito: marcar a plataforma depois do
+   * primeiro paint faria o bloco errado aparecer e sumir na cara do usuário.
+   *
+   * Sem JS nenhuma classe é aplicada e o CSS mostra OS DOIS blocos — feio,
+   * mas ninguém fica sem caminho. É o fallback correto aqui.
+   *
+   * O teste de maxTouchPoints existe porque iPad moderno se identifica como
+   * Mac ("MacIntel") no user agent; sem ele, iPad cairia no lado do APK.
+   */
+  (function () {
+    var ua = navigator.userAgent;
+    var isIOS = /iPad|iPhone|iPod/.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var root = document.documentElement;
+    root.classList.add(isIOS ? 'is-ios' : 'is-other');
+  })();
+</script>
 </head>
 <body>
 <main class="page">
@@ -37,29 +56,75 @@
              aria-label="Gravação das telas do app"></video>
     -->
 
-    <a class="button button--lg button--primary button--full-width"
-       href="[URL_DO_APK]" download>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 3v12"></path><path d="m7 11 5 5 5-5"></path><path d="M4 20h16"></path>
-      </svg>
-      Baixar o APK
-    </a>
+    <!-- Android: o download direto. Escondido no iOS, onde o APK não serve
+         para nada. -->
+    <div class="stack platform platform--other">
+      <a class="button button--lg button--primary button--full-width"
+         href="[URL_DO_APK]" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"></path><path d="m7 11 5 5 5-5"></path><path d="M4 20h16"></path>
+        </svg>
+        Baixar o APK
+      </a>
 
-    <p class="meta mono typography typography--body-sm typography--color-muted" style="margin: 0;">
-      <span>[VERSÃO]</span>
-      <span class="meta__sep" aria-hidden="true"></span>
-      <span>[TAMANHO]</span>
-      <span class="meta__sep" aria-hidden="true"></span>
-      <span>Android 8+</span>
-      <span class="meta__sep" aria-hidden="true"></span>
-      <span>[DATA]</span>
-    </p>
+      <p class="meta mono typography typography--body-sm typography--color-muted" style="margin: 0;">
+        <span>[VERSÃO]</span>
+        <span class="meta__sep" aria-hidden="true"></span>
+        <span>[TAMANHO]</span>
+        <span class="meta__sep" aria-hidden="true"></span>
+        <span>Android 8+</span>
+        <span class="meta__sep" aria-hidden="true"></span>
+        <span>[DATA]</span>
+      </p>
+
+      <p class="typography typography--body-sm typography--color-muted" style="margin: 0;">
+        Está no iPhone? <a class="link" href="#" data-switch-to="ios">Peça acesso ao TestFlight</a>.
+      </p>
+    </div>
+
+    <!--
+      iOS: não há download. O acesso é por TestFlight interno, e cada testador
+      precisa ser convidado à mão — daí o formulário em vez de um botão.
+
+      O formulário é o embed do Notion, e não um <form> próprio: o Notion é
+      página hospedada e não aceita POST de fora. A confirmação aparece DENTRO
+      do iframe, o que é a razão de embutir em vez de linkar — a pessoa não
+      sai da página e não perde o aviso de aceitar o convite da Apple.
+
+      `loading="lazy"` porque no Android este bloco está escondido: quem baixa
+      o APK não deve pagar o download de um iframe que nunca vai ver.
+    -->
+    <div class="stack platform platform--ios">
+      <iframe class="form-embed" src="https://andreojr.notion.site/ebd/3c52912ad7f3808c8805dd83781a1829"
+              title="Formulário de acesso ao TestFlight" loading="lazy"></iframe>
+
+      <p class="meta mono typography typography--body-sm typography--color-muted" style="margin: 0;">
+        <span>[VERSÃO]</span>
+        <span class="meta__sep" aria-hidden="true"></span>
+        <span>TestFlight</span>
+        <span class="meta__sep" aria-hidden="true"></span>
+        <span>iOS 15+</span>
+      </p>
+
+      <!-- O escape se o iframe não carregar (bloqueador de terceiros, rede da
+           universidade, Notion fora do ar). Sem isso, quem for bloqueado não
+           tem caminho nenhum. -->
+      <p class="typography typography--body-sm typography--color-muted" style="margin: 0;">
+        O formulário não carregou?
+        <a class="link" href="https://andreojr.notion.site/3c52912ad7f3808c8805dd83781a1829"
+           target="_blank" rel="noopener">Abra direto no Notion</a>.
+      </p>
+
+      <p class="typography typography--body-sm typography--color-muted" style="margin: 0;">
+        Está no Android? <a class="link" href="#" data-switch-to="other">Baixe o APK direto</a>.
+      </p>
+    </div>
   </div>
 
   <!-- O bloco que existe para economizar suporte: antecipa o aviso do Android
        antes de o usuário topar com ele e desistir. -->
-  <section class="surface surface--default card" style="margin-top: 2.5rem;">
+  <section class="surface surface--default card platform platform--other" style="margin-top: 2.5rem;">
     <h2 class="typography typography--h5" style="margin: 0 0 0.75rem;">
       O Android vai reclamar. É normal.
     </h2>
@@ -84,6 +149,42 @@
         <span class="step__n mono typography typography--body-sm">3</span>
         <span class="typography typography--body-sm">
           Volte e confirme a instalação. É uma vez por aparelho, não a cada atualização.
+        </span>
+      </li>
+    </ol>
+  </section>
+
+  <!-- O equivalente para iOS. Tem mais passos que o Android e envolve esperar
+       por um humano (eu), então dizer isso na cara é o que evita a pessoa
+       achar que quebrou e desistir. -->
+  <section class="surface surface--default card platform platform--ios" style="margin-top: 2.5rem;">
+    <h2 class="typography typography--h5" style="margin: 0 0 0.75rem;">
+      No iPhone não é imediato.
+    </h2>
+    <p class="typography typography--body-sm typography--color-muted" style="margin: 0 0 1.25rem;">
+      A Apple não deixa instalar app fora da App Store. O caminho é o TestFlight,
+      e cada pessoa precisa ser convidada uma a uma — por mim, na mão. Costuma
+      levar algumas horas.
+    </p>
+
+    <ol class="steps" style="margin: 0; padding: 0; list-style: none;">
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">1</span>
+        <span class="typography typography--body-sm">
+          Você manda o Apple ID no formulário acima.
+        </span>
+      </li>
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">2</span>
+        <span class="typography typography--body-sm">
+          Chega um convite <strong>da Apple</strong> no seu email. Precisa aceitar —
+          sem isso o app não aparece.
+        </span>
+      </li>
+      <li class="step">
+        <span class="step__n mono typography typography--body-sm">3</span>
+        <span class="typography typography--body-sm">
+          Instale o <strong>TestFlight</strong> pela App Store. O app vai estar lá dentro.
         </span>
       </li>
     </ol>
@@ -114,12 +215,33 @@
 
   <footer class="footer">
     <p class="typography typography--body-sm typography--color-muted" style="margin: 0;">
-      <strong style="color: var(--foreground);">iPhone:</strong> não tem. Distribuir fora
-      da App Store exige conta paga de desenvolvedor da Apple, e este projeto não gera
-      receita nenhuma.
+      <strong style="color: var(--foreground);">Vagas no iPhone são limitadas:</strong>
+      o TestFlight interno aceita no máximo 100 pessoas, e não há lista de espera.
+      Se encher, o jeito é abrir o beta público — o que depende de passar pela
+      revisão da Apple.
     </p>
   </footer>
 
 </main>
+
+<script>
+  /*
+   * A detecção acerta na quase totalidade dos casos, mas não em todos — e o
+   * caso que importa é o inverso do erro: alguém no Android querendo o link
+   * do TestFlight para mandar a um amigo com iPhone. Daí a troca manual.
+   *
+   * Alterna as duas classes em vez de mexer em style inline, para o CSS
+   * continuar sendo a única fonte de verdade sobre o que está visível.
+   */
+  document.querySelectorAll('[data-switch-to]').forEach(function (el) {
+    el.addEventListener('click', function (event) {
+      event.preventDefault();
+      var toIOS = el.dataset.switchTo === 'ios';
+      var root = document.documentElement;
+      root.classList.toggle('is-ios', toIOS);
+      root.classList.toggle('is-other', !toIOS);
+    });
+  });
+</script>
 </body>
 </html>
