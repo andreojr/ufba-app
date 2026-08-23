@@ -508,7 +508,9 @@ git commit -m "feat(mobile): fluxo de login SSO do Moodle via openAuthSessionAsy
 
 ---
 
-### Task 4: Cliente REST do Moodle (`moodle-api.ts`)
+### Task 4: Cliente REST mínimo do Moodle (`moodle-api.ts`)
+
+Apenas o necessário para **validar a conexão**: `callMoodle` + `getSiteInfo` + o verdict de token expirado. Nenhuma função de conteúdo (turmas, materiais, arquivos) — isso pertence a specs posteriores.
 
 **Files:**
 - Create: `mobile/src/lib/moodle-api.ts`
@@ -519,29 +521,16 @@ git commit -m "feat(mobile): fluxo de login SSO do Moodle via openAuthSessionAsy
 - Produces:
   - `type MoodleTokenVerdict = "valid" | "expired"`
   - `onMoodleTokenVerdict(listener: (v: MoodleTokenVerdict) => void): () => void`
-  - `type MoodleCourse = { id: number; fullname: string; shortname: string }`
-  - `type MoodleModule = { id: number; name: string; modname: string; contents?: { filename: string; fileurl: string; mimetype?: string }[] }`
-  - `type MoodleSection = { id: number; name: string; modules: MoodleModule[] }`
-  - `type MoodleSiteInfo = { userId: number; functions: string[] }`
+  - `type MoodleSiteInfo = { userId: number }`
   - `callMoodle<T>(session: MoodleSession, wsfunction: string, params?: Record<string, string>): Promise<T>`
   - `getSiteInfo(session: MoodleSession): Promise<MoodleSiteInfo>`
-  - `getCourses(session: MoodleSession): Promise<MoodleCourse[]>`
-  - `getCourseContents(session: MoodleSession, courseId: number): Promise<MoodleSection[]>`
-  - `fileUrl(session: MoodleSession, pluginfileUrl: string): string`
 
 - [ ] **Step 1: Write the failing test**
 
 ```typescript
 // mobile/src/lib/moodle-api.test.ts
 import { ApiError } from "./api";
-import {
-  callMoodle,
-  fileUrl,
-  getCourseContents,
-  getCourses,
-  getSiteInfo,
-  onMoodleTokenVerdict,
-} from "./moodle-api";
+import { callMoodle, getSiteInfo, onMoodleTokenVerdict } from "./moodle-api";
 import type { MoodleSession } from "./moodle-storage";
 
 const session: MoodleSession = {
@@ -578,7 +567,7 @@ describe("callMoodle", () => {
     const listener = jest.fn();
     const unsub = onMoodleTokenVerdict(listener);
 
-    await expect(callMoodle(session, "core_enrol_get_users_courses")).rejects.toMatchObject({
+    await expect(callMoodle(session, "core_webservice_get_site_info")).rejects.toMatchObject({
       code: "MOODLE_INVALID_TOKEN",
     });
     expect(listener).toHaveBeenCalledWith("expired");
@@ -591,54 +580,10 @@ describe("callMoodle", () => {
   });
 });
 
-describe("getSiteInfo / getCourses / getCourseContents", () => {
-  it("maps site info", async () => {
+describe("getSiteInfo", () => {
+  it("maps the user id", async () => {
     mockFetchOnce({ userid: 7, functions: [{ name: "core_course_get_contents" }] });
-    await expect(getSiteInfo(session)).resolves.toEqual({
-      userId: 7,
-      functions: ["core_course_get_contents"],
-    });
-  });
-
-  it("maps courses", async () => {
-    mockFetchOnce([{ id: 1, fullname: "Cálculo", shortname: "MATA01" }]);
-    await expect(getCourses(session)).resolves.toEqual([
-      { id: 1, fullname: "Cálculo", shortname: "MATA01" },
-    ]);
-  });
-
-  it("maps course sections and modules", async () => {
-    mockFetchOnce([
-      {
-        id: 10,
-        name: "Semana 1",
-        modules: [
-          {
-            id: 100,
-            name: "Slides",
-            modname: "resource",
-            contents: [{ filename: "aula.pdf", fileurl: "https://ava.ufba.br/pluginfile/aula.pdf" }],
-          },
-        ],
-      },
-    ]);
-    const sections = await getCourseContents(session, 1);
-    expect(sections[0].name).toBe("Semana 1");
-    expect(sections[0].modules[0].contents?.[0].filename).toBe("aula.pdf");
-  });
-});
-
-describe("fileUrl", () => {
-  it("appends the token with ? when there is no query", () => {
-    expect(fileUrl(session, "https://ava.ufba.br/pluginfile/aula.pdf")).toBe(
-      "https://ava.ufba.br/pluginfile/aula.pdf?token=tok",
-    );
-  });
-
-  it("appends the token with & when a query already exists", () => {
-    expect(fileUrl(session, "https://ava.ufba.br/pluginfile/aula.pdf?forcedownload=1")).toBe(
-      "https://ava.ufba.br/pluginfile/aula.pdf?forcedownload=1&token=tok",
-    );
+    await expect(getSiteInfo(session)).resolves.toEqual({ userId: 7 });
   });
 });
 ```
@@ -672,15 +617,7 @@ function reportVerdict(verdict: MoodleTokenVerdict): void {
   }
 }
 
-export type MoodleCourse = { id: number; fullname: string; shortname: string };
-export type MoodleModule = {
-  id: number;
-  name: string;
-  modname: string;
-  contents?: { filename: string; fileurl: string; mimetype?: string }[];
-};
-export type MoodleSection = { id: number; name: string; modules: MoodleModule[] };
-export type MoodleSiteInfo = { userId: number; functions: string[] };
+export type MoodleSiteInfo = { userId: number };
 
 function isMoodleException(
   body: unknown,
@@ -724,32 +661,11 @@ export async function callMoodle<T>(
 }
 
 export async function getSiteInfo(session: MoodleSession): Promise<MoodleSiteInfo> {
-  const raw = await callMoodle<{ userid: number; functions: { name: string }[] }>(
+  const raw = await callMoodle<{ userid: number }>(
     session,
     "core_webservice_get_site_info",
   );
-  return { userId: raw.userid, functions: raw.functions.map((f) => f.name) };
-}
-
-export async function getCourses(session: MoodleSession): Promise<MoodleCourse[]> {
-  const raw = await callMoodle<MoodleCourse[]>(session, "core_enrol_get_users_courses", {
-    userid: String(session.userId),
-  });
-  return raw.map((c) => ({ id: c.id, fullname: c.fullname, shortname: c.shortname }));
-}
-
-export async function getCourseContents(
-  session: MoodleSession,
-  courseId: number,
-): Promise<MoodleSection[]> {
-  return callMoodle<MoodleSection[]>(session, "core_course_get_contents", {
-    courseid: String(courseId),
-  });
-}
-
-export function fileUrl(session: MoodleSession, pluginfileUrl: string): string {
-  const separator = pluginfileUrl.includes("?") ? "&" : "?";
-  return `${pluginfileUrl}${separator}token=${session.wstoken}`;
+  return { userId: raw.userid };
 }
 ```
 
@@ -762,7 +678,7 @@ Expected: PASS.
 
 ```bash
 git add mobile/src/lib/moodle-api.ts mobile/src/lib/moodle-api.test.ts
-git commit -m "feat(mobile): cliente REST do Moodle (turmas, conteúdos, arquivos)"
+git commit -m "feat(mobile): cliente REST mínimo do Moodle (validação de conexão)"
 ```
 
 ---
