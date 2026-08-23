@@ -1,13 +1,18 @@
 import {
   ApiError,
   deleteAccount,
+  deletePontoAtencao,
+  deleteVotoPontoAtencao,
   getPontosAtencao,
   getSchedule,
   getSigaaLink,
   onSigaaCredentialsVerdict,
+  patchPontoAtencao,
   postGoogleLogin,
+  postPontoAtencao,
   postScheduleSync,
   postSigaaLink,
+  putVotoPontoAtencao,
 } from "../lib/api";
 
 describe("erasing server-side data", () => {
@@ -504,5 +509,219 @@ describe("getPontosAtencao", () => {
 
     await getPontosAtencao("token", { incluirVencidos: true });
     expect(fetchMock.mock.calls[1][0]).toContain("/pontos-atencao?desde=vencidos");
+  });
+});
+
+describe("postPontoAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Resolves every call to a 200 with `body` as the JSON payload. */
+  function mockFetchOk(body: unknown) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("POSTs para /pontos-atencao com turmaId misturado aos campos da entrada", async () => {
+    const ponto = { id: "ponto-1" };
+    const fetchMock = mockFetchOk(ponto);
+
+    await postPontoAtencao("token", "turma-1", {
+      tipo: "PROVA",
+      titulo: "P1",
+      data: "2026-09-01",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/pontos-atencao",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          turmaId: "turma-1",
+          tipo: "PROVA",
+          titulo: "P1",
+          data: "2026-09-01",
+        }),
+      }),
+    );
+  });
+});
+
+describe("patchPontoAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Resolves every call to a 200 with `body` as the JSON payload. */
+  function mockFetchOk(body: unknown) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("faz PATCH em /pontos-atencao/:id sem turmaId no corpo", async () => {
+    const ponto = { id: "ponto-1" };
+    const fetchMock = mockFetchOk(ponto);
+
+    await patchPontoAtencao("token", "ponto-1", {
+      tipo: "TRABALHO",
+      titulo: "Trabalho final",
+      data: "2026-10-01",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/pontos-atencao/ponto-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          tipo: "TRABALHO",
+          titulo: "Trabalho final",
+          data: "2026-10-01",
+        }),
+      }),
+    );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).not.toHaveProperty("turmaId");
+  });
+});
+
+describe("deletePontoAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** The delete endpoint answers 204 with no body at all — nothing to parse. */
+  function mockFetchNoContent() {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => {
+        throw new Error("204 has no body to parse");
+      },
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("faz DELETE em /pontos-atencao/:id e resolve num 204 sem corpo", async () => {
+    const fetchMock = mockFetchNoContent();
+
+    await expect(deletePontoAtencao("token", "ponto-1")).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/pontos-atencao/ponto-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});
+
+describe("putVotoPontoAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Resolves every call to a 200 with `body` as the JSON payload. */
+  function mockFetchOk(body: unknown) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("faz PUT em /pontos-atencao/:id/voto com { valor } no corpo", async () => {
+    const ponto = { id: "ponto-1", meuVoto: "CONFIRMA" };
+    const fetchMock = mockFetchOk(ponto);
+
+    await putVotoPontoAtencao("token", "ponto-1", "CONFIRMA");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/pontos-atencao/ponto-1/voto",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ valor: "CONFIRMA" }),
+      }),
+    );
+  });
+});
+
+describe("deleteVotoPontoAtencao", () => {
+  const originalFetch = global.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "https://api.example.com";
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  });
+
+  /** Resolves every call to a 200 with `body` as the JSON payload. */
+  function mockFetchOk(body: unknown) {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  }
+
+  it("faz DELETE em /pontos-atencao/:id/voto sem corpo", async () => {
+    const ponto = { id: "ponto-1", meuVoto: null };
+    const fetchMock = mockFetchOk(ponto);
+
+    await deleteVotoPontoAtencao("token", "ponto-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/pontos-atencao/ponto-1/voto",
+      expect.objectContaining({ method: "DELETE", body: undefined }),
+    );
   });
 });
