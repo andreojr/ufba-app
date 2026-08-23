@@ -5,6 +5,7 @@ import {
   Inject,
   Logger,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -23,6 +24,7 @@ import {
 import type { ItemPlano, TrajetoriaSalva } from './historico.repository';
 import { HistoricoService } from './historico.service';
 import type { Historico } from './parsers/historico';
+import { SalvarPlanoDto } from './plano.dto';
 import { SigaaCredentialsDto } from './sigaa-credentials.dto';
 
 /**
@@ -128,5 +130,14 @@ export class TrajetoriaController {
         senha: dto.senha,
       }),
     );
+  }
+
+  @Put('trajetoria/plano')
+  async salvarPlano(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: SalvarPlanoDto,
+  ): Promise<TrajetoriaResponse> {
+    await this.historicoService.salvarPlano(user.userId, dto.itens);
+    return this.get(user);
   }
 }

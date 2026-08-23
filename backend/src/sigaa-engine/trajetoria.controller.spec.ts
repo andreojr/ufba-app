@@ -221,4 +221,24 @@ describe('TrajetoriaController', () => {
     // O histórico continua lá: a projeção é extra, nunca motivo de falha.
     expect('historico' in resposta && resposta.historico).toBeTruthy();
   });
+
+  it('PUT /trajetoria/plano grava e devolve a trajetória reprojetada', async () => {
+    const itens = [
+      { codigo: 'MATA55', nome: 'SO', cargaHoraria: 68, semestre: '2027.1' },
+    ];
+    const service = {
+      getTrajetoria: jest.fn(async () => salvaFalsa()),
+      sync: jest.fn(),
+      salvarPlano: jest.fn(async () => undefined),
+    } as unknown as HistoricoService;
+    const curriculo = {
+      resolverPorNomeUsuario: jest.fn(async () => estruturaFalsa()),
+    } as unknown as CurriculoService;
+    const controller = new TrajetoriaController(service, curriculo);
+
+    const resposta = await controller.salvarPlano(USUARIO, { itens });
+
+    expect(service.salvarPlano).toHaveBeenCalledWith('user-1', itens);
+    expect('historico' in resposta).toBe(true);
+  });
 });

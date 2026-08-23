@@ -146,4 +146,26 @@ export class PrismaHistoricoRepository implements HistoricoRepository {
       where: { userId, codigo: { in: codigosConcluidos } },
     });
   }
+
+  async salvarPlano(userId: string, itens: ItemPlano[]): Promise<void> {
+    const removidos = itens.filter((item) => item.semestre === null);
+    if (removidos.length > 0) {
+      await this.prisma.planoItem.deleteMany({
+        where: { userId, codigo: { in: removidos.map((item) => item.codigo) } },
+      });
+    }
+    for (const item of itens.filter((i) => i.semestre !== null)) {
+      await this.prisma.planoItem.upsert({
+        where: { userId_codigo: { userId, codigo: item.codigo } },
+        create: {
+          userId,
+          codigo: item.codigo,
+          nome: item.nome,
+          cargaHoraria: item.cargaHoraria,
+          semestre: item.semestre,
+        },
+        update: { semestre: item.semestre },
+      });
+    }
+  }
 }

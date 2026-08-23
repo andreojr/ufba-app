@@ -127,6 +127,46 @@ describe('PrismaHistoricoRepository', () => {
     });
   });
 
+  it('salvarPlano faz upsert por (userId, codigo)', async () => {
+    const upsert = jest.fn();
+    const prisma = { planoItem: { upsert } } as unknown as PrismaService;
+    const repo = new PrismaHistoricoRepository(prisma);
+
+    await repo.salvarPlano('user-1', [
+      { codigo: 'MATA55', nome: 'SISTEMAS OPERACIONAIS', cargaHoraria: 68, semestre: '2027.1' },
+    ]);
+
+    expect(upsert).toHaveBeenCalledWith({
+      where: { userId_codigo: { userId: 'user-1', codigo: 'MATA55' } },
+      create: {
+        userId: 'user-1',
+        codigo: 'MATA55',
+        nome: 'SISTEMAS OPERACIONAIS',
+        cargaHoraria: 68,
+        semestre: '2027.1',
+      },
+      update: { semestre: '2027.1' },
+    });
+  });
+
+  it('salvarPlano apaga o item cujo semestre voltou a ser nulo', async () => {
+    const deleteMany = jest.fn();
+    const prisma = {
+      planoItem: { upsert: jest.fn(), deleteMany },
+    } as unknown as PrismaService;
+    const repo = new PrismaHistoricoRepository(prisma);
+
+    await repo.salvarPlano('user-1', [
+      { codigo: 'MATA55', nome: 'SO', cargaHoraria: 68, semestre: null },
+    ]);
+
+    // Sem semestre não é uma posição — é a ausência dela. Guardar a linha só
+    // deixaria um override fantasma que o projetor ignora de qualquer jeito.
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', codigo: { in: ['MATA55'] } },
+    });
+  });
+
   it('reports null when the user has never synced', async () => {
     const prisma = {
       historico: { findUnique: jest.fn(async () => null) },
