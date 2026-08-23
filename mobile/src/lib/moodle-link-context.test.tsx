@@ -87,6 +87,37 @@ it("link() saves the session on success", async () => {
   void getSiteInfo;
 });
 
+it("link() treats a failed local save as not linked", async () => {
+  mockGetSession.mockResolvedValueOnce(null);
+  mockStart.mockResolvedValueOnce({
+    status: "success",
+    session: { wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 3 },
+  });
+  mockSave.mockRejectedValueOnce(new Error("secure store unavailable"));
+
+  let linkFn: () => Promise<{ status: string }> = async () => ({ status: "unlinked" });
+  function Capture(): JSX.Element {
+    const ctx = useMoodleLink();
+    linkFn = ctx.link;
+    return <Text testID="status">{ctx.status}</Text>;
+  }
+  const screen = await render(
+    <MoodleLinkProvider>
+      <Capture />
+    </MoodleLinkProvider>,
+  );
+  await waitFor(() => expect(screen.getByTestId("status").props.children).toBe("unlinked"));
+
+  let result: { status: string } | undefined;
+  await act(async () => {
+    result = await linkFn();
+  });
+
+  expect(result?.status).toBe("failed");
+  expect(rememberMoodleWasLinked).not.toHaveBeenCalled();
+  expect(screen.getByTestId("status").props.children).toBe("unlinked");
+});
+
 it("unlink() clears the stored session and reports unlinked", async () => {
   mockGetSession.mockResolvedValueOnce({ wstoken: "t", siteUrl: "https://ava.ufba.br", userId: 1 });
 

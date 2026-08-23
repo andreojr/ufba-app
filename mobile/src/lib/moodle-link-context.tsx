@@ -60,7 +60,15 @@ export function MoodleLinkProvider({ children }: PropsWithChildren): JSX.Element
       getSiteInfo({ wstoken, siteUrl, userId: 0 }).then((info) => info.userId),
     );
     if (result.status === "success") {
-      await saveMoodleSession(result.session);
+      try {
+        await saveMoodleSession(result.session);
+      } catch (error) {
+        // Spec: falha ao salvar a sessão localmente após captura vira
+        // console.warn e o app trata como não vinculado — não deixamos um
+        // reject sem tratamento nem afirmamos um link que não foi persistido.
+        console.warn("Failed to save Moodle session locally", error);
+        return { status: "failed", reason: "Não foi possível salvar a sessão do Moodle" };
+      }
       void rememberMoodleWasLinked().catch((error: unknown) => {
         console.warn("Failed to record Moodle link", error);
       });
