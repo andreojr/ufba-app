@@ -485,6 +485,9 @@ describe("Trajetória", () => {
 
     // O selo viaja junto do card: espalhar o atraso não pode escondê-lo.
     expect(await screen.findByText("atrasada · 3º período")).toBeTruthy();
+    // Vermelho, o mesmo tom de uma reprovada — não o amarelo de trancada.
+    // Período vencido é buraco na trajetória, não pausa que o aluno escolheu.
+    expect(screen.getByTestId("atrasada-MATA60").props.className).toContain("bg-danger-soft");
   });
 
   it("resume o atraso acima da linha do tempo", async () => {

@@ -542,10 +542,12 @@ function LinhaDoTempo({
 /**
  * A componente the projector placed in a future semestre: no nota to show yet
  * and no density meter — the card is a placeholder for work not yet done, not
- * a record of work already measured. An atrasada carries the same warning
- * badge `MateriaCard`'s status card would, just repurposed for "this used to
- * belong to an earlier período" instead of a situação deviation. Tapping it
- * opens the same árvore de dependências a cursado card would.
+ * a record of work already measured. An atrasada carries the same status card
+ * `MateriaCard` hangs off a deviating componente, in the danger tone a
+ * reprovada uses rather than the warning tone of a trancada: a matéria whose
+ * período has already passed is a hole in the trajectory, not a pause the
+ * student chose. Tapping it opens the same árvore de dependências a cursado
+ * card would.
  */
 function CardProjetado({
   componente,
@@ -563,8 +565,11 @@ function CardProjetado({
   return (
     <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
       {componente.atrasada && componente.periodo !== null ? (
-        <View className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-warning-soft">
-          <Typography.Paragraph type="body-xs" className="text-warning">
+        <View
+          testID={`atrasada-${componente.codigo}`}
+          className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-danger-soft"
+        >
+          <Typography.Paragraph type="body-xs" className="text-danger">
             {`atrasada · ${componente.periodo}º período`}
           </Typography.Paragraph>
         </View>
