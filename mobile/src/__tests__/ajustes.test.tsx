@@ -1080,7 +1080,7 @@ describe("AjustesTab — versão do app", () => {
       dispensar: jest.fn(),
     });
 
-    const { getByText, queryByText } = await render(
+    const { getByText, queryByText, queryByTestId } = await render(
       <SyncFreshnessProvider>
         <AjustesTab />
       </SyncFreshnessProvider>,
@@ -1089,5 +1089,8 @@ describe("AjustesTab — versão do app", () => {
     expect(getByText("1.0.0")).toBeTruthy();
     // No claim either way — the app does not know, and must not guess.
     expect(queryByText("Você está na versão mais recente")).toBeNull();
+    // E a linha não pode reservar espaço para a descrição que não existe: uma
+    // ItemDescription vazia ainda ocupa a linha e desalinha o título.
+    expect(queryByTestId("app-version-description")).toBeNull();
   });
 });

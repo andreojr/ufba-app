@@ -126,6 +126,11 @@ export default function AjustesTab(): JSX.Element {
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const { versaoInstalada, release, temAtualizacao } = useAppUpdate();
+  const descricaoVersao = temAtualizacao
+    ? `Nova versão disponível: ${release?.latestVersion}`
+    : release
+      ? "Você está na versão mais recente"
+      : null;
   const moodle = useMoodleLink();
   const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
     "muted",
@@ -821,17 +826,18 @@ export default function AjustesTab(): JSX.Element {
               </ListGroup.ItemPrefix>
               <ListGroup.ItemContent>
                 <ListGroup.ItemTitle>Versão do app</ListGroup.ItemTitle>
-                <ListGroup.ItemDescription>
-                  {/* Silence, not a guess, when the check never landed: claiming
-                      "up to date" while offline would be a lie the user cannot
-                      check, and this row is the safety net for someone whose
-                      runtime stopped receiving updates. */}
-                  {temAtualizacao
-                    ? `Nova versão disponível: ${release?.latestVersion}`
-                    : release
-                      ? "Você está na versão mais recente"
-                      : ""}
-                </ListGroup.ItemDescription>
+                {/* Sem descrição, e não uma descrição vazia: até a checagem
+                    voltar — o estado de toda primeira abertura — não há o que
+                    dizer, e uma ItemDescription com string vazia ainda ocupa a
+                    linha, empurrando o título para o topo como se faltasse
+                    texto. Silêncio também é a resposta certa quando o app está
+                    offline: afirmar "você está na versão mais recente" seria
+                    uma garantia que ele não tem como dar. */}
+                {descricaoVersao === null ? null : (
+                  <ListGroup.ItemDescription testID="app-version-description">
+                    {descricaoVersao}
+                  </ListGroup.ItemDescription>
+                )}
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix>
                 <Typography.Paragraph type="body-sm" color="muted">
