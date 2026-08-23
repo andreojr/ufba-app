@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PrismaScheduleRepository } from './prisma-schedule.repository';
 import type { PrismaService } from './prisma.service';
 import type { PeriodoLetivo } from '../sigaa-engine/parsers/atestado-turmas';
@@ -137,7 +138,16 @@ describe('PrismaScheduleRepository', () => {
       new Date('2026-08-23T12:00:00Z'),
     );
 
-    expect(tx.turma.upsert.mock.calls[0][0].update.nome).toBe('CÁLCULO A');
+    // Busca pela chamada de MATA37 em vez de assumir a posição: `salvar`
+    // agora ordena as turmas pela chave natural antes de gravar (para que
+    // escritores concorrentes peguem locks na mesma ordem global), então a
+    // ordem das chamadas de upsert não é mais a ordem do atestado.
+    const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (chamada: any) =>
+        chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
+    );
+    expect(chamadaCalculoA?.[0].update.nome).toBe('CÁLCULO A');
   });
 
   it('não sobrescreve quando o registro tem exatamente o mesmo instante do sync', async () => {
@@ -171,6 +181,37 @@ describe('PrismaScheduleRepository', () => {
     expect(tx.matricula.createMany.mock.calls[0][0].data.map((m: any) => m.ordem)).toEqual([
       0, 1,
     ]);
+  });
+
+  it('tenta de novo e tem sucesso quando um P2002 vem de dois alunos sincronizando a mesma turma ao mesmo tempo', async () => {
+    // Dois `findUnique` concorrentes veem null e os dois tentam criar a
+    // mesma turma; um leva P2002 e a transação inteira aborta. A gravação
+    // não pode virar um 500 pro aluno que só perdeu a corrida por
+    // milissegundos — vale tentar de novo.
+    const conflito = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed on the fields: (`semestre`,`codigo`,`numero`)',
+      { code: 'P2002', clientVersion: '6.0.0' },
+    );
+    const { prisma, tx } = prismaFalso();
+    let tentativas = 0;
+    (prisma.$transaction as jest.Mock).mockImplementation(
+      async (fn: (t: typeof tx) => Promise<void>) => {
+        tentativas += 1;
+        if (tentativas === 1) {
+          throw conflito;
+        }
+        return fn(tx);
+      },
+    );
+
+    await new PrismaScheduleRepository(prisma).salvar(
+      'user-1',
+      turmasFalsas(),
+      periodoLetivo,
+      new Date('2026-08-23T12:00:00Z'),
+    );
+
+    expect(tentativas).toBe(2);
   });
 
   it('reports null when the user has never synced', async () => {
