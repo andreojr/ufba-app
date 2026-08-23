@@ -193,12 +193,12 @@ quando sair a próxima.
 
 `src/lib/app-update-install.ts`:
 
-1. Baixa o APK de `downloadUrl` com `expo-file-system` (já nas deps) pro
-   diretório de cache do app — invisível na pasta Downloads e limpável pelo
-   sistema sob pressão de armazenamento.
-2. Converte o caminho num `content://` URI (via FileProvider) e dispara a intent
-   `android.intent.action.INSTALL_PACKAGE` com
-   `FLAG_GRANT_READ_URI_PERMISSION`, usando `expo-intent-launcher`.
+1. Baixa o APK de `downloadUrl` com `File.downloadFileAsync` (`expo-file-system`,
+   já nas deps) pro diretório de cache do app — invisível na pasta Downloads e
+   limpável pelo sistema sob pressão de armazenamento.
+2. Lê `File#contentUri` (o `content://` do FileProvider) e dispara a intent
+   `android.intent.action.INSTALL_PACKAGE` com `FLAG_GRANT_READ_URI_PERMISSION`,
+   usando `expo-intent-launcher`.
 3. Apaga o arquivo depois de disparar a intent.
 
 Se o usuário não tiver concedido "instalar apps desconhecidos", encaminha pra
@@ -206,15 +206,18 @@ Se o usuário não tiver concedido "instalar apps desconhecidos", encaminha pra
 fallback de abrir a landing no navegador — o caminho manual nunca deixa de
 existir.
 
-O progresso adota a mesma linguagem visual do `DownloadProgressBar` do fluxo de
-histórico, mas **não reusa o componente**: aquele encena progresso calibrado
-porque o download do SIGAA é um POST opaco, enquanto o download do APK reporta
-bytes escritos de verdade. Reusar seria fingir estimativa onde há medição.
+**Nada de `expo-file-system/legacy`.** O subpath legacy tem download com
+callback de progresso e `getContentUriAsync`, e à primeira vista seria o
+caminho — mas está marcado pra remoção na SDK 55, e adotá-lo criaria dívida de
+migração num app cujo objetivo declarado é parar de exigir atenção. A API
+moderna cobre o essencial: a v19.0.24 instalada já tem `File#contentUri`
+(Android, adicionada na 19.0.19), que é o substituto do `getContentUriAsync`.
 
-Detalhe verificado em `node_modules` (v19.0.24): a API nova
-(`File.downloadFileAsync`) não tem callback de progresso e não expõe
-`getContentUriAsync`. Ambos existem só no subpath `expo-file-system/legacy`, que
-é o que esta entrega usa.
+O que se perde é a porcentagem: `File.downloadFileAsync` não reporta bytes. O
+card mostra estado indeterminado ("Baixando a atualização…" com spinner) em vez
+de inventar uma estimativa. Também não reusa o `DownloadProgressBar` do fluxo de
+histórico — aquele encena progresso a partir de estágios conhecidos do backend,
+que não existem aqui.
 
 ### Mudanças nativas (exigem `expo prebuild` + rebuild)
 
@@ -315,10 +318,11 @@ railway variables --set APP_LATEST_VERSION=1.1.0 --set APP_LATEST_VERSION_CODE=3
 
 - **Keystore.** É o risco irreversível da entrega. Errar aqui trava a
   atualização de toda a base instalada, sem conserto remoto.
-- **Dependência do subpath legacy do `expo-file-system`.** Resolvido para esta
-  entrega (ver "Download e instalação"), mas é superfície marcada como
-  deprecated: uma futura major da lib pode removê-la, e aí o download com
-  progresso e o `content://` URI precisam de outra fonte.
+- **FileProvider.** O `getContentUriAsync` do legacy chegou quebrado na SDK 54
+  para alguns apps (`Couldn't find meta-data for provider with authority
+  <package>.FileSystemFileProvider`, expo/expo#39056), e o `File#contentUri`
+  depende do mesmo FileProvider. Teste unitário não pega — só instalar de
+  verdade num aparelho revela.
 - **Detecção de permissão.** Não há API Expo direta equivalente a
   `PackageManager.canRequestPackageInstalls()`. Provável necessidade de tentar a
   intent e tratar a falha, em vez de checar antes.
