@@ -880,29 +880,14 @@ describe("AjustesTab", () => {
         expect(getByTestId("sync-profile-item").props.accessibilityState?.disabled).toBe(true);
       });
 
-      it("discloses what is kept and what is discarded before the first histórico sync", async () => {
-        // Moved here from Trajetória's old first-sync screen: pressing sync
-        // now always fetches the histórico too, so the disclosure belongs
-        // wherever that press actually lives.
-        const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
-
-        expect(await getByText(/O que fica guardado/i)).toBeTruthy();
-        expect(getByText(/matérias, notas e carga horária/i)).toBeTruthy();
-        expect(getByText(/O que não fica/i)).toBeTruthy();
-        expect(getByText(/CPF, RG e data de nascimento/i)).toBeTruthy();
-      });
-
-      it("hides the disclosure once the histórico has already been synced", async () => {
-        mockedGetTrajetoria.mockResolvedValue({
-          historico: {} as any,
-          fetchedAt: new Date().toISOString(),
-          plano: [],
-          marcos: null,
-        });
-
+      it("leaves the kept-vs-discarded disclosure to the linking screen", async () => {
+        // Vive em link-account.tsx, junto dos outros checks de segurança e
+        // sempre visível, em vez de aparecer aqui uma única vez antes do
+        // primeiro sync.
         const { queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
 
         await waitFor(() => expect(queryByText(/O que fica guardado/i)).toBeNull());
+        expect(queryByText(/CPF, RG e data de nascimento/i)).toBeNull();
       });
 
       it("re-scrapes both the schedule and the histórico and reports success when pressed", async () => {

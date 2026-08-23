@@ -409,11 +409,6 @@ export default function AjustesTab(): JSX.Element {
   };
 
   const perfilFetchedAt = perfilFreshness(scheduleFetchedAt, historicoFetchedAt);
-  // The same consent moment Trajetória used to show right above its own
-  // first-sync button: pressing sync now always fetches the histórico too
-  // (see handleSyncPerfil), so the disclosure belongs here, and only until
-  // the histórico's been fetched at least once.
-  const mostrarAvisoPrivacidade = isSigaaLinked && historicoFetchedAt === null;
 
   return (
     <View className="flex-1 bg-background">
@@ -565,29 +560,6 @@ export default function AjustesTab(): JSX.Element {
           <Typography.Paragraph type="body-xs" color="muted">
             Minha conta
           </Typography.Paragraph>
-          {/* Above the sync item, never below it: pressing sync is the moment
-              the student hands us a document carrying their CPF, RG and date
-              of birth, so both halves — what we keep and what we throw away
-              — have to be readable before the press. Moved here from
-              Trajetória's old first-sync screen since this is now the one
-              place that fetches the histórico. */}
-          {mostrarAvisoPrivacidade ? (
-            <View className="rounded-2xl bg-white/[0.04] p-3.5 gap-1.5">
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que fica guardado:{" "}
-                </Typography.Paragraph>
-                suas matérias, notas e carga horária.
-              </Typography.Paragraph>
-              <Typography.Paragraph type="body-xs" color="muted">
-                <Typography.Paragraph type="body-xs" weight="medium">
-                  O que não fica:{" "}
-                </Typography.Paragraph>
-                CPF, RG e data de nascimento. Eles estão no documento, mas são descartados na
-                leitura.
-              </Typography.Paragraph>
-            </View>
-          ) : null}
           <ListGroup>
             <ListGroup.Item onPress={() => router.push("/link-account")}>
               <ListGroup.ItemPrefix>
