@@ -39,6 +39,7 @@ import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
+import { useAppUpdate } from "@/lib/use-app-update";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
 import {
   clearSigaaCredentials,
@@ -123,6 +124,7 @@ export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
+  const { versaoInstalada, release, temAtualizacao } = useAppUpdate();
   const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
     "muted",
     "segment-foreground",
@@ -753,6 +755,38 @@ export default function AjustesTab(): JSX.Element {
                 <Chip variant="secondary" size="sm">
                   Em breve
                 </Chip>
+              </ListGroup.ItemSuffix>
+            </ListGroup.Item>
+          </ListGroup>
+        </View>
+
+        <View className="gap-2.5">
+          <Typography.Paragraph type="body-xs" color="muted">
+            Sobre
+          </Typography.Paragraph>
+          <ListGroup>
+            <ListGroup.Item testID="app-version-item" disabled>
+              <ListGroup.ItemPrefix>
+                <AppIcon name="IconInfo" size={22} color={mutedColor} />
+              </ListGroup.ItemPrefix>
+              <ListGroup.ItemContent>
+                <ListGroup.ItemTitle>Versão do app</ListGroup.ItemTitle>
+                <ListGroup.ItemDescription>
+                  {/* Silence, not a guess, when the check never landed: claiming
+                      "up to date" while offline would be a lie the user cannot
+                      check, and this row is the safety net for someone whose
+                      runtime stopped receiving updates. */}
+                  {temAtualizacao
+                    ? `Nova versão disponível: ${release?.latestVersion}`
+                    : release
+                      ? "Você está na versão mais recente"
+                      : ""}
+                </ListGroup.ItemDescription>
+              </ListGroup.ItemContent>
+              <ListGroup.ItemSuffix>
+                <Typography.Paragraph type="body-sm" color="muted">
+                  {versaoInstalada}
+                </Typography.Paragraph>
               </ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>

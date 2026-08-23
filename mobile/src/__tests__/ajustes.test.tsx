@@ -20,12 +20,14 @@ import {
   getSigaaCredentials,
 } from "@/lib/sigaa-storage";
 import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
+import { useAppUpdate } from "@/lib/use-app-update";
 import { saveThemePreference } from "@/lib/theme-preference";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
 import AjustesTab from "@/app/(tabs)/ajustes";
 
 jest.mock("@/lib/auth-context");
+jest.mock("@/lib/use-app-update");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
 jest.mock("@/lib/periodo-cache", () => ({
@@ -271,6 +273,18 @@ function mockSignedIn(userOverrides: Record<string, unknown> = {}) {
     refreshUser: mockRefreshUser,
   } as any);
 }
+
+// The screen destructures this hook unconditionally, so every test needs it to
+// return something. "No release fetched" is the honest default: most of these
+// tests are about other parts of the screen and never reach the network.
+beforeEach(() => {
+  jest.mocked(useAppUpdate).mockReturnValue({
+    versaoInstalada: "1.0.0",
+    release: null,
+    temAtualizacao: false,
+    dispensar: jest.fn(),
+  });
+});
 
 describe("AjustesTab", () => {
   beforeEach(() => {
@@ -965,5 +979,70 @@ describe("AjustesTab", () => {
       expect(mockUniwindSetTheme).toHaveBeenCalledWith("system");
       await waitFor(() => expect(mockedSaveThemePreference).toHaveBeenCalledWith("system"));
     });
+  });
+});
+
+describe("AjustesTab — versão do app", () => {
+  const RELEASE = {
+    latestVersion: "1.1.0",
+    versionCode: 3,
+    downloadUrl: "https://example.com/app.apk",
+    releaseNotes: "",
+    publishedAt: "2026-09-01T12:00:00Z",
+  };
+
+  it("shows the installed version and says it is up to date", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.1.0",
+      release: RELEASE,
+      temAtualizacao: false,
+      dispensar: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByTestId("app-version-item")).toBeTruthy();
+    expect(getByText("1.1.0")).toBeTruthy();
+    expect(getByText("Você está na versão mais recente")).toBeTruthy();
+  });
+
+  it("says a new version is available when one is", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: RELEASE,
+      temAtualizacao: true,
+      dispensar: jest.fn(),
+    });
+
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByText("Nova versão disponível: 1.1.0")).toBeTruthy();
+  });
+
+  it("still shows the installed version when the check never succeeded", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: null,
+      temAtualizacao: false,
+      dispensar: jest.fn(),
+    });
+
+    const { getByText, queryByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>,
+    );
+
+    expect(getByText("1.0.0")).toBeTruthy();
+    // No claim either way — the app does not know, and must not guess.
+    expect(queryByText("Você está na versão mais recente")).toBeNull();
   });
 });

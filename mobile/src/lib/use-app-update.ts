@@ -50,6 +50,14 @@ export function useAppUpdate(): EstadoAtualizacao {
     // Every failure path ends here: offline, timeout, 404 (nothing published),
     // malformed body. The screen simply never learns about an update, which is
     // the designed behaviour — a broken check must not surface to the user.
+    //
+    // The rule below flags setState reached from an effect body because that
+    // causes cascading renders. It cannot see through the async boundary:
+    // `checar` always awaits SecureStore before it ever calls setState, so no
+    // state update happens in the same tick as this effect, and no cascade is
+    // possible. Narrowly disabled rather than restructured — deferring the call
+    // through a timer only to satisfy the analysis would make the code worse.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void checar().catch(() => undefined);
 
     const subscription = AppState.addEventListener("change", (estado) => {
