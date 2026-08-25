@@ -66,10 +66,7 @@ const OPEN_SOURCE_POINTS = [
   "Achou um problema, ou tem uma ideia para o aplicativo? Você pode contribuir com o projeto.",
 ];
 
-// TODO: repositório ainda não publicado — trocar pela URL real antes de
-// mandar o app para as lojas, senão o card leva a um 404 e faz o efeito
-// contrário do que promete.
-const REPO_URL = "https://github.com/ufba-app/ufba";
+const REPO_URL = "https://github.com/andreojr/ufba-app";
 
 function formatCpf(raw: string): string {
   const digits = raw.replace(/\D/g, "").slice(0, 11);

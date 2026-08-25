@@ -56,6 +56,15 @@ module.exports = {
       "expo-sharing",
       "expo-status-bar",
       "expo-web-browser",
+      // Fora da Play Store não há App Bundle com split por ABI — um APK
+      // "universal" carregaria arm64-v8a, armeabi-v7a, x86 e x86_64 juntos
+      // (~80MB só de libs nativas). x86/x86_64 só servem emulador, e
+      // armeabi-v7a (32-bit) é uma fração residual de aparelhos hoje. Restrito
+      // a arm64-v8a — a esmagadora maioria dos celulares reais — exceto no
+      // client de dev, que ainda pode precisar rodar em emulador x86_64.
+      ...(IS_DEV
+        ? []
+        : [["expo-build-properties", { android: { buildArchs: ["arm64-v8a"] } }]]),
     ],
     experiments: {
       typedRoutes: true,

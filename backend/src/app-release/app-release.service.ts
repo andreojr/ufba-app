@@ -12,7 +12,39 @@ export interface AppRelease {
   releaseNotes: string;
   /** ISO 8601. */
   publishedAt: string;
+  /**
+   * From the asset's `Content-Length`, best-effort. Absent when it couldn't be
+   * determined — a landing page showing no size is fine; a release that fails
+   * to publish because GitHub was slow to answer a HEAD request is not.
+   */
+  fileSizeBytes?: number;
 }
+
+/** Resolves an asset URL to its byte size, or `undefined` if it can't tell. */
+export type SizeFetcher = (url: string) => Promise<number | undefined>;
+
+const SIZE_FETCH_TIMEOUT_MS = 3_000;
+
+/** Real implementation: a plain HEAD request, same style as the rest of the backend's HTTP code. */
+export const fetchSizeViaHead: SizeFetcher = async (url) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SIZE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    const contentLength = response.headers.get('content-length');
+    if (!contentLength) return undefined;
+    const size = Number.parseInt(contentLength, 10);
+    return Number.isInteger(size) ? size : undefined;
+  } catch {
+    // Network hiccup, timeout, GitHub having a bad day — none of that should
+    // ever take down the version check itself.
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const SIZE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Reads the release off environment variables rather than a table: publishing
@@ -22,10 +54,15 @@ export interface AppRelease {
  */
 @Injectable()
 export class AppReleaseService {
-  constructor(private readonly config: ConfigService) {}
+  private sizeCache: { url: string; size: number | undefined; fetchedAt: number } | null = null;
+
+  constructor(
+    private readonly config: ConfigService,
+    private readonly fetchSize: SizeFetcher = fetchSizeViaHead,
+  ) {}
 
   /** Null when nothing is published yet, or the configuration is incomplete. */
-  release(): AppRelease | null {
+  async release(): Promise<AppRelease | null> {
     const latestVersion = this.config.get<string>('APP_LATEST_VERSION');
     const rawVersionCode = this.config.get<string>('APP_LATEST_VERSION_CODE');
     const downloadUrl = this.config.get<string>('APP_DOWNLOAD_URL');
@@ -48,6 +85,19 @@ export class AppReleaseService {
       // fields above are required.
       releaseNotes: this.config.get<string>('APP_RELEASE_NOTES') ?? '',
       publishedAt,
+      fileSizeBytes: await this.sizeOf(downloadUrl),
     };
+  }
+
+  /** A release's asset never changes size mid-flight, so a short cache spares GitHub a HEAD per request. */
+  private async sizeOf(url: string): Promise<number | undefined> {
+    const cached = this.sizeCache;
+    if (cached && cached.url === url && Date.now() - cached.fetchedAt < SIZE_CACHE_TTL_MS) {
+      return cached.size;
+    }
+
+    const size = await this.fetchSize(url);
+    this.sizeCache = { url, size, fetchedAt: Date.now() };
+    return size;
   }
 }

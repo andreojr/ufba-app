@@ -11,19 +11,19 @@ const RELEASE: AppRelease = {
 };
 
 function serviceFake(release: AppRelease | null): AppReleaseService {
-  return { release: () => release } as unknown as AppReleaseService;
+  return { release: () => Promise.resolve(release) } as unknown as AppReleaseService;
 }
 
 describe('AppReleaseController', () => {
-  it('returns the published release', () => {
+  it('returns the published release', async () => {
     const controller = new AppReleaseController(serviceFake(RELEASE));
 
-    expect(controller.version()).toEqual(RELEASE);
+    await expect(controller.version()).resolves.toEqual(RELEASE);
   });
 
-  it('404s when nothing is published instead of returning a half-filled body', () => {
+  it('404s when nothing is published instead of returning a half-filled body', async () => {
     const controller = new AppReleaseController(serviceFake(null));
 
-    expect(() => controller.version()).toThrow(NotFoundException);
+    await expect(controller.version()).rejects.toThrow(NotFoundException);
   });
 });

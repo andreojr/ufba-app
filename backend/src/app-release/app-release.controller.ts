@@ -11,8 +11,8 @@ export class AppReleaseController {
   constructor(private readonly service: AppReleaseService) {}
 
   @Get('version')
-  version(): AppRelease {
-    const release = this.service.release();
+  async version(): Promise<AppRelease> {
+    const release = await this.service.release();
     if (!release) {
       throw new NotFoundException('No app release is published');
     }
