@@ -1,4 +1,5 @@
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
 import { AppReleaseService, type SizeFetcher } from './app-release.service';
 
 function configFake(values: Record<string, string | undefined>): ConfigService {
@@ -21,6 +22,21 @@ function sizeFetcherFake(result: number | undefined): SizeFetcher {
 }
 
 describe('AppReleaseService', () => {
+  // Regression test: the unit tests below construct the service directly
+  // with `new`, which bypasses Nest's DI entirely and would never have
+  // caught this. `fetchSize` is a plain function type with no DI token —
+  // without @Optional() on it, Nest throws UnknownDependenciesException and
+  // the whole app fails to boot. This is the one test that goes through the
+  // real container, the way production actually instantiates the service.
+  it('boots through Nest\'s real DI container without a fetchSize provider', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ ignoreEnvFile: true })],
+      providers: [AppReleaseService],
+    }).compile();
+
+    expect(() => moduleRef.get(AppReleaseService)).not.toThrow();
+  });
+
   it('reads the published release off the environment', async () => {
     const service = new AppReleaseService(configFake(COMPLETE), sizeFetcherFake(undefined));
 

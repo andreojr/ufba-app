@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /** The currently published Android build, as the mobile client sees it. */
@@ -58,7 +58,11 @@ export class AppReleaseService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly fetchSize: SizeFetcher = fetchSizeViaHead,
+    // SizeFetcher is a plain function type, not a class — Nest's DI can't
+    // resolve a token for it and throws UnknownDependenciesException on boot
+    // without @Optional() here. Tests inject a fake directly; production
+    // gets undefined from Nest and falls back to the real HEAD fetcher.
+    @Optional() private readonly fetchSize: SizeFetcher = fetchSizeViaHead,
   ) {}
 
   /** Null when nothing is published yet, or the configuration is incomplete. */
