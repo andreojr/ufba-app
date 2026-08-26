@@ -156,6 +156,38 @@ describe('alocar', () => {
     expect(semestres[0].componentes[0].preRequisitoNaoVerificado).toBe(false);
   });
 
+  it('não marca preRequisitoNaoVerificado quando o pré-requisito é cursado num semestre anterior do próprio planejamento, mesmo sem estar no histórico real', () => {
+    // A1 nunca foi cursado de verdade (aprovados = vazio) — mas o próprio
+    // planejamento aloca A1 em 2026.2 e só depois B1 em 2027.1. Dentro do
+    // planejamento que o aluno desenhou, quando ele chegar em B1 ele já terá
+    // cursado A1 — a checagem é contra "o que o plano já resolveu até
+    // aqui", não contra "o que já foi cursado até hoje".
+    const fila = [item('A1'), item('B1', { preRequisito: '(A1)', periodo: 2 })];
+    const fixos = new Map([
+      ['A1', '2026.2'],
+      ['B1', '2027.1'],
+    ]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 600);
+
+    expect(semestres[0].componentes[0]).toMatchObject({ codigo: 'A1', preRequisitoNaoVerificado: false });
+    expect(semestres[1].componentes[0]).toMatchObject({ codigo: 'B1', preRequisitoNaoVerificado: false });
+  });
+
+  it('marca preRequisitoNaoVerificado quando o próprio planejamento inverte a ordem do pré-requisito', () => {
+    // O oposto do teste acima: o aluno arrastou B1 pra ANTES de A1 dentro do
+    // mesmo planejamento — mesmo que A1 esteja planejado (só que depois),
+    // na hora de B1 o plano ainda não passou por A1.
+    const fila = [item('A1'), item('B1', { preRequisito: '(A1)', periodo: 2 })];
+    const fixos = new Map([
+      ['A1', '2027.1'],
+      ['B1', '2026.2'],
+    ]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 600);
+
+    const b1 = semestres.flatMap((s) => s.componentes).find((c) => c.codigo === 'B1');
+    expect(b1?.preRequisitoNaoVerificado).toBe(true);
+  });
+
   it('para no teto duro de semestres em vez de projetar milhares deles', () => {
     // O regex do DTO aceita "9999.2". Sem o teto duro, o laço andaria semestre
     // a semestre até lá — quase 16 mil deles, cada um serializado no
