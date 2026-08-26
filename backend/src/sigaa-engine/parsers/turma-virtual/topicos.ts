@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { assertPaginaDaTurmaVirtual } from './ava-page';
 
 export interface Topico {
   titulo: string;
@@ -11,9 +12,12 @@ const TITULO_PATTERN = /^(.+?)\s*\(([\s\S]+)\)$/;
 /**
  * Parses `Relatorios/timeline.jsf`'s `div.topico-aula`. `conteudoHtml` vem
  * `null` quando o professor cadastrou a data mas nunca postou material — caso
- * comum hoje (ver "Estado do conteúdo hoje" na investigação).
+ * comum hoje (ver "Estado do conteúdo hoje" na investigação). Zero tópicos
+ * só é resposta válida se a página for de fato a da Turma Virtual — ver
+ * ava-page.ts.
  */
 export function parseTopicos(html: string): Topico[] {
+  assertPaginaDaTurmaVirtual(html, 'os tópicos de aula');
   const $ = cheerio.load(html);
   const topicos: Topico[] = [];
 

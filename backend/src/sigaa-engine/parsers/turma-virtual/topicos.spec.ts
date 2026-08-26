@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { parseTopicos } from './topicos';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'timeline.html');
+const FIXTURE_VAZIO_PATH = join(__dirname, '__fixtures__', 'timeline-vazio.html');
 
 describe('parseTopicos', () => {
   it('parses título, período and conteudoHtml, with null for an empty conteúdo', () => {
@@ -16,5 +17,17 @@ describe('parseTopicos', () => {
         conteudoHtml: '<p>Slides da aula 2 anexados.</p>',
       },
     ]);
+  });
+
+  it('returns an empty list when the professor cadastrou nenhum tópico', () => {
+    const html = readFileSync(FIXTURE_VAZIO_PATH, 'utf-8');
+
+    expect(parseTopicos(html)).toEqual([]);
+  });
+
+  it('throws when the page is not a Turma Virtual page at all', () => {
+    expect(() => parseTopicos('<html><body>home do portal</body></html>')).toThrow(
+      /formMenu/,
+    );
   });
 });

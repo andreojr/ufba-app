@@ -17,9 +17,20 @@ describe('parseNoticiaDetalhe', () => {
     });
   });
 
-  it('throws if the expected "Visualização de Notícia" legend is missing (gotcha: GET ?id= renders an empty shell)', () => {
+  it('throws if the expected "Visualização de Notícia" legend is missing', () => {
     expect(() => parseNoticiaDetalhe('<html><body>outra página</body></html>')).toThrow(
       /Visualização de Notícia/,
     );
+  });
+
+  // Gotcha 2 da investigação: a casca vazia TEM a legenda e os <label>s — só
+  // título, data e texto vêm em branco. A legenda sozinha não detecta nada.
+  it('throws on the empty shell, which carries the legend but blank título/texto', () => {
+    const html = readFileSync(
+      join(__dirname, '__fixtures__', 'noticia-mostrar-casca-vazia.html'),
+      'utf-8',
+    );
+
+    expect(() => parseNoticiaDetalhe(html)).toThrow(/casca vazia/);
   });
 });

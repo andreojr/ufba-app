@@ -20,9 +20,11 @@ function textAfterLabel($: cheerio.CheerioAPI, li: Element, label: string): stri
 
 /**
  * Parses `NoticiaTurma/mostrar.jsf`. Só é confiável quando `id` chegou como
- * campo de POST — via GET na query, o SIGAA devolve a mesma legenda com
- * título/data/texto em branco (gotcha confirmado no spike), por isso a
- * ausência da legenda vira erro em vez de um objeto parcial silencioso.
+ * campo de POST — via GET na query, o SIGAA devolve a *mesma* legenda e os
+ * *mesmos* `<label>`s com título/data/texto em branco (gotcha 2 do spike).
+ * Ou seja: a legenda não distingue a casca vazia da resposta boa, então além
+ * dela exigimos que título e corpo tenham chegado preenchidos — é essa a
+ * assinatura real da casca.
  */
 export function parseNoticiaDetalhe(html: string): NoticiaDetalhe {
   const $ = cheerio.load(html);
@@ -59,6 +61,12 @@ export function parseNoticiaDetalhe(html: string): NoticiaDetalhe {
   const tdMatch = html.match(/<td\s+class="conteudoNoticia"[^>]*>([\s\S]*?)<\/td>/);
   if (tdMatch) {
     conteudoHtml = tdMatch[1].trim();
+  }
+
+  if (!titulo || !conteudoHtml) {
+    throw new Error(
+      'Notícia veio com título ou corpo em branco — assinatura da casca vazia do mostrar.jsf (o `id` precisa ir como campo de POST, não na query). Ver noticia-detalhe.ts.',
+    );
   }
 
   return { titulo, data, autor, conteudoHtml };
