@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type JSX } from "react";
 import { Modal, View, useWindowDimensions } from "react-native";
 import { Typography } from "heroui-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";

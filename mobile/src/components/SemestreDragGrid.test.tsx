@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, act } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
 import { HeroUINativeProvider } from "heroui-native";
+import type { JSX } from "react";
 
 import { ArrastoSemestreProvider, useArrastoSemestre } from "@/lib/arrasto-semestre-context";
 import { SemestreDragGrid } from "./SemestreDragGrid";

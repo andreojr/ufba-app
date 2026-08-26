@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, act } from "@testing-library/react-native";
 import { Pressable, Text } from "react-native";
+import type { JSX } from "react";
 
 import { ArrastoSemestreProvider, useArrastoSemestre } from "./arrasto-semestre-context";
 import type { ComponenteProjetado } from "./types";

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+  type JSX,
+  type ReactNode,
+} from "react";
 import { useSharedValue, type SharedValue } from "react-native-reanimated";
 
 import { quadradinhoNoPonto, REMOVER_DO_PLANO, type Retangulo } from "@/lib/drag-grid";
