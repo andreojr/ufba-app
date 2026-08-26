@@ -92,10 +92,19 @@ export function SemestreDragGrid({
         <Animated.View
           testID="card-fantasma"
           pointerEvents="none"
-          style={[{ position: "absolute", width: TAMANHO_QUADRADINHO }, estiloFantasma]}
+          style={[
+            { position: "absolute", width: TAMANHO_QUADRADINHO, height: TAMANHO_QUADRADINHO },
+            estiloFantasma,
+          ]}
         >
-          <View className="rounded-2xl bg-surface-secondary p-3">
-            <Typography.Paragraph weight="medium">{arrasto.componente.nome}</Typography.Paragraph>
+          {/* Quadrado fixo, do mesmo tamanho de um quadradinho do grid,
+              independente do nome da matéria — um nome comprido não pode
+              esticar o fantasma além do alvo que ele está prestes a ocupar.
+              Truncado em 1 linha pelo mesmo motivo. */}
+          <View className="flex-1 rounded-2xl bg-surface-secondary p-3 items-center justify-center">
+            <Typography.Paragraph weight="medium" numberOfLines={1} className="text-center">
+              {arrasto.componente.nome}
+            </Typography.Paragraph>
           </View>
         </Animated.View>
       </View>
