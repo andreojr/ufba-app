@@ -2,11 +2,15 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
 
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncAll } from "@/lib/sync-all";
 
 import LinkAccountScreen from "@/app/link-account";
 
 jest.mock("@/lib/sigaa-link-context");
+jest.mock("@/lib/auth-context");
+jest.mock("@/lib/sync-all");
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
@@ -86,6 +90,8 @@ async function lastDangerToastText(): Promise<string> {
 }
 
 const mockedUseSigaaLink = jest.mocked(useSigaaLink);
+const mockedUseAuth = jest.mocked(useAuth);
+const mockedSyncAll = jest.mocked(syncAll);
 
 // A well-known valid CPF (passes the check-digit algorithm) used purely as test fixture data.
 const VALID_CPF = "111.444.777-35";
@@ -108,6 +114,14 @@ describe("LinkAccountScreen", () => {
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(false);
     mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link, unlink });
+    // Sem token, o sync pós-vinculação (ver link-account.tsx) simplesmente
+    // não dispara — cada teste que precisa dele configura accessToken.
+    mockedUseAuth.mockReturnValue({ status: "signedOut" } as ReturnType<typeof useAuth>);
+    mockedSyncAll.mockResolvedValue({
+      horario: { status: "fulfilled", value: { sincronizado: false } },
+      historico: { status: "fulfilled", value: { sincronizado: false } },
+      docentes: null,
+    });
   });
 
   it("submits the unmasked CPF digits with syncMode device by default", async () => {

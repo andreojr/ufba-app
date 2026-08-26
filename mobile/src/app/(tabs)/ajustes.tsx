@@ -21,14 +21,7 @@ import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { ClassroomIcon } from "@/components/ClassroomIcon";
 import { MoodleIcon } from "@/components/MoodleIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
-import {
-  ApiError,
-  deleteAccount,
-  getSchedule,
-  getTrajetoria,
-  postScheduleSync,
-  postTrajetoriaSync,
-} from "@/lib/api";
+import { ApiError, deleteAccount, getSchedule, getTrajetoria, postScheduleSync } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
@@ -39,6 +32,7 @@ import { useMoodleLink } from "@/lib/moodle-link-context";
 import { relativeFreshness } from "@/lib/relative-freshness";
 import type { ScheduleResponse } from "@/lib/types";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncTudo } from "@/lib/sync-all";
 import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
 import { useAppUpdate } from "@/lib/use-app-update";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
@@ -284,10 +278,7 @@ export default function AjustesTab(): JSX.Element {
       }
 
       const credenciaisSigaa = { login: credentials.login, senha: credentials.senha };
-      const [horario, historico] = await Promise.allSettled([
-        postScheduleSync(accessToken, credenciaisSigaa),
-        postTrajetoriaSync(accessToken, credenciaisSigaa),
-      ]);
+      const { horario, historico } = await syncTudo(accessToken, credenciaisSigaa);
 
       const horarioOk = horario.status === "fulfilled" && "turmas" in horario.value;
       const historicoOk = historico.status === "fulfilled" && "historico" in historico.value;
@@ -840,7 +831,7 @@ export default function AjustesTab(): JSX.Element {
                 )}
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix>
-                <Typography.Paragraph type="body-sm" color="muted">
+                <Typography.Paragraph type="body-sm" color="muted" className="font-mono">
                   {versaoInstalada}
                 </Typography.Paragraph>
               </ListGroup.ItemSuffix>

@@ -31,6 +31,7 @@ import {
 import { relativeFreshness } from "@/lib/relative-freshness";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncAll } from "@/lib/sync-all";
 import { perfilFreshness, useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { PeriodoLetivo, PontoAtencao, Turma } from "@/lib/types";
 
@@ -179,6 +180,18 @@ export default function HomeTab(): JSX.Element {
     },
     [accessToken, applySchedule, syncSchedule]
   );
+
+  // "Tentar de novo" costumava só reler o cache — se o servidor tivesse
+  // caído, o aluno precisava repetir esse toque em Início, Trajetória,
+  // Insights e Professores, um de cada vez. Agora sincroniza tudo de uma
+  // vez (ver sync-all.ts) antes de recarregar esta tela.
+  const retryTudo = useCallback(async () => {
+    const credentials = accessToken ? await getSigaaCredentials() : null;
+    if (accessToken && credentials) {
+      await syncAll(accessToken, credentials);
+    }
+    await loadSchedule();
+  }, [accessToken, loadSchedule]);
 
   const [pontos, setPontos] = useState<PontoAtencao[]>([]);
 
@@ -372,9 +385,10 @@ export default function HomeTab(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {state.message}
             </Typography.Paragraph>
-            {/* Retrying is a plain re-read of our own database, so it is
-                offered whether or not the account is currently linked. */}
-            <Button variant="outline" size="sm" onPress={() => loadSchedule()}>
+            {/* Sincroniza horário, histórico e professores de uma vez (ver
+                retryTudo) quando há credenciais salvas; sem vínculo, cai de
+                volta para o mesmo re-read que sempre existiu aqui. */}
+            <Button variant="outline" size="sm" onPress={() => void retryTudo()}>
               <Button.Label>Tentar de novo</Button.Label>
             </Button>
           </View>

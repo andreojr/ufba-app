@@ -19,7 +19,9 @@ import { useCSSVariable } from "uniwind";
 import { AppBar } from "@/components/AppBar";
 import { AppIcon } from "@/components/AppIcon";
 import { describeApiError } from "@/lib/api-errors";
+import { useAuth } from "@/lib/auth-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncAll } from "@/lib/sync-all";
 import { dangerToast } from "@/lib/toast-helpers";
 
 // "000.000.000-00" — the longest a masked CPF can ever get, used as the
@@ -79,6 +81,7 @@ function formatCpf(raw: string): string {
 
 export default function LinkAccountScreen(): JSX.Element {
   const router = useRouter();
+  const auth = useAuth();
   const sigaaLink = useSigaaLink();
   const { toast } = useToast();
   const isLinked = sigaaLink.status === "linked";
@@ -124,6 +127,25 @@ export default function LinkAccountScreen(): JSX.Element {
       // precisa buscar algo em segundo plano, o backend só dá um toque neste
       // celular, e é ele que faz a requisição ao SIGAA com a senha local.
       await sigaaLink.link(cpfDigits, senha, "device");
+      // Horário, histórico e professores de uma vez só, aqui, antes de
+      // entrar nas tabs — em vez do horário se auto-sincronizar sozinho ao
+      // montar a Home enquanto histórico e professores ficam esperando o
+      // primeiro "tentar de novo" do aluno (ver sync-all.ts). Aguardado
+      // (não fire-and-forget): Trajetória, Insights e Professores só leem
+      // o cache uma vez ao montar, então uma sincronização ainda em voo
+      // quando a Home já navegou para lá as deixaria presas no card "não
+      // montada" até o próximo "tentar de novo" do aluno — elas nunca
+      // reconferem sozinhas. Uma falha aqui não impede a navegação: cada
+      // tela ainda sabe pedir para sincronizar de novo se algo não
+      // completar.
+      const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+      if (accessToken) {
+        try {
+          await syncAll(accessToken, { login: cpfDigits, senha });
+        } catch (error) {
+          console.warn("Failed to sync after linking the SIGAA account", error);
+        }
+      }
       router.replace("/(tabs)");
     } catch (error) {
       console.warn("SIGAA link failed", error);

@@ -9,7 +9,9 @@ import { describeApiError } from "@/lib/api-errors";
 import { getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncAll } from "@/lib/sync-all";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import {
   agruparPorSemestre,
@@ -131,6 +133,18 @@ export default function TrajetoriaTab(): JSX.Element {
     }
   }, [sigaaLink.status, accessToken, carregar]);
 
+  // "Tentar de novo" costumava só reler o cache — se o servidor tivesse
+  // caído, o aluno precisava repetir esse toque em Início, Trajetória,
+  // Insights e Professores, um de cada vez. Agora sincroniza tudo de uma
+  // vez (ver sync-all.ts) antes de recarregar esta tela.
+  const retryTudo = useCallback(async () => {
+    const credentials = accessToken ? await getSigaaCredentials() : null;
+    if (accessToken && credentials) {
+      await syncAll(accessToken, credentials);
+    }
+    await carregar();
+  }, [accessToken, carregar]);
+
   /**
    * Moving is a pure override: save the position and apply whatever
    * reprojected trajectory the server sends back. Deliberately no local
@@ -189,8 +203,10 @@ export default function TrajetoriaTab(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {state.message}
             </Typography.Paragraph>
-            {/* A plain re-read of our own database — offered linked or not. */}
-            <Button variant="outline" size="sm" onPress={() => carregar()}>
+            {/* Sincroniza horário, histórico e professores de uma vez (ver
+                retryTudo) quando há credenciais salvas; sem vínculo, cai de
+                volta para o mesmo re-read que sempre existiu aqui. */}
+            <Button variant="outline" size="sm" onPress={() => void retryTudo()}>
               Tentar de novo
             </Button>
           </View>

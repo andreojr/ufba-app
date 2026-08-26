@@ -8,7 +8,9 @@ import { DocenteCard } from "@/components/DocenteCard";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
+import { syncAll } from "@/lib/sync-all";
 import type { DocenteResumo, PeriodoLetivo } from "@/lib/types";
 
 type Estado =
@@ -111,6 +113,18 @@ export default function ProfessoresScreen(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
+  // "Tentar de novo" costumava só refazer a própria leitura (horário do
+  // cache + docentes). Agora sincroniza horário, histórico e docentes de
+  // uma vez (ver sync-all.ts) antes de recarregar esta tela — o mesmo botão
+  // que resolve Início, Trajetória e Insights resolve esta também.
+  const retryTudo = useCallback(async () => {
+    const credentials = accessToken ? await getSigaaCredentials() : null;
+    if (accessToken && credentials) {
+      await syncAll(accessToken, credentials);
+    }
+    await carregar();
+  }, [accessToken, carregar]);
+
   useEffect(() => {
     // O analisador não enxerga através da fronteira assíncrona: `carregar` só
     // chama setState depois de um await, então nada atualiza no mesmo tick deste
@@ -147,7 +161,7 @@ export default function ProfessoresScreen(): JSX.Element {
             <Typography.Paragraph type="body-sm" color="muted" align="center">
               {estado.message}
             </Typography.Paragraph>
-            <Button variant="outline" size="sm" onPress={() => void carregar()}>
+            <Button variant="outline" size="sm" onPress={() => void retryTudo()}>
               Tentar de novo
             </Button>
           </View>
