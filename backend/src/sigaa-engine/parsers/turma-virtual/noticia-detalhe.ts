@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import type { Element } from 'domhandler';
 
 export interface NoticiaDetalhe {
   titulo: string;
@@ -7,7 +8,7 @@ export interface NoticiaDetalhe {
   conteudoHtml: string;
 }
 
-function textAfterLabel($: cheerio.CheerioAPI, li: cheerio.Element, label: string): string {
+function textAfterLabel($: cheerio.CheerioAPI, li: Element, label: string): string {
   const $li = $(li);
   if (!$li.find('label').text().trim().startsWith(label)) {
     return '';
