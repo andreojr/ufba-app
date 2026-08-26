@@ -6,7 +6,7 @@ import {
 import type { EstruturaCurricularSalva } from './curriculo.repository';
 import { montarFila } from './fila-de-pendentes';
 import type { MarcosResponse } from './marcos-semestralizacao';
-import { alocar, type SemestreProjetado } from './projetor';
+import { alocar, compactarSemestres, type SemestreProjetado } from './projetor';
 import { compararSemestres, distanciaEmSemestres, proximoSemestre } from './semestre';
 import { tetoDeCarga } from './teto-de-carga';
 
@@ -192,7 +192,10 @@ export function montarProjecao(
   const ultimoCursado = ultimoSemestreCursado(historico);
   const primeiro = primeiroSemestreFuturo(ultimoCursado, historico);
 
-  const alocados = alocar(fila, fixos, codigosConcluidos(historico, marcos), primeiro, teto);
+  const alocados = compactarSemestres(
+    alocar(fila, fixos, codigosConcluidos(historico, marcos), primeiro, teto),
+    primeiro,
+  );
   const semestres = derramarHorasGenericas(
     alocados,
     historico.cargaHoraria.optativas.pendente,

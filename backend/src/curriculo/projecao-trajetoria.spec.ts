@@ -191,7 +191,8 @@ describe('montarProjecao', () => {
   it('grampeia no prazo máximo a posição fixa que passa dele', () => {
     // O regex do DTO aceita "9999.2", e planejar depois do jubilamento não
     // quer dizer nada — sem o grampo a projeção cresceria por milhares de
-    // semestres a partir de um PUT válido.
+    // semestres a partir de um PUT válido. A posição é grampeada, mas os
+    // semestres vazios entre o início e a posição fixa são compactados.
     const projecao = montarProjecao(
       estrutura([componente('B', 1)]),
       historico({
@@ -202,9 +203,9 @@ describe('montarProjecao', () => {
       [{ codigo: 'B', nome: 'B', cargaHoraria: 60, semestre: '9999.2' }],
     );
 
-    expect(projecao.conclusaoProjetada).toBe('2029.2');
+    expect(projecao.conclusaoProjetada).toBe('2026.2');
     const ultimo = projecao.semestres[projecao.semestres.length - 1];
-    expect(ultimo.semestre).toBe('2029.2');
+    expect(ultimo.semestre).toBe('2026.2');
     expect(ultimo.componentes.map((c) => c.codigo)).toEqual(['B']);
     expect(ultimo.componentes[0].manual).toBe(true);
   });
@@ -328,7 +329,9 @@ describe('montarProjecao', () => {
     const alocado = projecao.semestres.find((s) =>
       s.componentes.some((c) => c.codigo === 'B'),
     );
-    expect(alocado?.semestre).toBe('2027.2');
+    // O override é respeitado (B tem manual: true), mas o semestre é compactado
+    // porque não há outras matérias preenchendo os semestres intermediários.
+    expect(alocado?.semestre).toBe('2026.2');
     expect(alocado?.componentes[0].manual).toBe(true);
   });
 
@@ -351,5 +354,43 @@ describe('montarProjecao', () => {
 
     expect(projecao.semestres[0].semestre).toBe('2026.2');
     expect(projecao.semestres[0].componentes[0].manual).toBe(false);
+  });
+
+  it('não deixa semestre vazio no meio quando um override pula longe', () => {
+    // Sem nenhum pendente solto pra preencher o caminho, `alocar` empurraria
+    // 2026.2, 2027.1 e 2027.2 vazios até alcançar o override em 2028.1.
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1)]),
+      historico({
+        pendentesObrigatorios: [{ codigo: 'B', nome: 'B', cargaHoraria: 60, matriculado: false }],
+      }),
+      SEM_MARCOS,
+      [{ codigo: 'B', nome: 'B', cargaHoraria: 60, semestre: '2028.1' }],
+    );
+
+    expect(projecao.semestres).toHaveLength(1);
+    expect(projecao.semestres[0].semestre).toBe('2026.2');
+    expect(projecao.semestres[0].componentes[0].codigo).toBe('B');
+  });
+
+  it('renumera dois overrides distantes mantendo a ordem entre eles', () => {
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1), componente('C', 2)]),
+      historico({
+        pendentesObrigatorios: [
+          { codigo: 'B', nome: 'B', cargaHoraria: 60, matriculado: false },
+          { codigo: 'C', nome: 'C', cargaHoraria: 60, matriculado: false },
+        ],
+      }),
+      SEM_MARCOS,
+      [
+        { codigo: 'B', nome: 'B', cargaHoraria: 60, semestre: '2027.1' },
+        { codigo: 'C', nome: 'C', cargaHoraria: 60, semestre: '2029.1' },
+      ],
+    );
+
+    expect(projecao.semestres.map((s) => s.semestre)).toEqual(['2026.2', '2027.1']);
+    expect(projecao.semestres[0].componentes[0].codigo).toBe('B');
+    expect(projecao.semestres[1].componentes[0].codigo).toBe('C');
   });
 });
