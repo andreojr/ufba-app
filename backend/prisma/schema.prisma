@@ -112,6 +112,13 @@ model Turma {
   numero         String
   nome           String
   docente        String?
+  // Token opaco por turma, exigido pra entrar na Turma Virtual (POST em
+  // discente.jsf). Vem só da home do portal, nunca do atestado — ver o
+  // comentário de fetchSchedule em sigaa-engine.service.ts.
+  frontEndIdTurma String? @map("front_end_id_turma")
+  // Id numérico da turma no SIGAA (ex. "393380"). Não usado na Fase 1; capturado
+  // agora porque vem do mesmo parser, e é pré-requisito do feed global da Fase 2.
+  idTurmaSigaa    String? @map("id_turma_sigaa")
   vigenciaInicio String   @map("vigencia_inicio")
   vigenciaFim    String   @map("vigencia_fim")
   // TurmaSlot[] — mesmo formato do CachedTurma que isto substitui.
