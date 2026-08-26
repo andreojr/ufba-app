@@ -4,7 +4,10 @@ import {
   SigaaTurmaVirtualIndisponivelError,
 } from './turma-virtual.service';
 import type { SigaaSession } from './session';
-import { SigaaInvalidCredentialsError, SigaaSessionExpiredError } from './session';
+import {
+  SigaaInvalidCredentialsError,
+  SigaaSessionExpiredError,
+} from './session';
 import { SigaaRateLimitedError } from './http-client';
 import type { SigaaSessionFactory } from './sigaa-engine.service';
 import type { TurmaVirtualRepository } from './turma-virtual.repository';
@@ -70,12 +73,21 @@ describe('TurmaVirtualService', () => {
       codigo: 'MATA58',
     });
 
-    const feed = await service.getFeed('turma-uuid', { login: 'a', senha: 'b' });
+    const feed = await service.getFeed('turma-uuid', {
+      login: 'a',
+      senha: 'b',
+    });
 
     expect(feed).toEqual({
       noticias: [{ id: '1', titulo: 'Início', data: '18/08/2026' }],
       avaliacoes: [{ descricao: 'Prova 1', data: '06/10/2026' }],
-      topicos: [{ titulo: 'Aula 1', periodo: '20/08/2026 - 20/08/2026', conteudoHtml: null }],
+      topicos: [
+        {
+          titulo: 'Aula 1',
+          periodo: '20/08/2026 - 20/08/2026',
+          conteudoHtml: null,
+        },
+      ],
     });
   });
 
@@ -112,7 +124,10 @@ describe('TurmaVirtualService', () => {
   });
 
   it('throws FrontEndIdTurmaAusenteError when there is neither a stored token nor a fresh match', async () => {
-    const service = servicoCom(fakeSession({}), { frontEndIdTurma: null, codigo: 'ENGG54' });
+    const service = servicoCom(fakeSession({}), {
+      frontEndIdTurma: null,
+      codigo: 'ENGG54',
+    });
 
     await expect(
       service.getFeed('turma-uuid', { login: 'a', senha: 'b' }),
@@ -133,23 +148,33 @@ describe('TurmaVirtualService', () => {
       ...FEED_RESPONSES,
       __entrarTurma__: '<html>de volta na home do portal</html>',
     });
-    const service = servicoCom(session, { frontEndIdTurma: null, codigo: 'MATA58' });
+    const service = servicoCom(session, {
+      frontEndIdTurma: null,
+      codigo: 'MATA58',
+    });
 
     await expect(
       service.getFeed('turma-uuid', { login: 'a', senha: 'b' }),
     ).rejects.toThrow(SigaaTurmaVirtualIndisponivelError);
-    expect(session.get).not.toHaveBeenCalledWith('/sigaa/ava/NoticiaTurma/listar.jsf');
+    expect(session.get).not.toHaveBeenCalledWith(
+      '/sigaa/ava/NoticiaTurma/listar.jsf',
+    );
   });
 
   // Um relogin no meio de três GETs concorrentes corre em cima do cookie e do
   // ViewState compartilhados, e deixa a sessão fora da turma.
   it('fetches the three sections sequentially, in order', async () => {
     const session = fakeSession(FEED_RESPONSES);
-    const service = servicoCom(session, { frontEndIdTurma: null, codigo: 'MATA58' });
+    const service = servicoCom(session, {
+      frontEndIdTurma: null,
+      codigo: 'MATA58',
+    });
 
     await service.getFeed('turma-uuid', { login: 'a', senha: 'b' });
 
-    const paths = (session.get as jest.Mock).mock.calls.map(([path]) => path as string);
+    const paths = (session.get as jest.Mock).mock.calls.map(
+      ([path]) => path as string,
+    );
     expect(paths).toEqual([
       '/sigaa/portais/discente/discente.jsf',
       '/sigaa/ava/NoticiaTurma/listar.jsf',
@@ -166,7 +191,10 @@ describe('TurmaVirtualService', () => {
     it('from getFeed', async () => {
       const session = fakeSession(FEED_RESPONSES);
       (session.login as jest.Mock).mockRejectedValue(erro);
-      const service = servicoCom(session, { frontEndIdTurma: 'x', codigo: 'MATA58' });
+      const service = servicoCom(session, {
+        frontEndIdTurma: 'x',
+        codigo: 'MATA58',
+      });
 
       await expect(
         service.getFeed('turma-uuid', { login: 'a', senha: 'b' }),
@@ -176,10 +204,16 @@ describe('TurmaVirtualService', () => {
     it('from getNoticiaDetalhe', async () => {
       const session = fakeSession(FEED_RESPONSES);
       (session.login as jest.Mock).mockRejectedValue(erro);
-      const service = servicoCom(session, { frontEndIdTurma: 'x', codigo: 'MATA58' });
+      const service = servicoCom(session, {
+        frontEndIdTurma: 'x',
+        codigo: 'MATA58',
+      });
 
       await expect(
-        service.getNoticiaDetalhe('turma-uuid', '1', { login: 'a', senha: 'b' }),
+        service.getNoticiaDetalhe('turma-uuid', '1', {
+          login: 'a',
+          senha: 'b',
+        }),
       ).rejects.toBe(erro);
     });
   });

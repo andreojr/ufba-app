@@ -18,7 +18,10 @@ import { SigaaCredentialsDto } from './sigaa-credentials.dto';
  * (então podem ter vindo do render de outro) e nenhum cliente precisa deles —
  * quem entra na Turma Virtual é o backend, pelo id da turma.
  */
-export type TurmaNoHorario = Omit<TurmaSalva, 'frontEndIdTurma' | 'idTurmaSigaa'>;
+export type TurmaNoHorario = Omit<
+  TurmaSalva,
+  'frontEndIdTurma' | 'idTurmaSigaa'
+>;
 
 export type ScheduleResponse =
   | { sincronizado: false }
@@ -29,7 +32,13 @@ export type ScheduleResponse =
     };
 
 function serializarTurma(turma: TurmaSalva): TurmaNoHorario {
-  const { frontEndIdTurma: _fe, idTurmaSigaa: _id, ...resto } = turma;
+  const {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    frontEndIdTurma,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    idTurmaSigaa,
+    ...resto
+  } = turma;
   return resto;
 }
 

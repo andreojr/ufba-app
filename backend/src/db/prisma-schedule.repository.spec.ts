@@ -46,13 +46,14 @@ const periodoLetivo: PeriodoLetivo = {
   fim: '2026-12-19',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function prismaFalso(overrides: { atualizadoEm?: Date } = {}) {
   const upserts: any[] = [];
   const tx = {
     turma: {
       findUnique: jest.fn(async () =>
-        overrides.atualizadoEm ? { id: 'turma-1', atualizadoEm: overrides.atualizadoEm } : null,
+        overrides.atualizadoEm
+          ? { id: 'turma-1', atualizadoEm: overrides.atualizadoEm }
+          : null,
       ),
       // Um id distinto por chave natural: com um id fixo para todas as
       // turmas, o par turmaId↔ordem gravado na matrícula seria
@@ -66,13 +67,15 @@ function prismaFalso(overrides: { atualizadoEm?: Date } = {}) {
     },
     matricula: {
       deleteMany: jest.fn(async () => undefined),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       createMany: jest.fn(async (_args: any) => undefined),
     },
     cachedSchedule: { upsert: jest.fn(async () => undefined) },
   };
   const prisma = {
-    $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) => fn(tx)),
+    $transaction: jest.fn(async (fn: (t: typeof tx) => Promise<void>) =>
+      fn(tx),
+    ),
   } as unknown as PrismaService;
   return { prisma, tx, upserts };
 }
@@ -128,7 +131,9 @@ function matriculasFalsas() {
 
 describe('PrismaScheduleRepository', () => {
   it('não sobrescreve uma turma que outro aluno sincronizou depois', async () => {
-    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T12:00:00Z') });
+    const { prisma, tx } = prismaFalso({
+      atualizadoEm: new Date('2026-08-23T12:00:00Z'),
+    });
 
     await new PrismaScheduleRepository(prisma).salvar(
       'user-1',
@@ -142,7 +147,9 @@ describe('PrismaScheduleRepository', () => {
   });
 
   it('sobrescreve quando o sync é mais recente que o registro', async () => {
-    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
+    const { prisma, tx } = prismaFalso({
+      atualizadoEm: new Date('2026-08-23T09:00:00Z'),
+    });
 
     await new PrismaScheduleRepository(prisma).salvar(
       'user-1',
@@ -156,7 +163,6 @@ describe('PrismaScheduleRepository', () => {
     // escritores concorrentes peguem locks na mesma ordem global), então a
     // ordem das chamadas de upsert não é mais a ordem do atestado.
     const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (chamada: any) =>
         chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
     );
@@ -167,7 +173,9 @@ describe('PrismaScheduleRepository', () => {
   // `Turma` é linha compartilhada, então gravar null por cima apagaria, pra
   // turma inteira, o token que o sync de outro aluno já tinha populado.
   it('não anula o token da turma virtual já gravado quando este aluno não tem o link', async () => {
-    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
+    const { prisma, tx } = prismaFalso({
+      atualizadoEm: new Date('2026-08-23T09:00:00Z'),
+    });
     const semToken = turmasFalsas().map((turma) => ({
       ...turma,
       frontEndIdTurma: null,
@@ -182,7 +190,6 @@ describe('PrismaScheduleRepository', () => {
     );
 
     const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (chamada: any) =>
         chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
     );
@@ -193,7 +200,9 @@ describe('PrismaScheduleRepository', () => {
   });
 
   it('grava o token da turma virtual quando este aluno tem o link', async () => {
-    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
+    const { prisma, tx } = prismaFalso({
+      atualizadoEm: new Date('2026-08-23T09:00:00Z'),
+    });
 
     await new PrismaScheduleRepository(prisma).salvar(
       'user-1',
@@ -203,7 +212,6 @@ describe('PrismaScheduleRepository', () => {
     );
 
     const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (chamada: any) =>
         chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
     );
@@ -240,7 +248,9 @@ describe('PrismaScheduleRepository', () => {
       new Date('2026-08-23T12:00:00Z'),
     );
 
-    expect(tx.matricula.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    expect(tx.matricula.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+    });
     // A fixture é justamente o caso que inverte: `codigo: null` ordena antes
     // de 'MATA37', então as turmas são gravadas na ordem oposta à do
     // atestado. Cada turmaId tem que voltar para o índice em que o SIGAA

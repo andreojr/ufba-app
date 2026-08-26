@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { parseNoticias } from './noticias';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'noticias-listar.html');
-const FIXTURE_VAZIO_PATH = join(__dirname, '__fixtures__', 'noticias-listar-vazio.html');
+const FIXTURE_VAZIO_PATH = join(
+  __dirname,
+  '__fixtures__',
+  'noticias-listar-vazio.html',
+);
 
 const MENU = '<form id="formMenu" action="/sigaa/ava/index.jsf"></form>';
 
@@ -33,8 +37,8 @@ describe('parseNoticias', () => {
   });
 
   it('throws when the page is not a Turma Virtual page at all', () => {
-    expect(() => parseNoticias('<html><body>home do portal</body></html>')).toThrow(
-      /formMenu/,
-    );
+    expect(() =>
+      parseNoticias('<html><body>home do portal</body></html>'),
+    ).toThrow(/formMenu/);
   });
 });

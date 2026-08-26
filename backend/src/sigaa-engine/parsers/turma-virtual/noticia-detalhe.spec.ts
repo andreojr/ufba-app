@@ -18,9 +18,9 @@ describe('parseNoticiaDetalhe', () => {
   });
 
   it('throws if the expected "Visualização de Notícia" legend is missing', () => {
-    expect(() => parseNoticiaDetalhe('<html><body>outra página</body></html>')).toThrow(
-      /Visualização de Notícia/,
-    );
+    expect(() =>
+      parseNoticiaDetalhe('<html><body>outra página</body></html>'),
+    ).toThrow(/Visualização de Notícia/);
   });
 
   // Gotcha 2 da investigação: a casca vazia TEM a legenda e os <label>s — só

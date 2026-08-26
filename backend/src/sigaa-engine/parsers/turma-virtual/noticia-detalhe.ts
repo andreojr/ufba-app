@@ -8,7 +8,11 @@ export interface NoticiaDetalhe {
   conteudoHtml: string;
 }
 
-function textAfterLabel($: cheerio.CheerioAPI, li: Element, label: string): string {
+function textAfterLabel(
+  $: cheerio.CheerioAPI,
+  li: Element,
+  label: string,
+): string {
   const $li = $(li);
   if (!$li.find('label').text().trim().startsWith(label)) {
     return '';
@@ -58,7 +62,9 @@ export function parseNoticiaDetalhe(html: string): NoticiaDetalhe {
   // cheerio's htmlparser2 strips the `<td>` tag but hoists its children.
   // So we extract from the raw string using regex, preserving the rich HTML markup.
   let conteudoHtml = '';
-  const tdMatch = html.match(/<td\s+class="conteudoNoticia"[^>]*>([\s\S]*?)<\/td>/);
+  const tdMatch = html.match(
+    /<td\s+class="conteudoNoticia"[^>]*>([\s\S]*?)<\/td>/,
+  );
   if (tdMatch) {
     conteudoHtml = tdMatch[1].trim();
   }

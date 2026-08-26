@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePostbackAcessarTurma } from './entrar-turma';
 
-const FIXTURE_PATH = join(__dirname, '__fixtures__', 'portal-form-acessar.html');
+const FIXTURE_PATH = join(
+  __dirname,
+  '__fixtures__',
+  'portal-form-acessar.html',
+);
 
 describe('parsePostbackAcessarTurma', () => {
   const html = readFileSync(FIXTURE_PATH, 'utf-8');

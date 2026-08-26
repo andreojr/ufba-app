@@ -12,6 +12,7 @@ jest.mock("@/lib/api", () => ({
   postTurmaVirtual: jest.fn(),
   postNoticiaDetalhe: jest.fn(),
 }));
+const mockVoltar = jest.fn();
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({
     id: "turma-uuid",
@@ -19,7 +20,7 @@ jest.mock("expo-router", () => ({
     codigo: "MATA58",
     docente: "Fulano",
   }),
-  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({ back: mockVoltar, push: jest.fn() }),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -41,6 +42,7 @@ jest.mock("heroui-native", () => {
       Heading: ({ children }: any) => <Text>{children}</Text>,
       Paragraph: ({ children, onPress }: any) => <Text onPress={onPress}>{children}</Text>,
     },
+    useThemeColor: () => "#888888",
   };
 });
 
@@ -121,5 +123,72 @@ describe("TurmaVirtualScreen", () => {
     });
 
     expect(screen.queryByText("Fechar")).toBeNull();
+  });
+
+  // headerShown: false é global — sem AppBar, um iPhone só tem o edge-swipe.
+  it("renders an AppBar whose back button goes back", async () => {
+    postTurmaVirtual.mockResolvedValue(feed());
+
+    await render(<TurmaVirtualScreen />);
+    await screen.findByText("Início do Semestre");
+
+    fireEvent.press(screen.getByTestId("app-bar-back"));
+
+    expect(mockVoltar).toHaveBeenCalled();
+  });
+
+  it("shows a spinner while a notícia is being fetched", async () => {
+    postTurmaVirtual.mockResolvedValue(feed());
+    const { postNoticiaDetalhe } = jest.requireMock("@/lib/api");
+    let resolver: (valor: unknown) => void = () => {};
+    postNoticiaDetalhe.mockReturnValue(
+      new Promise((resolve) => {
+        resolver = resolve;
+      }),
+    );
+
+    await render(<TurmaVirtualScreen />);
+    fireEvent.press(await screen.findByText("Início do Semestre"));
+
+    expect(await screen.findByTestId("noticia-carregando")).toBeTruthy();
+
+    await act(async () => {
+      resolver({
+        titulo: "Início do Semestre",
+        data: "18/08/2026",
+        autor: null,
+        conteudoHtml: "<p>Bem-vindos</p>",
+      });
+    });
+
+    expect(screen.queryByTestId("noticia-carregando")).toBeNull();
+  });
+
+  it("surfaces a visible error when opening a notícia fails", async () => {
+    postTurmaVirtual.mockResolvedValue(feed());
+    const { postNoticiaDetalhe } = jest.requireMock("@/lib/api");
+    postNoticiaDetalhe.mockRejectedValue(new Error("falhou"));
+
+    await render(<TurmaVirtualScreen />);
+    fireEvent.press(await screen.findByText("Início do Semestre"));
+
+    expect(await screen.findByTestId("noticia-erro")).toBeTruthy();
+  });
+
+  // Corpo de notícia é HTML rico e pode ser longo demais pra caber na tela.
+  it("scrolls the notícia overlay", async () => {
+    postTurmaVirtual.mockResolvedValue(feed());
+    const { postNoticiaDetalhe } = jest.requireMock("@/lib/api");
+    postNoticiaDetalhe.mockResolvedValue({
+      titulo: "Início do Semestre",
+      data: "18/08/2026",
+      autor: "Fulano",
+      conteudoHtml: "<p>Bem-vindos</p>",
+    });
+
+    await render(<TurmaVirtualScreen />);
+    fireEvent.press(await screen.findByText("Início do Semestre"));
+
+    expect(await screen.findByTestId("noticia-scroll")).toBeTruthy();
   });
 });

@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { parseAvaliacoes } from './avaliacoes';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'avaliacoes-listar.html');
-const FIXTURE_VAZIO_PATH = join(__dirname, '__fixtures__', 'avaliacoes-listar-vazio.html');
+const FIXTURE_VAZIO_PATH = join(
+  __dirname,
+  '__fixtures__',
+  'avaliacoes-listar-vazio.html',
+);
 
 const MENU = '<form id="formMenu" action="/sigaa/ava/index.jsf"></form>';
 
@@ -26,12 +30,14 @@ describe('parseAvaliacoes', () => {
   it('parses rows even when the real markup omits <tbody>', () => {
     const html = `${MENU}<table class="listing"><tr><th>Descrição</th><th>Data</th></tr><tr><td>Prova 1</td><td>06/10/2026</td></tr></table>`;
 
-    expect(parseAvaliacoes(html)).toEqual([{ descricao: 'Prova 1', data: '06/10/2026' }]);
+    expect(parseAvaliacoes(html)).toEqual([
+      { descricao: 'Prova 1', data: '06/10/2026' },
+    ]);
   });
 
   it('throws when the page is not a Turma Virtual page at all', () => {
-    expect(() => parseAvaliacoes('<html><body>home do portal</body></html>')).toThrow(
-      /formMenu/,
-    );
+    expect(() =>
+      parseAvaliacoes('<html><body>home do portal</body></html>'),
+    ).toThrow(/formMenu/);
   });
 });

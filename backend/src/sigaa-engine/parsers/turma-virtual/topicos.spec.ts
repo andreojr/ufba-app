@@ -3,14 +3,22 @@ import { join } from 'node:path';
 import { parseTopicos } from './topicos';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'timeline.html');
-const FIXTURE_VAZIO_PATH = join(__dirname, '__fixtures__', 'timeline-vazio.html');
+const FIXTURE_VAZIO_PATH = join(
+  __dirname,
+  '__fixtures__',
+  'timeline-vazio.html',
+);
 
 describe('parseTopicos', () => {
   it('parses título, período and conteudoHtml, with null for an empty conteúdo', () => {
     const html = readFileSync(FIXTURE_PATH, 'utf-8');
 
     expect(parseTopicos(html)).toEqual([
-      { titulo: 'Aula 1', periodo: '20/08/2026 - 20/08/2026', conteudoHtml: null },
+      {
+        titulo: 'Aula 1',
+        periodo: '20/08/2026 - 20/08/2026',
+        conteudoHtml: null,
+      },
       {
         titulo: 'Aula 2',
         periodo: '25/08/2026 - 25/08/2026',
@@ -26,8 +34,8 @@ describe('parseTopicos', () => {
   });
 
   it('throws when the page is not a Turma Virtual page at all', () => {
-    expect(() => parseTopicos('<html><body>home do portal</body></html>')).toThrow(
-      /formMenu/,
-    );
+    expect(() =>
+      parseTopicos('<html><body>home do portal</body></html>'),
+    ).toThrow(/formMenu/);
   });
 });

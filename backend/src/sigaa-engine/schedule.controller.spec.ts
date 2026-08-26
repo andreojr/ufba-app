@@ -20,7 +20,11 @@ function horarioFalso(): HorarioSalvo {
         semestre: '2026.2',
       },
     ],
-    periodoLetivo: { semestre: '2026.2', inicio: '2026-08-19', fim: '2026-12-19' },
+    periodoLetivo: {
+      semestre: '2026.2',
+      inicio: '2026-08-19',
+      fim: '2026-12-19',
+    },
     fetchedAt: new Date('2026-08-19T03:35:00Z'),
   };
 }
@@ -34,9 +38,11 @@ describe('ScheduleController', () => {
 
     // The screen's fallback state is a normal outcome, not a failure: a brand
     // new user has simply never pressed the sync button.
-    await expect(new ScheduleController(service).get(USUARIO)).resolves.toEqual({
-      sincronizado: false,
-    });
+    await expect(new ScheduleController(service).get(USUARIO)).resolves.toEqual(
+      {
+        sincronizado: false,
+      },
+    );
   });
 
   it('serialises fetchedAt as an ISO string so the client can show staleness', async () => {
@@ -58,8 +64,13 @@ describe('ScheduleController', () => {
 
     const resposta = await new ScheduleController(service).get(USUARIO);
 
-    const { frontEndIdTurma: _fe, idTurmaSigaa: _id, ...turmaEsperada } =
-      horarioFalso().turmas[0];
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      frontEndIdTurma,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      idTurmaSigaa,
+      ...turmaEsperada
+    } = horarioFalso().turmas[0];
     expect(resposta).toMatchObject({
       turmas: [turmaEsperada],
       periodoLetivo: horarioFalso().periodoLetivo,

@@ -1,10 +1,11 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Spinner, Typography } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppBar } from "@/components/AppBar";
 import { postNoticiaDetalhe, postTurmaVirtual } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
@@ -23,13 +24,22 @@ export default function TurmaVirtualScreen(): JSX.Element {
     codigo: string;
     docente: string;
   }>();
+  const router = useRouter();
   const auth = useAuth();
   // useAuth() returns a discriminated union — accessToken only exists once
-  // signed in — matching ProfessoresScreen's pattern.
-  const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
+  // signed in — matching ProfessoresScreen's pattern. A rota vive dentro do
+  // <Stack.Protected> do _layout, então `signedOut` não chega aqui; o `?? ""`
+  // é só pra satisfazer o tipo, como professor/[siape].tsx já faz.
+  const accessToken = auth.status === "signedIn" ? auth.accessToken : "";
   const insets = useSafeAreaInsets();
+  // RenderHtml precisa da largura em pixels pra dimensionar imagens e tabelas
+  // do HTML rico do professor — a da janela, menos o padding do card.
+  const { width: larguraJanela } = useWindowDimensions();
+  const larguraConteudo = Math.max(larguraJanela - 48, 1);
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
   const [noticiaAberta, setNoticiaAberta] = useState<NoticiaDetalhe | null>(null);
+  const [noticiaCarregando, setNoticiaCarregando] = useState(false);
+  const [noticiaErro, setNoticiaErro] = useState<string | null>(null);
   const montadoRef = useRef(true);
 
   useEffect(
@@ -42,12 +52,6 @@ export default function TurmaVirtualScreen(): JSX.Element {
   const carregar = useCallback(async () => {
     setEstado({ status: "loading" });
     try {
-      if (!accessToken) {
-        if (montadoRef.current) {
-          setEstado({ status: "error", message: "Faça login para abrir a turma virtual." });
-        }
-        return;
-      }
       const credenciais = await getSigaaCredentials();
       if (!credenciais) {
         if (montadoRef.current) {
@@ -76,16 +80,30 @@ export default function TurmaVirtualScreen(): JSX.Element {
 
   const abrirNoticia = useCallback(
     async (noticiaId: string) => {
-      if (!accessToken) {
-        return;
-      }
-      const credenciais = await getSigaaCredentials();
-      if (!credenciais) {
-        return;
-      }
-      const detalhe = await postNoticiaDetalhe(accessToken, id, noticiaId, credenciais);
-      if (montadoRef.current) {
-        setNoticiaAberta(detalhe);
+      setNoticiaErro(null);
+      setNoticiaCarregando(true);
+      try {
+        const credenciais = await getSigaaCredentials();
+        if (!credenciais) {
+          if (montadoRef.current) {
+            setNoticiaErro("Vincule sua conta do SIGAA para abrir esta notícia.");
+          }
+          return;
+        }
+        const detalhe = await postNoticiaDetalhe(accessToken, id, noticiaId, credenciais);
+        if (montadoRef.current) {
+          setNoticiaAberta(detalhe);
+        }
+      } catch (error) {
+        // Sem isto a promise rejeitada só produzia um aviso no console e nada
+        // na tela — o toque na notícia parecia simplesmente não fazer nada.
+        if (montadoRef.current) {
+          setNoticiaErro(describeApiError(error));
+        }
+      } finally {
+        if (montadoRef.current) {
+          setNoticiaCarregando(false);
+        }
       }
     },
     [accessToken, id],
@@ -93,26 +111,35 @@ export default function TurmaVirtualScreen(): JSX.Element {
 
   const fecharNoticia = useCallback(() => {
     setNoticiaAberta(null);
+    setNoticiaErro(null);
   }, []);
+
+  // `headerShown: false` é global no _layout, então cada tela empilhada
+  // desenha a própria AppBar — sem ela um iPhone só tem o edge-swipe pra
+  // voltar. Mesmo padrão de professor/[siape].tsx.
+  const barra = <AppBar title={nome} titleType="h5" onBack={() => router.back()} />;
 
   if (estado.status === "loading") {
     return (
-      <View className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
-        <Spinner />
+      <View className="flex-1">
+        {barra}
+        <View className="mt-10 items-center">
+          <Spinner />
+        </View>
       </View>
     );
   }
 
   if (estado.status === "error") {
     return (
-      <View
-        className="flex-1 items-center justify-center gap-4 p-8"
-        style={{ paddingTop: insets.top }}
-      >
-        <Typography.Paragraph>{estado.message}</Typography.Paragraph>
-        <Button variant="outline" size="sm" onPress={() => void carregar()}>
-          Tentar novamente
-        </Button>
+      <View className="flex-1">
+        {barra}
+        <View className="mt-10 items-center gap-4 px-8">
+          <Typography.Paragraph>{estado.message}</Typography.Paragraph>
+          <Button variant="outline" size="sm" onPress={() => void carregar()}>
+            Tentar novamente
+          </Button>
+        </View>
       </View>
     );
   }
@@ -123,12 +150,20 @@ export default function TurmaVirtualScreen(): JSX.Element {
   const subtitulo = [codigo, docente].filter(Boolean).join(" · ");
 
   return (
-    <View className="flex-1" style={{ paddingTop: insets.top }}>
+    <View className="flex-1">
+      {barra}
       <ScrollView contentContainerClassName="pb-8">
-        <View className="p-6 gap-1">
-          <Typography.Heading>{nome}</Typography.Heading>
-          {subtitulo ? <Typography.Paragraph>{subtitulo}</Typography.Paragraph> : null}
-        </View>
+        {subtitulo ? (
+          <View className="px-6 pb-4">
+            <Typography.Paragraph>{subtitulo}</Typography.Paragraph>
+          </View>
+        ) : null}
+
+        {noticiaErro ? (
+          <View testID="noticia-erro" className="mx-6 mb-4 rounded-2xl bg-danger-soft p-4">
+            <Typography.Paragraph>{noticiaErro}</Typography.Paragraph>
+          </View>
+        ) : null}
 
         {vazio ? (
           <View className="items-center p-8">
@@ -178,7 +213,10 @@ export default function TurmaVirtualScreen(): JSX.Element {
                 <Typography.Paragraph>{topico.titulo}</Typography.Paragraph>
                 <Typography.Paragraph>{topico.periodo}</Typography.Paragraph>
                 {topico.conteudoHtml ? (
-                  <RenderHtml contentWidth={300} source={{ html: topico.conteudoHtml }} />
+                  <RenderHtml
+                    contentWidth={larguraConteudo}
+                    source={{ html: topico.conteudoHtml }}
+                  />
                 ) : null}
               </View>
             ))}
@@ -186,17 +224,33 @@ export default function TurmaVirtualScreen(): JSX.Element {
         ) : null}
       </ScrollView>
 
+      {noticiaCarregando ? (
+        <View
+          testID="noticia-carregando"
+          className="absolute inset-0 items-center justify-center bg-surface-primary/80"
+        >
+          <Spinner />
+        </View>
+      ) : null}
+
       {noticiaAberta ? (
-        <View className="absolute inset-0 bg-surface-primary p-6" style={{ paddingTop: insets.top }}>
-          <Button variant="outline" size="sm" onPress={fecharNoticia}>
-            Fechar
-          </Button>
-          <Typography.Heading>{noticiaAberta.titulo}</Typography.Heading>
-          <Typography.Paragraph>
-            {noticiaAberta.data}
-            {noticiaAberta.autor ? ` · ${noticiaAberta.autor}` : ""}
-          </Typography.Paragraph>
-          <RenderHtml contentWidth={300} source={{ html: noticiaAberta.conteudoHtml }} />
+        <View className="absolute inset-0 bg-surface-primary" style={{ paddingTop: insets.top }}>
+          {/* O corpo é HTML rico do professor e pode passar de uma tela —
+              sem ScrollView o fim da notícia ficava inalcançável. */}
+          <ScrollView testID="noticia-scroll" contentContainerClassName="gap-2 p-6 pb-10">
+            <Button variant="outline" size="sm" onPress={fecharNoticia}>
+              Fechar
+            </Button>
+            <Typography.Heading>{noticiaAberta.titulo}</Typography.Heading>
+            <Typography.Paragraph>
+              {noticiaAberta.data}
+              {noticiaAberta.autor ? ` · ${noticiaAberta.autor}` : ""}
+            </Typography.Paragraph>
+            <RenderHtml
+              contentWidth={larguraConteudo}
+              source={{ html: noticiaAberta.conteudoHtml }}
+            />
+          </ScrollView>
         </View>
       ) : null}
     </View>

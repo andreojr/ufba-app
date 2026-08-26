@@ -39,7 +39,9 @@ interface Credenciais {
 /** A turma nunca sincronizou o token — o cliente deve reorientar pra sincronizar o horário primeiro. */
 export class FrontEndIdTurmaAusenteError extends Error {
   constructor() {
-    super('Esta turma ainda não tem o token da Turma Virtual — sincronize seu horário antes.');
+    super(
+      'Esta turma ainda não tem o token da Turma Virtual — sincronize seu horário antes.',
+    );
     this.name = 'FrontEndIdTurmaAusenteError';
   }
 }
@@ -122,7 +124,10 @@ export class TurmaVirtualService {
     );
   }
 
-  async getFeed(turmaId: string, credenciais: Credenciais): Promise<TurmaVirtualFeed> {
+  async getFeed(
+    turmaId: string,
+    credenciais: Credenciais,
+  ): Promise<TurmaVirtualFeed> {
     const session = this.createSession();
     try {
       await session.login(credenciais);
@@ -163,7 +168,9 @@ export class TurmaVirtualService {
     try {
       await session.login(credenciais);
       await this.entrarNaTurma(session, turmaId);
-      const html = await session.postback(NOTICIA_DETALHE_PATH, { id: noticiaId });
+      const html = await session.postback(NOTICIA_DETALHE_PATH, {
+        id: noticiaId,
+      });
       return parseNoticiaDetalhe(html);
     } catch (error) {
       if (TurmaVirtualService.erroDeDominio(error)) {
