@@ -625,20 +625,20 @@ function CardProjetado({
           </View>
         ) : null}
         {/* Só aparece em posição manual: o aluno arrastou a matéria pra um
-            semestre sem o projetor confirmar que o pré-requisito já foi
-            cursado até lá. Não bloqueia o arrasto — é aviso, não trava,
-            porque o override já venceu (o aluno decidiu) e há casos
-            legítimos (cursar em paralelo, equivalência ainda não
-            registrada) em que a matéria cabe ali mesmo assim. */}
+            semestre em que o pré-requisito checou negativo — não é
+            incerteza, é o resultado da checagem. Não bloqueia o arrasto —
+            é aviso, não trava, porque o override já venceu (o aluno
+            decidiu) e há casos legítimos (cursar em paralelo, equivalência
+            ainda não registrada) em que a matéria cabe ali mesmo assim. */}
         {componente.preRequisitoNaoVerificado ? (
           <View
-            testID={`prerequisito-nao-verificado-${componente.codigo}`}
+            testID={`prerequisito-nao-cursado-${componente.codigo}`}
             className={`px-3 py-1.5 bg-warning-soft ${
               componente.atrasada ? "" : "rounded-t-2xl rounded-b-md"
             }`}
           >
             <Typography.Paragraph type="body-xs" className="text-warning">
-              pré-requisito não confirmado
+              pré-requisito não cursado
             </Typography.Paragraph>
           </View>
         ) : null}
