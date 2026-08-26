@@ -624,9 +624,29 @@ function CardProjetado({
             </Typography.Paragraph>
           </View>
         ) : null}
+        {/* Só aparece em posição manual: o aluno arrastou a matéria pra um
+            semestre sem o projetor confirmar que o pré-requisito já foi
+            cursado até lá. Não bloqueia o arrasto — é aviso, não trava,
+            porque o override já venceu (o aluno decidiu) e há casos
+            legítimos (cursar em paralelo, equivalência ainda não
+            registrada) em que a matéria cabe ali mesmo assim. */}
+        {componente.preRequisitoNaoVerificado ? (
+          <View
+            testID={`prerequisito-nao-verificado-${componente.codigo}`}
+            className={`px-3 py-1.5 bg-warning-soft ${
+              componente.atrasada ? "" : "rounded-t-2xl rounded-b-md"
+            }`}
+          >
+            <Typography.Paragraph type="body-xs" className="text-warning">
+              pré-requisito não confirmado
+            </Typography.Paragraph>
+          </View>
+        ) : null}
         <View
           className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
-            componente.atrasada ? "rounded-t-md rounded-b-2xl" : "rounded-2xl"
+            componente.atrasada || componente.preRequisitoNaoVerificado
+              ? "rounded-t-md rounded-b-2xl"
+              : "rounded-2xl"
           }`}
         >
           <View className="gap-0.5">

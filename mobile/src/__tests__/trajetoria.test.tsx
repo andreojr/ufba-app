@@ -538,6 +538,38 @@ describe("Trajetória", () => {
     expect(screen.getByTestId("atrasada-MATA60").props.className).toContain("bg-danger-soft");
   });
 
+  it("avisa quando a posição manual não confirma o pré-requisito, sem bloquear o card", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(
+      comProjecao([
+        {
+          semestre: "2026.2",
+          componentes: [
+            {
+              codigo: "MATA60",
+              nome: "BANCO DE DADOS",
+              cargaHoraria: 68,
+              periodo: 3,
+              atrasada: false,
+              manual: true,
+              preRequisitoNaoVerificado: true,
+            },
+          ],
+          horasOptativas: 0,
+          horasComplementares: 0,
+        },
+      ]),
+    );
+
+    await render(<TrajetoriaTab />);
+
+    expect(await screen.findByText("pré-requisito não confirmado")).toBeTruthy();
+    // Amarelo de aviso, não vermelho de atrasada — é decisão do aluno, não
+    // um buraco na trajetória.
+    expect(screen.getByTestId("prerequisito-nao-verificado-MATA60").props.className).toContain(
+      "bg-warning-soft",
+    );
+  });
+
   it("resume o atraso acima da linha do tempo", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(
       comProjecao([], {
