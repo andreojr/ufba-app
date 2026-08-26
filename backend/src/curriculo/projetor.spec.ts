@@ -118,6 +118,44 @@ describe('alocar', () => {
     expect(semestres[0].componentes[0].manual).toBe(true);
   });
 
+  it('marca preRequisitoNaoVerificado numa posição fixa cujo pré-requisito ainda não foi cursado', () => {
+    // O aluno arrastou B1 pro 2026.2 sem ter cursado A1 ainda — o override
+    // não passa por avaliarPreRequisito hoje, então isso entrava silencioso.
+    // Código com dígito (A1, não A): o regex de avaliarPreRequisito exige
+    // letras+dígitos, então um código de teste sem dígito nunca "casa" e o
+    // avaliador falha fechado sempre — o que mascararia os dois lados deste
+    // teste se eu usasse 'A'/'B' como no resto do arquivo.
+    const fila = [item('B1', { preRequisito: '(A1)' })];
+    const fixos = new Map([['B1', '2026.2']]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 600);
+
+    expect(semestres[0].componentes[0]).toMatchObject({
+      codigo: 'B1',
+      manual: true,
+      preRequisitoNaoVerificado: true,
+    });
+  });
+
+  it('não marca preRequisitoNaoVerificado numa posição fixa cujo pré-requisito já foi cursado', () => {
+    const fila = [item('B1', { preRequisito: '(A1)' })];
+    const fixos = new Map([['B1', '2026.2']]);
+    const semestres = alocar(fila, fixos, new Set(['A1']), '2026.2', 600);
+
+    expect(semestres[0].componentes[0]).toMatchObject({
+      codigo: 'B1',
+      manual: true,
+      preRequisitoNaoVerificado: false,
+    });
+  });
+
+  it('não marca preRequisitoNaoVerificado numa posição fixa sem pré-requisito', () => {
+    const fila = [item('A1')];
+    const fixos = new Map([['A1', '2026.2']]);
+    const semestres = alocar(fila, fixos, new Set(), '2026.2', 600);
+
+    expect(semestres[0].componentes[0].preRequisitoNaoVerificado).toBe(false);
+  });
+
   it('para no teto duro de semestres em vez de projetar milhares deles', () => {
     // O regex do DTO aceita "9999.2". Sem o teto duro, o laço andaria semestre
     // a semestre até lá — quase 16 mil deles, cada um serializado no

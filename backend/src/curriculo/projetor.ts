@@ -91,7 +91,17 @@ export function alocar(
     // esvazia e o `while` gira para sempre.
     for (let i = 0; i < fixadas.length; i += 1) {
       if (compararSemestres(fixos.get(fixadas[i].codigo)!, semestre) <= 0) {
-        componentes.push(projetar(fixadas[i], { manual: true, naoVerificado: false }));
+        // O override não passa pelo avaliador do jeito que as pendentes
+        // passam — o aluno pode arrastar uma matéria pra antes do
+        // pré-requisito dela. Não é bloqueado (o override já venceu, é a
+        // vontade do aluno), mas o card carrega o mesmo aviso que a válvula
+        // usa pra pendente sem pré-requisito satisfeito.
+        componentes.push(
+          projetar(fixadas[i], {
+            manual: true,
+            naoVerificado: !avaliarPreRequisito(fixadas[i].preRequisito, concluidos),
+          }),
+        );
         capacidade -= fixadas[i].cargaHoraria;
         fixadas.splice(i, 1);
         i -= 1;
