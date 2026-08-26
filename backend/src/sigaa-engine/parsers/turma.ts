@@ -20,6 +20,10 @@ export interface Turma {
   nome: string;
   /** Only the atestado de matrícula carries this — null when parsed off the portal home. */
   docente: string | null;
+  /** Token pra entrar na Turma Virtual — null se a turma nunca teve o link (ver parseTurmaVirtualTokens). */
+  frontEndIdTurma: string | null;
+  /** Id numérico da turma no SIGAA — null pelo mesmo motivo acima. */
+  idTurmaSigaa: string | null;
   /**
    * A coluna "Turma" do atestado ("02", "16"). Junto com semestre e código,
    * identifica a turma em toda a UFBA — é a chave natural que permite dois

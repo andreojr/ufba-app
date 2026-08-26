@@ -10,7 +10,9 @@ import type {
   SigaaCredentials,
   SigaaWebSession,
   Session,
+  NoticiaDetalhe,
   TrajetoriaResponse,
+  TurmaVirtualFeed,
   ValorVoto,
   VizinhosCurricularesResponse,
 } from "./types";
@@ -206,6 +208,45 @@ export async function postScheduleSync(
     timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
     carriesStoredSigaaPassword: true,
   });
+}
+
+/**
+ * Re-scrapes the turma virtual feed (notícias, avaliações, tópicos) for one
+ * turma off SIGAA's AVA mirror. Same cost profile as postScheduleSync — the
+ * scrape chains 3+ sequential server-side requests — hence the same long
+ * timeout and the same verdict-reporting on the stored password.
+ */
+export async function postTurmaVirtual(
+  accessToken: string,
+  turmaId: string,
+  credentials: Pick<SigaaCredentials, "login" | "senha">,
+): Promise<TurmaVirtualFeed> {
+  return request<TurmaVirtualFeed>(`/turmas/${turmaId}/turma-virtual`, {
+    method: "POST",
+    accessToken,
+    body: credentials,
+    timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
+    carriesStoredSigaaPassword: true,
+  });
+}
+
+/** Fetches the full content of one notícia from the turma virtual feed. */
+export async function postNoticiaDetalhe(
+  accessToken: string,
+  turmaId: string,
+  noticiaId: string,
+  credentials: Pick<SigaaCredentials, "login" | "senha">,
+): Promise<NoticiaDetalhe> {
+  return request<NoticiaDetalhe>(
+    `/turmas/${turmaId}/turma-virtual/noticias/${noticiaId}`,
+    {
+      method: "POST",
+      accessToken,
+      body: credentials,
+      timeoutMs: SIGAA_DOCUMENT_TIMEOUT_MS,
+      carriesStoredSigaaPassword: true,
+    },
+  );
 }
 
 /**

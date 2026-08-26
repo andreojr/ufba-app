@@ -13,12 +13,18 @@ function horarioFalso(): HorarioSalvo {
         nome: 'CÁLCULO A',
         numero: '01',
         docente: 'DR. ALGUEM',
+        frontEndIdTurma: null,
+        idTurmaSigaa: null,
         slots: [],
         vigencia: { inicio: '2026-08-19', fim: '2026-12-19' },
         semestre: '2026.2',
       },
     ],
-    periodoLetivo: { semestre: '2026.2', inicio: '2026-08-19', fim: '2026-12-19' },
+    periodoLetivo: {
+      semestre: '2026.2',
+      inicio: '2026-08-19',
+      fim: '2026-12-19',
+    },
     fetchedAt: new Date('2026-08-19T03:35:00Z'),
   };
 }
@@ -32,9 +38,11 @@ describe('ScheduleController', () => {
 
     // The screen's fallback state is a normal outcome, not a failure: a brand
     // new user has simply never pressed the sync button.
-    await expect(new ScheduleController(service).get(USUARIO)).resolves.toEqual({
-      sincronizado: false,
-    });
+    await expect(new ScheduleController(service).get(USUARIO)).resolves.toEqual(
+      {
+        sincronizado: false,
+      },
+    );
   });
 
   it('serialises fetchedAt as an ISO string so the client can show staleness', async () => {
@@ -56,10 +64,31 @@ describe('ScheduleController', () => {
 
     const resposta = await new ScheduleController(service).get(USUARIO);
 
+    const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      frontEndIdTurma,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      idTurmaSigaa,
+      ...turmaEsperada
+    } = horarioFalso().turmas[0];
     expect(resposta).toMatchObject({
-      turmas: horarioFalso().turmas,
+      turmas: [turmaEsperada],
       periodoLetivo: horarioFalso().periodoLetivo,
     });
+  });
+
+  // Tokens opacos de sessão do SIGAA, numa linha Turma compartilhada entre
+  // alunos: nenhum cliente precisa deles, então não viajam no payload.
+  it('does not leak the Turma Virtual tokens in the response', async () => {
+    const service = {
+      getCached: jest.fn(async () => horarioFalso()),
+      sync: jest.fn(),
+    } as unknown as ScheduleService;
+
+    const resposta = await new ScheduleController(service).get(USUARIO);
+
+    expect(JSON.stringify(resposta)).not.toContain('frontEndIdTurma');
+    expect(JSON.stringify(resposta)).not.toContain('idTurmaSigaa');
   });
 
   it('POST schedule/sync delegates to ScheduleService with the authenticated userId', async () => {

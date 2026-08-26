@@ -79,6 +79,11 @@ export function parseTurmasHorario(html: string): TurmaPortal[] {
       codigo,
       nome,
       docente: null,
+      // Este parser (Minhas Turmas) é só diagnóstico e nunca fonte de
+      // horário (ver o comentário de TurmaPortal em parsers/turma.ts) —
+      // parseTurmaVirtualTokens é quem lê o token dessa mesma home.
+      frontEndIdTurma: null,
+      idTurmaSigaa: null,
       slots: buildTurmaSlots(codesText, local),
       vigencia: { inicio, fim },
       semestre: currentSemester,

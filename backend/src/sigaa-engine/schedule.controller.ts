@@ -12,17 +12,39 @@ import { SigaaCredentialsDto } from './sigaa-credentials.dto';
  * TrajetoriaResponse: the screen needs to say how old its data is, and the
  * sync button stays permanent regardless of any future scheduled sync.
  */
+/**
+ * `frontEndIdTurma` e `idTurmaSigaa` ficam fora do payload: são tokens opacos
+ * de sessão do SIGAA, vivem numa linha `Turma` compartilhada entre alunos
+ * (então podem ter vindo do render de outro) e nenhum cliente precisa deles —
+ * quem entra na Turma Virtual é o backend, pelo id da turma.
+ */
+export type TurmaNoHorario = Omit<
+  TurmaSalva,
+  'frontEndIdTurma' | 'idTurmaSigaa'
+>;
+
 export type ScheduleResponse =
   | { sincronizado: false }
   | {
-      turmas: TurmaSalva[];
+      turmas: TurmaNoHorario[];
       periodoLetivo: PeriodoLetivo | null;
       fetchedAt: string;
     };
 
+function serializarTurma(turma: TurmaSalva): TurmaNoHorario {
+  const {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    frontEndIdTurma,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    idTurmaSigaa,
+    ...resto
+  } = turma;
+  return resto;
+}
+
 function serializar(salvo: HorarioSalvo): ScheduleResponse {
   return {
-    turmas: salvo.turmas,
+    turmas: salvo.turmas.map(serializarTurma),
     periodoLetivo: salvo.periodoLetivo,
     fetchedAt: salvo.fetchedAt.toISOString(),
   };

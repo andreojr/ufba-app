@@ -68,6 +68,7 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="pontos-atencao" />
           <Stack.Screen name="ponto-de-atencao/novo" />
           <Stack.Screen name="ponto-de-atencao/[id]" />
+          <Stack.Screen name="turma/[id]" />
           <Stack.Screen
             name="sigaa-webview"
             options={{

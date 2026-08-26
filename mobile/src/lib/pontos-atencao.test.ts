@@ -34,8 +34,10 @@ function ponto(overrides: Partial<PontoAtencao> = {}): PontoAtencao {
 function aula(inicioMin: number): ScheduleBlock {
   return {
     key: `a-${inicioMin}`,
+    turmaId: "turma-engg67",
     codigo: "ENGG67",
     nome: "SISTEMAS DIGITAIS",
+    docente: null,
     inicioMin,
     fimMin: inicioMin + 110,
     predio: "ENG",

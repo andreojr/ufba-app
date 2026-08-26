@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Logger } from '@nestjs/common';
 import {
   SigaaEngineService,
@@ -5,6 +7,16 @@ import {
 } from './sigaa-engine.service';
 import { SigaaInvalidCredentialsError, SigaaSession } from './session';
 import { SigaaRateLimitedError } from './http-client';
+
+const TURMA_VIRTUAL_TABLE = readFileSync(
+  join(
+    __dirname,
+    'parsers',
+    '__fixtures__',
+    'portal-discente-turma-virtual.html',
+  ),
+  'utf-8',
+);
 
 const PORTAL_HTML = `
   <div id="agenda-docente">
@@ -95,6 +107,47 @@ const ATESTADO_SCHEDULE_HTML = `
   </table>
 `;
 
+// Mesma home do atestado, mas com a tabela "Minhas Turmas" que carrega os
+// forms de Turma Virtual (fixture da Task 2) — é dela que fetchSchedule tira
+// frontEndIdTurma/idTurmaSigaa, sem request extra.
+const HOME_WITH_ATESTADO_MENU_AND_TOKENS = `
+  ${HOME_WITH_ATESTADO_MENU}
+  ${TURMA_VIRTUAL_TABLE}
+`;
+
+// Mesmo formato do ATESTADO_SCHEDULE_HTML, mas com uma segunda turma
+// MATRICULADO ("ENGG54") que — na fixture de Turma Virtual acima — é
+// justamente a linha sem link de Turma Virtual (professor não habilitou):
+// serve pra confirmar que o merge não quebra quando não há token
+// correspondente.
+const ATESTADO_SCHEDULE_HTML_WITH_UNMATCHED_TURMA = `
+  <table id="identificacao">
+    <tr><td>Período Letivo:</td><td><strong>2026.2</strong> (19/08/2026 à 19/12/2026)</td></tr>
+  </table>
+  <table id="matriculas">
+    <tbody>
+      <tr>
+        <td class="codigo">MATA58</td>
+        <td><span class="componente">SISTEMAS OPERACIONAIS</span>
+            <span class="docente">BEATRIZ NUNES CAMPELO</span>
+            <span class="local"><b>Local:</b> ENG (ENG)</span></td>
+        <td class="turma">02</td>
+        <td class="status">MATRICULADO</td>
+        <td class="horario">2N34 (19/08/2026 - 19/12/2026)</td>
+      </tr>
+      <tr>
+        <td class="codigo">ENGG54</td>
+        <td><span class="componente">LABORATÓRIO INTEGRADO III-A</span>
+            <span class="docente">FULANO DE TAL</span>
+            <span class="local"><b>Local:</b> ENG (ENG)</span></td>
+        <td class="turma">01</td>
+        <td class="status">MATRICULADO</td>
+        <td class="horario">6N12 (19/08/2026 - 19/12/2026)</td>
+      </tr>
+    </tbody>
+  </table>
+`;
+
 describe('SigaaEngineService.fetchSchedule', () => {
   // Falling back is a warned-about event, so let the tests that trigger it
   // assert the warning instead of letting Nest print it over the test output.
@@ -139,6 +192,35 @@ describe('SigaaEngineService.fetchSchedule', () => {
     expect(turmas).toHaveLength(1);
     expect(turmas[0].codigo).toBe('MATA58');
     expect(turmas[0].docente).toBe('BEATRIZ NUNES CAMPELO');
+  });
+
+  it('merges frontEndIdTurma/idTurmaSigaa from the portal home into the atestado turmas by codigo', async () => {
+    const session = scheduleSession({
+      get: jest.fn().mockResolvedValue(HOME_WITH_ATESTADO_MENU_AND_TOKENS),
+      postback: jest
+        .fn()
+        .mockResolvedValue(ATESTADO_SCHEDULE_HTML_WITH_UNMATCHED_TURMA),
+    });
+    const service = new SigaaEngineService(
+      () => session as unknown as SigaaSession,
+    );
+
+    const { turmas } = await service.fetchSchedule({
+      login: 'user',
+      senha: 'pass',
+    });
+
+    const mata58 = turmas.find((t) => t.codigo === 'MATA58');
+    expect(mata58?.frontEndIdTurma).toBe(
+      'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
+    );
+    expect(mata58?.idTurmaSigaa).toBe('393380');
+
+    // A turma do atestado sem correspondente na home não quebra:
+    const semToken = turmas.find((t) => t.frontEndIdTurma === null);
+    expect(semToken).toBeDefined();
+    expect(semToken?.codigo).toBe('ENGG54');
+    expect(semToken?.idTurmaSigaa).toBeNull();
   });
 
   it('returns the periodo letivo the atestado states', async () => {

@@ -305,6 +305,10 @@ export default function HomeTab(): JSX.Element {
           return {
             key: entry.key,
             dayIndex,
+            turmaId: entry.turmaId,
+            nome: entry.nome,
+            codigo: entry.codigo,
+            docente: entry.docente,
             label: (entry.codigo ?? entry.nome).slice(0, 8),
             color: colors.fg,
             style: {
@@ -556,7 +560,19 @@ export default function HomeTab(): JSX.Element {
                     {blocks.map((block) => (
                       <Pressable
                         key={block.key}
-                        onPress={() => setSelectedDay(block.dayIndex)}
+                        testID={`schedule-block-${block.codigo ?? block.nome}`}
+                        onPress={() => {
+                          setSelectedDay(block.dayIndex);
+                          router.push({
+                            pathname: "/turma/[id]",
+                            params: {
+                              id: block.turmaId,
+                              nome: block.nome,
+                              codigo: block.codigo ?? "",
+                              docente: block.docente ?? "",
+                            },
+                          });
+                        }}
                         style={block.style}
                       >
                         <Typography.Paragraph
@@ -585,8 +601,20 @@ export default function HomeTab(): JSX.Element {
               ) : (
                 itensDoDia.map((item) =>
                   item.kind === "aula" ? (
-                    <View
+                    <Pressable
                       key={item.aula.key}
+                      testID={`day-item-${item.aula.key}`}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/turma/[id]",
+                          params: {
+                            id: item.aula.turmaId,
+                            nome: item.aula.nome,
+                            codigo: item.aula.codigo ?? "",
+                            docente: item.aula.docente ?? "",
+                          },
+                        })
+                      }
                       className="rounded-2xl bg-surface-secondary p-3.5 flex-row items-start gap-3"
                     >
                       <View
@@ -619,7 +647,7 @@ export default function HomeTab(): JSX.Element {
                           />
                         </View>
                       </View>
-                    </View>
+                    </Pressable>
                   ) : (
                     <View
                       key={item.ponto.id}

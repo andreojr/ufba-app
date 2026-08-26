@@ -95,6 +95,38 @@ export type ScheduleResponse =
   | { sincronizado: false }
   | { turmas: Turma[]; periodoLetivo: PeriodoLetivo | null; fetchedAt: string };
 
+export interface NoticiaResumo {
+  id: string;
+  titulo: string;
+  data: string;
+}
+
+export interface Avaliacao {
+  descricao: string;
+  data: string;
+}
+
+export interface Topico {
+  titulo: string;
+  periodo: string;
+  conteudoHtml: string | null;
+}
+
+/** What POST /turmas/:turmaId/turma-virtual answers with — the SIGAA AVA mirror feed. */
+export interface TurmaVirtualFeed {
+  noticias: NoticiaResumo[];
+  avaliacoes: Avaliacao[];
+  topicos: Topico[];
+}
+
+/** What POST /turmas/:turmaId/turma-virtual/noticias/:noticiaId answers with. */
+export interface NoticiaDetalhe {
+  titulo: string;
+  data: string;
+  autor: string | null;
+  conteudoHtml: string;
+}
+
 /** Mirrors the backend's parser output — see backend/src/sigaa-engine/parsers/historico.ts. */
 export interface ComponenteCursado {
   semestre: string;
