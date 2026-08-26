@@ -130,6 +130,10 @@ export function parseAtestadoTurmas(html: string): {
       nome: cell.find('span.componente').text().trim(),
       numero: cell.find('td.turma').text().trim(),
       docente: docente || null,
+      // O atestado não carrega o token de Turma Virtual — quem mescla é o
+      // fetchSchedule, batendo pelo código contra a home do portal.
+      frontEndIdTurma: null,
+      idTurmaSigaa: null,
       slots: buildTurmaSlots(codesText, readLocal(cell)),
       vigencia: { inicio, fim },
       semestre: periodoLetivo?.semestre ?? '',

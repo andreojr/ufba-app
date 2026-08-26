@@ -26,6 +26,8 @@ function turmasFalsas(): Turma[] {
       nome: 'CÁLCULO A',
       numero: '01',
       docente: 'DR. ALGUEM',
+      frontEndIdTurma: null,
+      idTurmaSigaa: null,
       slots: [],
       vigencia: { inicio: '2026-08-19', fim: '2026-12-19' },
       semestre: '2026.2',

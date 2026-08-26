@@ -9,6 +9,7 @@ import {
 import { SigaaRateLimitedError } from './http-client';
 import { Turma } from './parsers/turma';
 import { parseAtestadoTurmas, PeriodoLetivo } from './parsers/atestado-turmas';
+import { parseTurmaVirtualTokens } from './parsers/turma-virtual-tokens';
 import { DiscentePerfil, parseDiscentePerfil } from './parsers/discente-perfil';
 import {
   parseAtestadoMenuPostback,
@@ -90,15 +91,30 @@ export class SigaaEngineService {
         jscook_action: jscookAction,
       });
       const { turmas, periodoLetivo } = parseAtestadoTurmas(atestadoHtml);
+      // portalHtml já foi lido acima (linha 82) pra pegar o perfil — o token
+      // da Turma Virtual mora no mesmo documento, sem request extra.
+      const tokensPorCodigo = new Map(
+        parseTurmaVirtualTokens(portalHtml)
+          .filter((token) => token.codigo)
+          .map((token) => [token.codigo, token]),
+      );
+      const turmasComToken = turmas.map((turma) => {
+        const token = turma.codigo ? tokensPorCodigo.get(turma.codigo) : undefined;
+        return {
+          ...turma,
+          frontEndIdTurma: token?.frontEndIdTurma ?? null,
+          idTurmaSigaa: token?.idTurmaSigaa ?? null,
+        };
+      });
       // Código e número são a identidade compartilhada da turma. Sem eles o
       // horário até renderizaria, mas não se conectaria a turma nenhuma — é
       // o mesmo motivo pelo qual a home do portal deixou de valer. Zero
       // turmas não entra aqui: um atestado lido com sucesso que lista uma
       // grade vazia é uma resposta válida, não uma falha de sincronização.
-      if (turmas.some((turma) => !turma.codigo || !turma.numero)) {
+      if (turmasComToken.some((turma) => !turma.codigo || !turma.numero)) {
         throw new SigaaScheduleIndisponivelError();
       }
-      return { turmas, perfil, periodoLetivo };
+      return { turmas: turmasComToken, perfil, periodoLetivo };
     } catch (error) {
       // Erros de domínio do SIGAA já sabem o próprio status (401 de sessão
       // expirada, 429 de rate limit) e o cliente já sabe reagir a cada um —
