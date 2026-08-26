@@ -117,8 +117,10 @@ export const GRID_TIME_MARKS: number[] = SIGAA_SLOTS.filter(
 
 export interface ScheduleBlock {
   key: string;
+  turmaId: string;
   codigo: string | null;
   nome: string;
+  docente: string | null;
   inicioMin: number;
   fimMin: number;
   predio: string | null;
@@ -158,8 +160,10 @@ export function buildWeekSchedule(turmas: Turma[]): ScheduleBlock[][] {
       }
       rawByDay[dayIndex].push({
         key: `${turma.codigo ?? turma.nome}-${slot.dia}-${slot.inicioMin}`,
+        turmaId: turma.id,
         codigo: turma.codigo,
         nome: turma.nome,
+        docente: turma.docente,
         inicioMin: slot.inicioMin,
         fimMin: slot.fimMin,
         predio: slot.predio,

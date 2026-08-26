@@ -33,6 +33,8 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+const mockRouterPush = jest.fn();
+
 jest.mock("expo-router", () => {
   const react = jest.requireActual("react");
   return {
@@ -45,6 +47,7 @@ jest.mock("expo-router", () => {
         return typeof limpeza === "function" ? limpeza : undefined;
       }, []);
     }),
+    useRouter: () => ({ push: mockRouterPush }),
   };
 });
 
@@ -170,6 +173,7 @@ describe("HomeTab", () => {
     } as any);
     mockedPostScheduleSync.mockClear();
     mockedSavePeriodoCache.mockClear();
+    mockRouterPush.mockClear();
     jest.mocked(useSyncFreshness).mockReturnValue({
       scheduleFetchedAt: null,
       historicoFetchedAt: null,
@@ -271,6 +275,47 @@ describe("HomeTab", () => {
 
     await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
     expect(getByText("2026.2", { exact: false })).toBeTruthy();
+  });
+
+  it("navigates to /turma/[id] when a grid block is pressed", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+    const { getAllByTestId, getAllByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    fireEvent.press(getAllByTestId("schedule-block-MATA37")[0]);
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: "/turma/[id]",
+        params: expect.objectContaining({
+          id: "turma-1",
+          nome: "SISTEMAS OPERACIONAIS",
+          codigo: "MATA37",
+          docente: "BEATRIZ NUNES CAMPELO",
+        }),
+      }),
+    );
+  });
+
+  it("navigates to /turma/[id] when a day-list item is pressed", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+    const { getByTestId, getAllByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    fireEvent.press(getByTestId(/^day-item-MATA37/));
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: "/turma/[id]",
+        params: expect.objectContaining({ id: "turma-1" }),
+      }),
+    );
   });
 
   describe("badge da próxima aula", () => {

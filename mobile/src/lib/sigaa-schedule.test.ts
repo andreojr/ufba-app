@@ -203,6 +203,14 @@ describe("buildWeekSchedule", () => {
     expect(redes?.colorIndex).toBe(0);
     expect(sistemas?.colorIndex).toBe(1);
   });
+
+  it("carries turmaId and docente on every block", () => {
+    const week = buildWeekSchedule(TURMAS);
+    const block = week[1].find((b) => b.codigo === "MATA48");
+
+    expect(block?.turmaId).toBe("turma-2");
+    expect(block?.docente).toBeNull();
+  });
 });
 
 describe("maskWeekToPeriodo", () => {
