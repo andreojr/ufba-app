@@ -1,5 +1,5 @@
 import type { ItemFila } from './fila-de-pendentes';
-import { MAX_SEMESTRES_PROJETADOS, alocar } from './projetor';
+import { MAX_SEMESTRES_PROJETADOS, alocar, compactarSemestres, type SemestreProjetado } from './projetor';
 
 function item(codigo: string, extras: Partial<ItemFila> = {}): ItemFila {
   return {
@@ -175,5 +175,68 @@ describe('alocar', () => {
 
     expect(semestres[0].componentes[0]).toMatchObject({ codigo: 'A', atrasada: true });
     expect(semestres[1].componentes[0]).toMatchObject({ codigo: 'B', atrasada: false });
+  });
+});
+
+function semestreVazio(semestre: string): SemestreProjetado {
+  return { semestre, componentes: [], horasOptativas: 0, horasComplementares: 0 };
+}
+
+function semestreCom(semestre: string, codigo: string): SemestreProjetado {
+  return {
+    semestre,
+    componentes: [
+      {
+        codigo,
+        nome: codigo,
+        cargaHoraria: 60,
+        periodo: 1,
+        atrasada: false,
+        manual: true,
+        preRequisitoNaoVerificado: false,
+      },
+    ],
+    horasOptativas: 0,
+    horasComplementares: 0,
+  };
+}
+
+describe('compactarSemestres', () => {
+  it('não mexe em nada quando não há semestre vazio', () => {
+    const semestres = [semestreCom('2026.2', 'A'), semestreCom('2027.1', 'B')];
+    expect(compactarSemestres(semestres, '2026.2')).toEqual(semestres);
+  });
+
+  it('remove um semestre vazio no meio e desloca os seguintes em -1', () => {
+    const semestres = [semestreCom('2026.2', 'A'), semestreVazio('2027.1'), semestreCom('2027.2', 'B')];
+    const resultado = compactarSemestres(semestres, '2026.2');
+
+    expect(resultado.map((s) => s.semestre)).toEqual(['2026.2', '2027.1']);
+    expect(resultado.map((s) => s.componentes.map((c) => c.codigo))).toEqual([['A'], ['B']]);
+  });
+
+  it('remove múltiplos vazios não contíguos', () => {
+    const semestres = [
+      semestreVazio('2026.2'),
+      semestreCom('2027.1', 'A'),
+      semestreVazio('2027.2'),
+      semestreVazio('2028.1'),
+      semestreCom('2028.2', 'B'),
+    ];
+    const resultado = compactarSemestres(semestres, '2026.2');
+
+    expect(resultado.map((s) => s.semestre)).toEqual(['2026.2', '2027.1']);
+    expect(resultado.map((s) => s.componentes[0].codigo)).toEqual(['A', 'B']);
+  });
+
+  it('some com o último semestre quando ele fica vazio, sem deslocar nada', () => {
+    const semestres = [semestreCom('2026.2', 'A'), semestreVazio('2027.1')];
+    const resultado = compactarSemestres(semestres, '2026.2');
+
+    expect(resultado).toEqual([semestreCom('2026.2', 'A')]);
+  });
+
+  it('lista vazia continua vazia', () => {
+    expect(compactarSemestres([], '2026.2')).toEqual([]);
   });
 });

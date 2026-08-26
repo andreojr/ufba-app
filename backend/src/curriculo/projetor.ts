@@ -159,3 +159,25 @@ export function alocar(
 
   return semestres;
 }
+
+/**
+ * Remove semestres sem nenhum componente e renumera os que sobraram,
+ * fechando o buraco — nunca é exibido um semestre futuro vazio no meio da
+ * linha do tempo. `alocar` já pode produzir isso hoje (uma posição fixa bem
+ * distante, sem pendentes soltos pra preencher o meio caminho), e é
+ * exatamente o caso que o arrasto do grid explora ao mover a última matéria
+ * pra fora de um semestre. Ver
+ * docs/superpowers/specs/2026-08-26-trajetoria-drag-semestre-design.md.
+ */
+export function compactarSemestres(
+  semestres: SemestreProjetado[],
+  primeiroSemestre: string,
+): SemestreProjetado[] {
+  const naoVazios = semestres.filter((semestre) => semestre.componentes.length > 0);
+  let semestre = primeiroSemestre;
+  return naoVazios.map((atual) => {
+    const renomeado = { ...atual, semestre };
+    semestre = proximoSemestre(semestre);
+    return renomeado;
+  });
+}
