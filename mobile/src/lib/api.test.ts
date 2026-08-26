@@ -9,7 +9,9 @@ import {
   postGoogleLogin,
   postSigaaAtestado,
   postSigaaHistorico,
+  postNoticiaDetalhe,
   postTrajetoriaSync,
+  postTurmaVirtual,
 } from "./api";
 import type { Session } from "./types";
 
@@ -401,6 +403,78 @@ describe("getDocente", () => {
     expect(global.fetch).toHaveBeenCalledWith(
       "http://192.168.1.10:3000/docentes/1815041",
       expect.objectContaining({ method: "GET" }),
+    );
+  });
+});
+
+describe("postTurmaVirtual", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts credentials to /turmas/:id/turma-virtual", async () => {
+    const feed = { noticias: [], avaliacoes: [], topicos: [] };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => feed,
+    });
+
+    await expect(
+      postTurmaVirtual("token", "turma-uuid", { login: "a", senha: "b" }),
+    ).resolves.toEqual(feed);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/turmas/turma-uuid/turma-virtual",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ login: "a", senha: "b" }),
+      }),
+    );
+  });
+});
+
+describe("postNoticiaDetalhe", () => {
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = "http://192.168.1.10:3000";
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+    jest.restoreAllMocks();
+  });
+
+  it("posts credentials to /turmas/:id/turma-virtual/noticias/:noticiaId", async () => {
+    const detalhe = { titulo: "x", data: "y", autor: null, conteudoHtml: "<p></p>" };
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => detalhe,
+    });
+
+    await expect(
+      postNoticiaDetalhe("token", "turma-uuid", "noticia-1", { login: "a", senha: "b" }),
+    ).resolves.toEqual(detalhe);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://192.168.1.10:3000/turmas/turma-uuid/turma-virtual/noticias/noticia-1",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({ login: "a", senha: "b" }),
+      }),
     );
   });
 });
