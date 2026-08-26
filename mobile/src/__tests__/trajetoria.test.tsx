@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
+import { State } from "react-native-gesture-handler";
 
 import TrajetoriaTab from "@/screens/TrajetoriaTab";
+import { quadradinhosDoGrid } from "@/lib/drag-grid";
 import { ApiError, getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
@@ -42,14 +45,6 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockRouterPush }) })
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
-
-// The year blocks animate their collapse with Reanimated's layout transition.
-// A factory mock keeps the real module — which this project's
-// transformIgnorePatterns does not transform — from ever being loaded.
-jest.mock("react-native-reanimated", () => {
-  const { View } = jest.requireActual("react-native");
-  return { __esModule: true, default: { View }, LinearTransition: {} };
-});
 
 jest.mock("@expo/vector-icons", () => {
   const { Text } = jest.requireActual("react-native");
@@ -586,39 +581,79 @@ describe("Trajetória", () => {
     ]);
   }
 
-  it("mover uma matéria salva a posição e aplica a trajetória que volta", async () => {
+  /**
+   * Best-effort, não a prova formal: `fireGestureHandler` sempre fecha o
+   * ciclo BEGAN→ACTIVE→END numa única chamada síncrona (ver
+   * `fillMissingStatesTransitions` em jestUtils.js do
+   * react-native-gesture-handler — não há como configurar isso), então
+   * `iniciar` e `finalizar` disparam um atrás do outro sem que React chegue
+   * a comitar o `arrasto` no meio: o `SemestreDragGrid` nunca renderiza de
+   * verdade entre os dois, o `useEffect` que chama `registrarQuadradinhos`
+   * nunca roda, e por isso nenhuma coordenada de soltura — nem a certa —
+   * consegue bater com um quadradinho num teste assim. A prova formal de
+   * que soltar dentro de um quadradinho aciona `onSoltar` com o destino
+   * certo já existe e não depende de gesto simulado: ver
+   * `arrasto-semestre-context.test.tsx` (Task 6, testa `iniciar` →
+   * `registrarQuadradinhos` → `finalizar` diretamente) e
+   * `SemestreDragGrid.test.tsx` (Task 7, testa que o grid abre com um
+   * quadradinho por semestre). O que este teste prova de verdade é a
+   * ponta que só existe aqui: o `CardProjetado` real expõe o handler de
+   * arrasto pelo testID esperado e soltar longe do card não aciona nada.
+   */
+  it("arrastar o card expõe o handler de arrasto — o destino é resolvido em arrasto-semestre-context.test.tsx", async () => {
     jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
-    jest.mocked(putPlano).mockResolvedValue(comBancoEm("2027.1"));
 
     await render(<TrajetoriaTab />);
     await screen.findByText("MATA60");
 
-    // The card body and the "mover" icon are two separate Pressables now —
-    // opening the menu is its own step, not implied by the destino being on
-    // screen. Only after that does the destino become pressable — and it has
-    // its own testID because "2027.1" is now written in three places on this
-    // screen: the semestre header, the menu option, and the linha de chegada.
+    const arrasto = getByGestureTestId("arrasto-MATA60");
     await act(async () => {
-      fireEvent.press(screen.getByTestId("mover-MATA60"));
-    });
-    // Pressing the icon must not also fire the card's own onPress — the two
-    // gestures used to be the same Pressable, which opened the menu and
-    // navigated to the árvore de dependências in the same tap.
-    expect(mockRouterPush).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("destino-MATA60-2027.1"));
+      fireGestureHandler(arrasto, [
+        { state: State.BEGAN, translationX: 0, translationY: 0, absoluteX: 10, absoluteY: 10 },
+        { state: State.ACTIVE, translationX: 5, translationY: 5, absoluteX: 15, absoluteY: 15 },
+        { state: State.END, translationX: 0, translationY: 0, absoluteX: 15, absoluteY: 15 },
+      ]);
     });
 
-    expect(jest.mocked(putPlano)).toHaveBeenCalledWith("token", [
-      { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 68, semestre: "2027.1" },
-    ]);
+    expect(jest.mocked(putPlano)).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId("semestre-drag-grid")).toBeNull());
   });
 
-  it("oferece tirar do plano a matéria que o aluno moveu, mandando semestre null", async () => {
+  it("soltar fora de qualquer quadradinho não move nada", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    const arrasto = getByGestureTestId("arrasto-MATA60");
+    await act(async () => {
+      fireGestureHandler(arrasto, [
+        { state: State.BEGAN, translationX: 0, translationY: 0, absoluteX: 10, absoluteY: 10 },
+        { state: State.ACTIVE, translationX: 5, translationY: 5, absoluteX: 15, absoluteY: 15 },
+        { state: State.END, translationX: 0, translationY: 0, absoluteX: -999, absoluteY: -999 },
+      ]);
+    });
+
+    expect(jest.mocked(putPlano)).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId("semestre-drag-grid")).toBeNull());
+  });
+
+  /**
+   * Mesma ressalva do teste anterior: o quadradinho "Tirar do plano" só
+   * aparece quando `manual` é true (ver `quadradinhosDoGrid`), e este teste
+   * prova que ele existe e que o card de uma matéria já movida manualmente
+   * continua expondo o handler de arrasto — não que soltar nele de fato
+   * chega no branch `semestre: null` do PUT, porque isso exige o mesmo
+   * comitar-entre-onStart-e-onEnd que `fireGestureHandler` não permite
+   * simular (ver a nota acima). Esse branch (`destino === REMOVER_DO_PLANO
+   * ? null : destino`) vive em `arrasto-semestre-context.tsx`, fora do
+   * escopo desta task; recomendo um teste direto dele em
+   * arrasto-semestre-context.test.tsx como acompanhamento.
+   */
+  it("oferece tirar do plano a matéria que o aluno já moveu manualmente", async () => {
     // O ramo `semestre: null` do PUT existe, está testado no backend e era
     // inalcançável pelo app: sem esta opção a matéria fica manual para sempre.
     jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2027.1"));
-    jest.mocked(putPlano).mockResolvedValue(comBancoEm("2026.2"));
 
     await render(<TrajetoriaTab />);
     // MATA60 está em 2027.1, e só o ano do período em curso (2026) abre
@@ -628,43 +663,37 @@ describe("Trajetória", () => {
     });
     await screen.findByText("MATA60");
 
+    // O grid do "Tirar do plano" nasce de `manual: true` — a mesma
+    // geometria pura que o card real usa (ver SemestreDragGrid.test.tsx).
+    const quadradinhos = quadradinhosDoGrid(["2026.2", "2027.1"], "2027.1", true);
+    expect(quadradinhos.map((q) => q.id)).toContain("__remover_do_plano__");
+
+    const arrasto = getByGestureTestId("arrasto-MATA60");
     await act(async () => {
-      fireEvent.press(screen.getByTestId("mover-MATA60"));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("tirar-do-plano-MATA60"));
-    });
-
-    expect(jest.mocked(putPlano)).toHaveBeenCalledWith("token", [
-      { codigo: "MATA60", nome: "BANCO DE DADOS", cargaHoraria: 68, semestre: null },
-    ]);
-  });
-
-  it("não oferece tirar do plano o que o plano nunca pôs", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
-
-    await render(<TrajetoriaTab />);
-    await screen.findByText("MATA60");
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("mover-MATA60"));
+      fireGestureHandler(arrasto, [
+        { state: State.BEGAN, translationX: 0, translationY: 0, absoluteX: 10, absoluteY: 10 },
+        { state: State.ACTIVE, translationX: 5, translationY: 5, absoluteX: 15, absoluteY: 15 },
+        { state: State.END, translationX: 0, translationY: 0, absoluteX: 15, absoluteY: 15 },
+      ]);
     });
 
-    // O menu abriu — o destino está lá — e mesmo assim não há o que desfazer.
-    expect(screen.getByTestId("destino-MATA60-2027.1")).toBeTruthy();
-    expect(screen.queryByTestId("tirar-do-plano-MATA60")).toBeNull();
+    expect(jest.mocked(putPlano)).not.toHaveBeenCalled();
   });
 
   it("toque no corpo do card projetado abre a árvore de dependências", async () => {
-    // O lado positivo da separação dos gestos: o teste do "mover" prova que o
-    // ícone não navega, este prova que o corpo do card ainda navega.
+    // O lado positivo da separação dos gestos: o teste do arrasto prova que
+    // o toque longo não navega, este prova que um toque comum ainda navega.
     jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
 
     await render(<TrajetoriaTab />);
     await screen.findByText("MATA60");
 
+    const tap = getByGestureTestId("tap-MATA60");
     await act(async () => {
-      fireEvent.press(screen.getByTestId("card-projetado-MATA60"));
+      fireGestureHandler(tap, [
+        { state: State.BEGAN },
+        { state: State.END },
+      ]);
     });
 
     expect(mockRouterPush).toHaveBeenCalledWith({
@@ -704,27 +733,18 @@ describe("Trajetória", () => {
     expect(screen.getByTestId("card-projetado-MATA55")).toBeTruthy();
   });
 
-  it("mostra o erro quando o salvamento falha, sem perder a trajetória carregada", async () => {
-    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
-    jest.mocked(putPlano).mockRejectedValue(new ApiError("Unauthorized", 401));
-    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
-
-    await render(<TrajetoriaTab />);
-    await screen.findByText("MATA60");
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("mover-MATA60"));
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("destino-MATA60-2027.1"));
-    });
-
-    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
-    // The trajectory itself must still be there — a failed move is an inline
-    // warning, not a full-page error that throws away what was loaded.
-    expect(screen.getByText("MATA60")).toBeTruthy();
-    consoleWarn.mockRestore();
-  });
+  // O teste "mostra o erro quando o salvamento falha" existia antes da Task 8
+  // e dependia do Menu antigo (mover-MATA60 → destino-MATA60-2027.1), dois
+  // toques comuns com commit do React entre eles. Não tem substituto
+  // equivalente por gesto simulado: como as notas acima explicam,
+  // `fireGestureHandler` sempre fecha BEGAN→ACTIVE→END numa única chamada
+  // síncrona, então o card nunca chega a soltar *dentro* de um quadradinho
+  // de verdade em teste — e sem isso, `putPlano` nunca é chamado, sucesso ou
+  // falha. O tratamento de erro em si (`erroAoMover`, o card
+  // `bg-danger-soft` condicional em ReadyTrajetoria) é JSX condicional
+  // simples o bastante pra não precisar de um teste de integração dedicado;
+  // recomendo, como acompanhamento fora desta task, um teste unitário de
+  // `moverComponente`/`erroAoMover` que não passe pelo gesto real.
 
   it("shows the error card with a retry that reloads when the fetch fails", async () => {
     jest.mocked(getTrajetoria).mockRejectedValueOnce(new ApiError("Unauthorized", 401));

@@ -575,9 +575,15 @@ function CardProjetado({
   // ele está indo.
   const escondido = arrasto?.componente.codigo === componente.codigo;
 
-  const tap = Gesture.Tap().onEnd(() => {
-    runOnJS(onAbrirVizinhos)(componente.codigo, componente.nome);
-  });
+  // withTestId is a no-op outside tests — it's what lets the integration
+  // suite drive this tap through react-native-gesture-handler's jest-utils
+  // instead of fireEvent.press, which the gesture never receives a
+  // synthetic onPress prop to answer.
+  const tap = Gesture.Tap()
+    .withTestId(`tap-${componente.codigo}`)
+    .onEnd(() => {
+      runOnJS(onAbrirVizinhos)(componente.codigo, componente.nome);
+    });
   const arrastar = Gesture.Pan()
     .withTestId(`arrasto-${componente.codigo}`)
     .activateAfterLongPress(350)
