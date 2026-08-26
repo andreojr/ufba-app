@@ -163,6 +163,56 @@ describe('PrismaScheduleRepository', () => {
     expect(chamadaCalculoA?.[0].update.nome).toBe('CÁLCULO A');
   });
 
+  // O link da Turma Virtual só aparece no render da home de quem o tem —
+  // `Turma` é linha compartilhada, então gravar null por cima apagaria, pra
+  // turma inteira, o token que o sync de outro aluno já tinha populado.
+  it('não anula o token da turma virtual já gravado quando este aluno não tem o link', async () => {
+    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
+    const semToken = turmasFalsas().map((turma) => ({
+      ...turma,
+      frontEndIdTurma: null,
+      idTurmaSigaa: null,
+    }));
+
+    await new PrismaScheduleRepository(prisma).salvar(
+      'user-1',
+      semToken,
+      periodoLetivo,
+      new Date('2026-08-23T12:00:00Z'),
+    );
+
+    const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (chamada: any) =>
+        chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
+    );
+    // O resto dos dados continua sendo atualizado — só os tokens ficam fora.
+    expect(chamadaCalculoA?.[0].update.nome).toBe('CÁLCULO A');
+    expect(chamadaCalculoA?.[0].update).not.toHaveProperty('frontEndIdTurma');
+    expect(chamadaCalculoA?.[0].update).not.toHaveProperty('idTurmaSigaa');
+  });
+
+  it('grava o token da turma virtual quando este aluno tem o link', async () => {
+    const { prisma, tx } = prismaFalso({ atualizadoEm: new Date('2026-08-23T09:00:00Z') });
+
+    await new PrismaScheduleRepository(prisma).salvar(
+      'user-1',
+      turmasFalsas(),
+      periodoLetivo,
+      new Date('2026-08-23T12:00:00Z'),
+    );
+
+    const chamadaCalculoA = tx.turma.upsert.mock.calls.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (chamada: any) =>
+        chamada[0].where.semestre_codigo_numero.codigo === 'MATA37',
+    );
+    expect(chamadaCalculoA?.[0].update.frontEndIdTurma).toBe('token-teste');
+    expect(chamadaCalculoA?.[0].update.idTurmaSigaa).toBe('999');
+    // Na criação não há nada a preservar: o valor que chegou vale, nulo ou não.
+    expect(chamadaCalculoA?.[0].create.frontEndIdTurma).toBe('token-teste');
+  });
+
   it('não sobrescreve quando o registro tem exatamente o mesmo instante do sync', async () => {
     // `>=` na guarda é proposital: um empate significa que já existe um
     // registro tão novo quanto este fetch, então não há dado mais recente

@@ -58,10 +58,26 @@ describe('ScheduleController', () => {
 
     const resposta = await new ScheduleController(service).get(USUARIO);
 
+    const { frontEndIdTurma: _fe, idTurmaSigaa: _id, ...turmaEsperada } =
+      horarioFalso().turmas[0];
     expect(resposta).toMatchObject({
-      turmas: horarioFalso().turmas,
+      turmas: [turmaEsperada],
       periodoLetivo: horarioFalso().periodoLetivo,
     });
+  });
+
+  // Tokens opacos de sessão do SIGAA, numa linha Turma compartilhada entre
+  // alunos: nenhum cliente precisa deles, então não viajam no payload.
+  it('does not leak the Turma Virtual tokens in the response', async () => {
+    const service = {
+      getCached: jest.fn(async () => horarioFalso()),
+      sync: jest.fn(),
+    } as unknown as ScheduleService;
+
+    const resposta = await new ScheduleController(service).get(USUARIO);
+
+    expect(JSON.stringify(resposta)).not.toContain('frontEndIdTurma');
+    expect(JSON.stringify(resposta)).not.toContain('idTurmaSigaa');
   });
 
   it('POST schedule/sync delegates to ScheduleService with the authenticated userId', async () => {
