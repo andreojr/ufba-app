@@ -49,11 +49,9 @@ não pode é alternar entre chaves diferentes.
 
 ### Qual é a keystore deste projeto
 
-> **A DEFINIR.** Preencher aqui antes da primeira release pública:
->
-> - Caminho: `___`
-> - Gerenciada por: `EAS` ou `local`
-> - Onde está o backup: `___`
+> - Caminho: gerenciada remotamente pelo EAS (Build Credentials `knbOvxPrzG`, perfil `production`), sem arquivo local até hoje.
+> - Gerenciada por: `EAS`
+> - Onde está o backup: **A DEFINIR** — ainda não baixado. Rodar `eas credentials` e guardar o arquivo antes da próxima chance de perdê-lo.
 > - Backup conferido em: `___`
 
 **Se for EAS.** O EAS gera e guarda a chave. Baixe o backup uma vez:
@@ -96,21 +94,22 @@ faz a atualização ser rejeitada pelo sistema, sem mensagem útil.
 
 ### 2. Buildar
 
-Com EAS, o perfil precisa pedir APK explicitamente — o padrão é AAB, que só
-serve pra loja:
-
-```json
-{ "build": { "production": { "android": { "buildType": "apk" } } } }
-```
+**Local, sempre — não usar `eas build` (nuvem).** Decisão do André: builds de
+release deste projeto são locais. `eas build` continua existindo só para
+gerar/gerenciar a keystore remota (`eas credentials`) e para builds de
+desenvolvimento (`development`/`preview`), nunca para o APK que vai pro
+GitHub Releases.
 
 ```bash
-eas build --platform android --profile production
+npx expo prebuild --platform android
+cd android && ./gradlew assembleRelease
 ```
 
-O plano grátis dá 15 builds Android por mês.
-
-Alternativa local: `expo prebuild` e depois `./gradlew assembleRelease` em
-`android/`, com a mesma keystore configurada.
+O APK assinado sai em `android/app/build/outputs/apk/release/app-release.apk`.
+Precisa da **mesma keystore** que o EAS já usa (Build Credentials `knbOvxPrzG`
+neste projeto) configurada em `android/gradle.properties` /
+`android/app/build.gradle` — baixe-a uma vez com `eas credentials` (ver acima)
+antes do primeiro build local, e nunca gere uma nova.
 
 ### 3. Publicar no GitHub Releases
 

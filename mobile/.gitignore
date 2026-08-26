@@ -45,3 +45,11 @@ yarn-error.*
 
 # Local run scripts
 run-android.pid
+
+# EAS credentials baixadas via `eas credentials` (keystores + senhas)
+credentials*.json
+/credentials
+
+# APKs de build local/EAS — vão pro GitHub Releases, não pro repo (ver
+# docs/reference/release.md)
+*.apk
