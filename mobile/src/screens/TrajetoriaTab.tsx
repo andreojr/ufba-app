@@ -1,10 +1,13 @@
 import { useRouter } from "expo-router";
-import { Button, Menu, Typography, useThemeColor } from "heroui-native";
+import { Button, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
 import { Pressable, ScrollView, View } from "react-native";
-import Animated, { LinearTransition } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { LinearTransition, runOnJS } from "react-native-reanimated";
 
 import { AppIcon } from "@/components/AppIcon";
+import { SemestreDragGrid } from "@/components/SemestreDragGrid";
+import { ArrastoSemestreProvider, useArrastoSemestre } from "@/lib/arrasto-semestre-context";
 import { describeApiError } from "@/lib/api-errors";
 import { getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -270,7 +273,7 @@ function ReadyTrajetoria({
   const desatualizado = historicoDesatualizado(historico.cursados, fimDoPeriodo, new Date());
 
   return (
-    <>
+    <ArrastoSemestreProvider onSoltar={onMover}>
       {/* The plain "sincronizado em" line is gone — that freshness now lives
           on Início's badge, fed by every screen that reads the histórico
           (see sync-freshness-context). Only the actionable nudge survives
@@ -325,12 +328,11 @@ function ReadyTrajetoria({
         anos={anos}
         desatualizado={desatualizado}
         marcos={marcos}
-        semestresProjetados={projecao?.semestres.map((semestre) => semestre.semestre) ?? []}
         conclusaoProjetada={projecao?.conclusaoProjetada ?? null}
         onAbrirVizinhos={onAbrirVizinhos}
-        onMover={onMover}
       />
-    </>
+      <SemestreDragGrid semestresProjetados={projecao?.semestres.map((semestre) => semestre.semestre) ?? []} />
+    </ArrastoSemestreProvider>
   );
 }
 
@@ -349,18 +351,14 @@ function LinhaDoTempo({
   anos,
   desatualizado,
   marcos,
-  semestresProjetados,
   conclusaoProjetada,
   onAbrirVizinhos,
-  onMover,
 }: {
   anos: AnoTrajetoria[];
   desatualizado: boolean;
   marcos: MarcosSemestralizacao | null;
-  semestresProjetados: string[];
   conclusaoProjetada: string | null;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
-  onMover: (componente: ComponenteProjetado, semestre: string | null) => void;
 }): JSX.Element {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
@@ -498,10 +496,8 @@ function LinhaDoTempo({
                       <CardProjetado
                         key={`${semestre.semestre}-${componente.codigo}`}
                         componente={componente}
-                        destinos={semestresProjetados.filter((destino) => destino !== semestre.semestre)}
-                        mutedColor={mutedColor}
+                        semestreAtual={semestre.semestre}
                         onAbrirVizinhos={onAbrirVizinhos}
-                        onMover={onMover}
                       />
                     ))}
                     {semestre.horasOptativas > 0 ? (
@@ -559,56 +555,73 @@ function LinhaDoTempo({
  * período has already passed is a hole in the trajectory, not a pause the
  * student chose. The badge does not name the período it came from — the
  * student is looking at where the matéria goes now, and which período the
- * grade originally wanted it in changes nothing about that. Tapping the card
- * opens the same árvore de dependências a cursado card would.
+ * grade originally wanted it in changes nothing about that. A tap opens the
+ * same árvore de dependências a cursado card would; a long-press-and-drag
+ * opens the semestre grid (SemestreDragGrid) via ArrastoSemestreProvider —
+ * ver docs/superpowers/specs/2026-08-26-trajetoria-drag-semestre-design.md.
  */
 function CardProjetado({
   componente,
-  destinos,
-  mutedColor,
+  semestreAtual,
   onAbrirVizinhos,
-  onMover,
 }: {
   componente: ComponenteProjetado;
-  destinos: string[];
-  mutedColor: string;
+  semestreAtual: string;
   onAbrirVizinhos: (codigo: string, nome: string) => void;
-  onMover: (componente: ComponenteProjetado, semestre: string | null) => void;
 }): JSX.Element {
+  const { arrasto, iniciar, finalizar, fingerX, fingerY } = useArrastoSemestre();
+  // Escondido, não desmontado: o card continua existindo (e continua sendo o
+  // dono do gesto em andamento) enquanto o fantasma no grid mostra pra onde
+  // ele está indo.
+  const escondido = arrasto?.componente.codigo === componente.codigo;
+
+  const tap = Gesture.Tap().onEnd(() => {
+    runOnJS(onAbrirVizinhos)(componente.codigo, componente.nome);
+  });
+  const arrastar = Gesture.Pan()
+    .withTestId(`arrasto-${componente.codigo}`)
+    .activateAfterLongPress(350)
+    .onStart(() => {
+      runOnJS(iniciar)({ componente, semestreAtual });
+    })
+    .onUpdate((event) => {
+      fingerX.value = event.absoluteX;
+      fingerY.value = event.absoluteY;
+    })
+    .onEnd((event) => {
+      runOnJS(finalizar)(event.absoluteX, event.absoluteY);
+    });
+  // Race, não Simultaneous: um toque rápido não deve também começar (e
+  // depois cancelar) um arrasto, e um arrasto que já começou não deve também
+  // navegar quando o dedo finalmente solta.
+  const gesto = Gesture.Race(tap, arrastar);
+
   return (
-    <View className="gap-0.5" style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}>
-      {componente.atrasada ? (
-        <View
-          testID={`atrasada-${componente.codigo}`}
-          className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-danger-soft"
-        >
-          <Typography.Paragraph type="body-xs" className="text-danger">
-            atrasada
-          </Typography.Paragraph>
-        </View>
-      ) : null}
-      {/* A tap on the card body opens the árvore de dependências, same as a
-          cursado card. HeroUI Native's Menu.Trigger just toggles the menu on
-          press — there is no separate long-press gesture — so "mover" gets
-          its own small icon button instead of sharing the card's Pressable:
-          nesting Pressables gives React Native's responder system the two
-          disjoint targets it needs, without one gesture swallowing the
-          other. Only shown when the menu would have something in it: another
-          projected semestre to move into, or the undo for a card the student
-          moved here themselves. */}
-      {/* Its own testID prefix, not `materia-card-`: a reprovada shows up
-          twice on this screen — once as the cursado card, once as the
-          projetada that has to be retaken — and one shared prefix made
-          `getByTestId("materia-card-<codigo>")` throw on the duplicate. */}
-      <Pressable
+    <GestureDetector gesture={gesto}>
+      <View
         testID={`card-projetado-${componente.codigo}`}
-        onPress={() => onAbrirVizinhos(componente.codigo, componente.nome)}
-        className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
-          componente.atrasada ? "rounded-t-md rounded-b-2xl" : "rounded-2xl"
-        }`}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={componente.nome}
+        className={`gap-0.5 ${escondido ? "opacity-0" : ""}`}
+        style={{ minWidth: 140, flexGrow: 1, flexBasis: 140 }}
       >
-        <View className="gap-0.5">
-          <View className="flex-row items-center justify-between gap-1.5">
+        {componente.atrasada ? (
+          <View
+            testID={`atrasada-${componente.codigo}`}
+            className="rounded-t-2xl rounded-b-md px-3 py-1.5 bg-danger-soft"
+          >
+            <Typography.Paragraph type="body-xs" className="text-danger">
+              atrasada
+            </Typography.Paragraph>
+          </View>
+        ) : null}
+        <View
+          className={`flex-1 p-3 justify-between gap-1.5 bg-surface-secondary/40 border border-dashed border-white/20 ${
+            componente.atrasada ? "rounded-t-md rounded-b-2xl" : "rounded-2xl"
+          }`}
+        >
+          <View className="gap-0.5">
             <View className="flex-row items-baseline gap-1.5">
               <Typography.Paragraph type="body-xs" color="muted" className="font-mono">
                 {componente.codigo}
@@ -617,57 +630,11 @@ function CardProjetado({
                 · {componente.cargaHoraria} h
               </Typography.Paragraph>
             </View>
-            {destinos.length > 0 || componente.manual ? (
-              <Menu>
-                <Menu.Trigger asChild>
-                  <Pressable
-                    testID={`mover-${componente.codigo}`}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mover para outro semestre"
-                    hitSlop={8}
-                  >
-                    <AppIcon name="IconCalendarBlank" size={16} color={mutedColor} />
-                  </Pressable>
-                </Menu.Trigger>
-                <Menu.Portal>
-                  <Menu.Overlay />
-                  <Menu.Content presentation="popover" width={220}>
-                    {/* Only when there is somewhere to move to: with just
-                        "Tirar do plano" left, a "Mover para" header would
-                        title a list that isn't there. */}
-                    {destinos.length > 0 ? <Menu.Label>Mover para</Menu.Label> : null}
-                    {destinos.map((destino) => (
-                      <Menu.Item
-                        key={destino}
-                        testID={`destino-${componente.codigo}-${destino}`}
-                        onPress={() => onMover(componente, destino)}
-                      >
-                        <Menu.ItemTitle>{destino}</Menu.ItemTitle>
-                      </Menu.Item>
-                    ))}
-                    {/* The way back. Without it a moved matéria stays `manual`
-                        forever, holding a place the plan may have outgrown —
-                        and the student has no way to hand it back to the
-                        projector. Only offered for what the student actually
-                        moved: there is nothing to undo on a card the plan
-                        never touched. */}
-                    {componente.manual ? (
-                      <Menu.Item
-                        testID={`tirar-do-plano-${componente.codigo}`}
-                        onPress={() => onMover(componente, null)}
-                      >
-                        <Menu.ItemTitle>Tirar do plano</Menu.ItemTitle>
-                      </Menu.Item>
-                    ) : null}
-                  </Menu.Content>
-                </Menu.Portal>
-              </Menu>
-            ) : null}
+            <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
           </View>
-          <Typography.Paragraph weight="medium">{componente.nome}</Typography.Paragraph>
         </View>
-      </Pressable>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 
