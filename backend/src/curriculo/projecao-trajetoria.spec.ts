@@ -342,6 +342,30 @@ describe('montarProjecao', () => {
     expect(projecao.conclusaoProjetada).toBe('2026.1');
   });
 
+  it('não derrama horas de complementares nem de optativas nos semestres projetados', () => {
+    // A seleção de optativas/complementares ainda não existe — derramar
+    // essas horas geraria blocos genéricos que a tela mostraria como se
+    // fossem uma decisão real, quando não são nada. Fica pra quando a
+    // feature de optativas existir.
+    const projecao = montarProjecao(
+      estrutura([componente('B', 1, 120)]),
+      historico({
+        pendentesObrigatorios: [{ codigo: 'B', nome: 'B', cargaHoraria: 120, matriculado: false }],
+        cargaHoraria: {
+          obrigatorias: { exigida: 2400, integralizada: 120, pendente: 2280 },
+          optativas: { exigida: 360, integralizada: 0, pendente: 360 },
+          complementares: { exigida: 240, integralizada: 0, pendente: 240 },
+          total: { exigida: 3000, integralizada: 120, pendente: 2880 },
+        },
+      }),
+      SEM_MARCOS,
+      [],
+    );
+
+    expect(projecao.semestres.every((s) => s.horasOptativas === 0)).toBe(true);
+    expect(projecao.semestres.every((s) => s.horasComplementares === 0)).toBe(true);
+  });
+
   it('ignora override sem semestre — é o pool, não uma posição', () => {
     const projecao = montarProjecao(
       estrutura([componente('B', 1, 120)]),

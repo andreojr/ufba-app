@@ -196,10 +196,16 @@ export function montarProjecao(
     alocar(fila, fixos, codigosConcluidos(historico, marcos), primeiro, teto),
     primeiro,
   );
+  // Zero, não historico.cargaHoraria.*.pendente: sem uma feature de seleção
+  // de optativas, derramar essas horas gera um bloco genérico que a tela
+  // mostra como se fosse uma decisão real — é ruído, não informação. Volta
+  // a usar o pendente de optativas quando essa feature existir;
+  // complementares fica sempre zerado aqui (não há seleção equivalente
+  // planejada pra ela).
   const semestres = derramarHorasGenericas(
     alocados,
-    historico.cargaHoraria.optativas.pendente,
-    historico.cargaHoraria.complementares.pendente,
+    0,
+    0,
     teto,
     primeiro,
   );
