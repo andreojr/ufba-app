@@ -60,7 +60,10 @@ export function useAppUpdate(): EstadoAtualizacao {
   const verificarAgora = useCallback(async () => {
     setVerificando(true);
     try {
-      await checar(true);
+      // Mesmo comportamento em falha da checagem automática (ver o efeito
+      // abaixo): offline, timeout, ou nada publicado — sem toast, `release`
+      // simplesmente não muda. A diferença aqui é só ignorar o intervalo.
+      await checar(true).catch(() => undefined);
     } finally {
       setVerificando(false);
     }
