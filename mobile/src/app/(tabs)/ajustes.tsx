@@ -12,7 +12,7 @@ import {
   useToast,
 } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, View } from "react-native";
 import { SvgUri } from "react-native-svg";
 import { Uniwind, useUniwind } from "uniwind";
 
@@ -21,6 +21,7 @@ import { AppIcon, type AppIconName } from "@/components/AppIcon";
 import { ClassroomIcon } from "@/components/ClassroomIcon";
 import { MoodleIcon } from "@/components/MoodleIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
+import { baixarEInstalar, InstalacaoIndisponivelError } from "@/lib/app-update-install";
 import { ApiError, deleteAccount, getSchedule, getTrajetoria, postScheduleSync } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
@@ -119,12 +120,37 @@ export default function AjustesTab(): JSX.Element {
   const router = useRouter();
   const auth = useAuth();
   const sigaaLink = useSigaaLink();
-  const { versaoInstalada, release, temAtualizacao } = useAppUpdate();
-  const descricaoVersao = temAtualizacao
-    ? `Nova versão disponível: ${release?.latestVersion}`
-    : release
-      ? "Você está na versão mais recente"
-      : null;
+  const { versaoInstalada, release, temAtualizacao, verificando, verificarAgora } = useAppUpdate();
+  const [baixandoAtualizacao, setBaixandoAtualizacao] = useState(false);
+  const [progressoAtualizacao, setProgressoAtualizacao] = useState<number | null>(null);
+  const descricaoVersao = verificando
+    ? "Verificando…"
+    : temAtualizacao
+      ? `Nova versão disponível: ${release?.latestVersion}`
+      : release
+        ? "Você está na versão mais recente"
+        : null;
+
+  // O mesmo caminho de download+instalação do UpdateCard (ver
+  // app-update-install.ts) — só que disparado daqui, do item "Versão do
+  // app", em vez de esperar o card automático aparecer em Início.
+  const instalarAtualizacao = useCallback(async () => {
+    if (!release) {
+      return;
+    }
+    setBaixandoAtualizacao(true);
+    setProgressoAtualizacao(null);
+    try {
+      await baixarEInstalar(release.downloadUrl, release.latestVersion, setProgressoAtualizacao);
+    } catch (erro) {
+      if (erro instanceof InstalacaoIndisponivelError) {
+        void Linking.openURL(release.downloadUrl);
+      }
+    } finally {
+      setBaixandoAtualizacao(false);
+      setProgressoAtualizacao(null);
+    }
+  }, [release]);
   const moodle = useMoodleLink();
   const [mutedColor, segmentForegroundColor, successColor, dangerColor] = useThemeColor([
     "muted",
@@ -811,7 +837,16 @@ export default function AjustesTab(): JSX.Element {
             Sobre
           </Typography.Paragraph>
           <ListGroup>
-            <ListGroup.Item testID="app-version-item" disabled>
+            <ListGroup.Item
+              testID="app-version-item"
+              disabled={verificando || baixandoAtualizacao}
+              // Sem atualização conhecida: o toque verifica agora, ignorando
+              // o intervalo de 1h que a checagem automática respeita — é
+              // justamente o gesto explícito que faz essa espera não fazer
+              // sentido. Com atualização já encontrada: o toque baixa e
+              // instala direto, sem precisar esperar o card de Início.
+              onPress={() => void (temAtualizacao ? instalarAtualizacao() : verificarAgora())}
+            >
               <ListGroup.ItemPrefix>
                 <AppIcon name="IconInfo" size={22} color={mutedColor} />
               </ListGroup.ItemPrefix>
@@ -824,16 +859,28 @@ export default function AjustesTab(): JSX.Element {
                     texto. Silêncio também é a resposta certa quando o app está
                     offline: afirmar "você está na versão mais recente" seria
                     uma garantia que ele não tem como dar. */}
-                {descricaoVersao === null ? null : (
+                {baixandoAtualizacao ? (
+                  <ListGroup.ItemDescription testID="app-version-description">
+                    {progressoAtualizacao === null
+                      ? "Baixando atualização…"
+                      : `Baixando atualização… ${Math.round(progressoAtualizacao * 100)}%`}
+                  </ListGroup.ItemDescription>
+                ) : descricaoVersao === null ? null : (
                   <ListGroup.ItemDescription testID="app-version-description">
                     {descricaoVersao}
                   </ListGroup.ItemDescription>
                 )}
               </ListGroup.ItemContent>
               <ListGroup.ItemSuffix>
-                <Typography.Paragraph type="body-sm" color="muted" className="font-mono">
-                  {versaoInstalada}
-                </Typography.Paragraph>
+                {verificando || baixandoAtualizacao ? (
+                  <Spinner size="sm" />
+                ) : temAtualizacao ? (
+                  <AppIcon name="IconArrowsClockwise" size={18} color={mutedColor} />
+                ) : (
+                  <Typography.Paragraph type="body-sm" color="muted" className="font-mono">
+                    {versaoInstalada}
+                  </Typography.Paragraph>
+                )}
               </ListGroup.ItemSuffix>
             </ListGroup.Item>
           </ListGroup>

@@ -13,7 +13,10 @@ import {
   postTrajetoriaSync,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
+import {
+  CalendarPermissionDeniedError,
+  exportScheduleToDeviceCalendar,
+} from "@/lib/calendar-export";
 import { useMoodleLink } from "@/lib/moodle-link-context";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { clearPeriodoCache } from "@/lib/periodo-cache";
@@ -22,6 +25,7 @@ import {
   forgetSigaaWasLinked,
   getSigaaCredentials,
 } from "@/lib/sigaa-storage";
+import { baixarEInstalar } from "@/lib/app-update-install";
 import { SyncFreshnessProvider } from "@/lib/sync-freshness-context";
 import { useAppUpdate } from "@/lib/use-app-update";
 import { saveThemePreference } from "@/lib/theme-preference";
@@ -31,6 +35,7 @@ import AjustesTab from "@/app/(tabs)/ajustes";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/use-app-update");
+jest.mock("@/lib/app-update-install");
 jest.mock("@/lib/moodle-link-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
@@ -89,7 +94,7 @@ jest.mock("heroui-native", () => {
   // Type argument moved into the value: `React` here comes from jest.requireActual,
   // so it is untyped and TS refuses type arguments on the call itself.
   const TabsContext = React.createContext(
-    {} as { value?: string; onValueChange?: (value: string) => void },
+    {} as { value?: string; onValueChange?: (value: string) => void }
   );
 
   const Tabs = Object.assign(
@@ -133,7 +138,7 @@ jest.mock("heroui-native", () => {
           {typeof children === "string" ? <Text>{children}</Text> : children}
         </TouchableOpacity>
       ),
-      { Label: ({ children }: any) => <Text>{children}</Text> },
+      { Label: ({ children }: any) => <Text>{children}</Text> }
     ),
     Chip: ({ children }: any) => <Text>{children}</Text>,
     Tabs,
@@ -174,7 +179,7 @@ jest.mock("heroui-native", () => {
         Close: ({ children }: any) => <View>{children}</View>,
         Title: ({ children }: any) => <Text>{children}</Text>,
         Description: ({ children }: any) => <Text>{children}</Text>,
-      },
+      }
     ),
     Spinner: () => <Text>Carregando spinner</Text>,
     Typography: {
@@ -218,7 +223,11 @@ jest.mock("react-native-svg", () => {
   // must be carried over explicitly: it's non-enumerable on the real module, so the
   // spread below silently drops it, and Babel's default-import interop then wraps this
   // whole mock object as `Svg`'s value instead of unwrapping `actual.default`.
-  return { ...actual, __esModule: true, SvgUri: ({ uri, testID }: any) => <Text testID={testID} uri={uri} /> };
+  return {
+    ...actual,
+    __esModule: true,
+    SvgUri: ({ uri, testID }: any) => <Text testID={testID} uri={uri} />,
+  };
 });
 
 const mockedUseAuth = jest.mocked(useAuth);
@@ -290,6 +299,8 @@ beforeEach(() => {
     release: null,
     temAtualizacao: false,
     dispensar: jest.fn(),
+    verificando: false,
+    verificarAgora: jest.fn(),
   });
 });
 
@@ -304,7 +315,11 @@ describe("AjustesTab", () => {
     mockUniwindSetTheme.mockClear();
     mockedSaveThemePreference.mockClear();
     mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
-    mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link: jest.fn(), unlink: jest.fn() } as any);
+    mockedUseMoodleLink.mockReturnValue({
+      status: "unlinked",
+      link: jest.fn(),
+      unlink: jest.fn(),
+    } as any);
     mockSignedIn();
   });
 
@@ -312,13 +327,18 @@ describe("AjustesTab", () => {
     return await render(
       <SyncFreshnessProvider>
         <AjustesTab />
-      </SyncFreshnessProvider>,
+      </SyncFreshnessProvider>
     );
   }
 
   describe("vincular Moodle", () => {
     it("enables the Moodle item and starts linking when tapped while unlinked", async () => {
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
       const link = jest.fn().mockResolvedValue({ status: "cancelled" });
       mockedUseMoodleLink.mockReturnValue({ status: "unlinked", link, unlink: jest.fn() } as any);
 
@@ -335,7 +355,12 @@ describe("AjustesTab", () => {
     });
 
     it("shows 'Vinculado' with a check and offers unlink when already linked", async () => {
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
       const unlink = jest.fn().mockResolvedValue(undefined);
       mockedUseMoodleLink.mockReturnValue({
         status: "linked",
@@ -362,9 +387,18 @@ describe("AjustesTab", () => {
   });
 
   it("shows the signed-in user's name and email", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText("Ana Carvalho")).toBeTruthy();
     expect(getByText("ana.carvalho@ufba.br")).toBeTruthy();
@@ -372,9 +406,18 @@ describe("AjustesTab", () => {
   });
 
   it("navigates to the avatar picker when the avatar is pressed", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     await act(async () => {
       fireEvent.press(getByTestId("avatar-touchable"));
@@ -385,26 +428,53 @@ describe("AjustesTab", () => {
 
   it("shows the chosen avatar image when the user has one", async () => {
     mockSignedIn({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/png?seed=abc" });
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByTestId("avatar-image")).toBeTruthy();
   });
 
   it("shows an inviting call-to-action to pick an avatar when the user doesn't have one yet", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId, getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId, getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByTestId("avatar-cta")).toBeTruthy();
     expect(getByText("Experimente")).toBeTruthy();
   });
 
   it("navigates to the avatar picker when the avatar call-to-action is pressed", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     await act(async () => {
       fireEvent.press(getByTestId("avatar-cta"));
@@ -415,17 +485,35 @@ describe("AjustesTab", () => {
 
   it("hides the avatar call-to-action once the user already has an avatar", async () => {
     mockSignedIn({ avatarUrl: "https://api.dicebear.com/9.x/open-peeps/svg?seed=abc" });
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { queryByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { queryByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(queryByTestId("avatar-cta")).toBeNull();
   });
 
   it("shows 'Não vinculado' when the SIGAA account isn't linked", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText("Não vinculado")).toBeTruthy();
   });
@@ -440,7 +528,11 @@ describe("AjustesTab", () => {
       unlink: jest.fn(),
     });
 
-    const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText("Vinculado · senha só neste aparelho")).toBeTruthy();
   });
@@ -455,7 +547,11 @@ describe("AjustesTab", () => {
       unlink: jest.fn(),
     });
 
-    const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText("Vinculado · senha só neste aparelho")).toBeTruthy();
   });
@@ -471,7 +567,9 @@ describe("AjustesTab", () => {
     });
 
     const { getByText, getByTestId, queryByTestId } = await render(
-      <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
     );
 
     expect(getByTestId("vinculo-status-ok")).toBeTruthy();
@@ -490,7 +588,9 @@ describe("AjustesTab", () => {
     });
 
     const { getByText, getByTestId, queryByTestId } = await render(
-      <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
     );
 
     expect(getByText("Senha desatualizada · toque para atualizar")).toBeTruthy();
@@ -500,10 +600,17 @@ describe("AjustesTab", () => {
   });
 
   it("shows the unlinked state as a red X too", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
     const { getByText, getByTestId, queryByTestId } = await render(
-      <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
     );
 
     expect(getByText("Não vinculado")).toBeTruthy();
@@ -513,18 +620,36 @@ describe("AjustesTab", () => {
   });
 
   it("refreshes the user profile when the screen mounts", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(mockRefreshUser).toHaveBeenCalled();
   });
 
   it("shows the matrícula next to the email when the user has one", async () => {
     mockSignedIn({ matricula: "223116037" });
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText(/223116037/)).toBeTruthy();
   });
@@ -535,9 +660,18 @@ describe("AjustesTab", () => {
       curso: "ENGENHARIA DE COMPUTAÇÃO/PGCOMP - SALVADOR - Presencial - MT - BACHARELADO",
       periodoIngresso: "2022.1",
     });
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId, getByText, queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId, getByText, queryByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByTestId("academic-card")).toBeTruthy();
     // Only the course name proper — unit/city/shift details after the slash stay hidden.
@@ -548,26 +682,53 @@ describe("AjustesTab", () => {
   });
 
   it("hides the academic card while no academic info was captured yet", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { queryByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { queryByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(queryByTestId("academic-card")).toBeNull();
   });
 
   it("shows Perfil as the screen title, not Ajustes", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByText, queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByText, queryByText } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     expect(getByText("Perfil")).toBeTruthy();
     expect(queryByText("Ajustes")).toBeNull();
   });
 
   it("navigates to documentos when 'Meus documentos' is pressed", async () => {
-    mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedUseSigaaLink.mockReturnValue({
+      status: "unlinked",
+      jaVinculou: true,
+      link: jest.fn(),
+      unlink: jest.fn(),
+    });
 
-    const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
 
     await act(async () => {
       fireEvent.press(getByTestId("documentos-item"));
@@ -585,7 +746,9 @@ describe("AjustesTab", () => {
     });
 
     const { getByTestId, getByText } = await render(
-      <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
     );
 
     expect(getByTestId("sync-profile-item").props.accessibilityState?.disabled).toBe(true);
@@ -606,11 +769,13 @@ describe("AjustesTab", () => {
     });
 
     const { getByTestId } = await render(
-      <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
     );
 
     expect(getByTestId("sync-profile-item").props.accessibilityValue?.text ?? "").not.toContain(
-      "opacity-50",
+      "opacity-50"
     );
   });
 
@@ -637,7 +802,9 @@ describe("AjustesTab", () => {
 
     it("asks to confirm before erasing anything", async () => {
       const { getByTestId, queryByTestId, getByText } = await render(
-        <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
       );
 
       expect(queryByTestId("confirmar-exclusao-button")).toBeNull();
@@ -656,7 +823,9 @@ describe("AjustesTab", () => {
 
     it("erases nothing when the confirmation is dismissed", async () => {
       const { getByTestId, queryByTestId } = await render(
-        <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
       );
 
       await act(async () => {
@@ -672,7 +841,9 @@ describe("AjustesTab", () => {
 
     it("erases the account once confirmed, then clears the device and signs out", async () => {
       const { getByTestId } = await render(
-        <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
       );
 
       await act(async () => {
@@ -696,7 +867,9 @@ describe("AjustesTab", () => {
       const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
 
       const { getByTestId } = await render(
-        <SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>,
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
       );
 
       await act(async () => {
@@ -722,11 +895,15 @@ describe("AjustesTab", () => {
         unlink: jest.fn(),
       });
 
-      const { getByTestId, getByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId, getByText } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       expect(getByTestId("export-calendar-item").props.accessibilityState?.disabled).toBeFalsy();
       expect(
-        getByText('Cria um calendário "UFBA" no aparelho com suas aulas do semestre'),
+        getByText('Cria um calendário "UFBA" no aparelho com suas aulas do semestre')
       ).toBeTruthy();
     });
 
@@ -738,7 +915,11 @@ describe("AjustesTab", () => {
         unlink: jest.fn(),
       });
 
-      await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       await waitFor(() => expect(jest.mocked(getSchedule)).toHaveBeenCalledWith("token"));
       expect(jest.mocked(getTrajetoria)).toHaveBeenCalledWith("token");
@@ -754,7 +935,11 @@ describe("AjustesTab", () => {
         unlink: jest.fn(),
       });
 
-      const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       expect(getByTestId("export-calendar-item").props.accessibilityState?.disabled).toBeFalsy();
     });
@@ -783,7 +968,11 @@ describe("AjustesTab", () => {
       });
 
       it("exports the cached schedule to the device calendar when pressed, without re-scraping SIGAA", async () => {
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("export-calendar-item"));
@@ -795,9 +984,7 @@ describe("AjustesTab", () => {
             PERIODO_LETIVO
           )
         );
-        expect(mockToastShow).toHaveBeenCalledWith(
-          expect.objectContaining({ variant: "success" })
-        );
+        expect(mockToastShow).toHaveBeenCalledWith(expect.objectContaining({ variant: "success" }));
         expect(mockedPostScheduleSync).not.toHaveBeenCalled();
       });
 
@@ -809,7 +996,11 @@ describe("AjustesTab", () => {
           fetchedAt: new Date().toISOString(),
         });
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("export-calendar-item"));
@@ -830,7 +1021,11 @@ describe("AjustesTab", () => {
           fetchedAt: new Date().toISOString(),
         });
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("export-calendar-item"));
@@ -844,7 +1039,11 @@ describe("AjustesTab", () => {
       it("shows a toast asking to enable calendar access when permission is denied", async () => {
         mockedExportScheduleToDeviceCalendar.mockRejectedValue(new CalendarPermissionDeniedError());
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("export-calendar-item"));
@@ -857,7 +1056,11 @@ describe("AjustesTab", () => {
       it("shows a generic error toast when fetching the schedule fails", async () => {
         mockedGetSchedule.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("export-calendar-item"));
@@ -889,9 +1092,18 @@ describe("AjustesTab", () => {
       });
 
       it("blocks the sync item when the SIGAA account isn't linked", async () => {
-        mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+        mockedUseSigaaLink.mockReturnValue({
+          status: "unlinked",
+          jaVinculou: true,
+          link: jest.fn(),
+          unlink: jest.fn(),
+        });
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         expect(getByTestId("sync-profile-item").props.accessibilityState?.disabled).toBe(true);
       });
@@ -900,7 +1112,11 @@ describe("AjustesTab", () => {
         // Vive em link-account.tsx, junto dos outros checks de segurança e
         // sempre visível, em vez de aparecer aqui uma única vez antes do
         // primeiro sync.
-        const { queryByText } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { queryByText } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await waitFor(() => expect(queryByText(/O que fica guardado/i)).toBeNull());
         expect(queryByText(/CPF, RG e data de nascimento/i)).toBeNull();
@@ -930,7 +1146,11 @@ describe("AjustesTab", () => {
           projecao: null,
         });
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("sync-profile-item"));
@@ -941,8 +1161,14 @@ describe("AjustesTab", () => {
             expect.objectContaining({ variant: "success" })
           )
         );
-        expect(mockedPostScheduleSync).toHaveBeenCalledWith("token", { login: "123", senha: "segredo" });
-        expect(mockedPostTrajetoriaSync).toHaveBeenCalledWith("token", { login: "123", senha: "segredo" });
+        expect(mockedPostScheduleSync).toHaveBeenCalledWith("token", {
+          login: "123",
+          senha: "segredo",
+        });
+        expect(mockedPostTrajetoriaSync).toHaveBeenCalledWith("token", {
+          login: "123",
+          senha: "segredo",
+        });
       });
 
       it("reports a partial failure when only the histórico sync fails", async () => {
@@ -953,7 +1179,11 @@ describe("AjustesTab", () => {
         });
         mockedPostTrajetoriaSync.mockRejectedValue(new ApiError("Falha no histórico", 500));
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("sync-profile-item"));
@@ -969,7 +1199,11 @@ describe("AjustesTab", () => {
         mockedPostScheduleSync.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
         mockedPostTrajetoriaSync.mockRejectedValue(new ApiError("Credenciais inválidas", 401));
 
-        const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+        const { getByTestId } = await render(
+          <SyncFreshnessProvider>
+            <AjustesTab />
+          </SyncFreshnessProvider>
+        );
 
         await act(async () => {
           fireEvent.press(getByTestId("sync-profile-item"));
@@ -984,9 +1218,18 @@ describe("AjustesTab", () => {
   describe("aparência", () => {
     it("shows Claro selected when the theme is light and not following the system", async () => {
       mockedUseUniwind.mockReturnValue({ theme: "light", hasAdaptiveThemes: false });
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
 
-      const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       expect(getByTestId("theme-light-trigger").props.accessibilityState?.selected).toBe(true);
       expect(getByTestId("theme-dark-trigger").props.accessibilityState?.selected).toBe(false);
@@ -994,17 +1237,35 @@ describe("AjustesTab", () => {
 
     it("shows Sistema selected when following the device color scheme", async () => {
       mockedUseUniwind.mockReturnValue({ theme: "dark", hasAdaptiveThemes: true });
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
 
-      const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       expect(getByTestId("theme-system-trigger").props.accessibilityState?.selected).toBe(true);
     });
 
     it("switches to dark and persists the preference when Escuro is pressed", async () => {
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
 
-      const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       await act(async () => {
         fireEvent.press(getByTestId("theme-dark-trigger"));
@@ -1015,9 +1276,18 @@ describe("AjustesTab", () => {
     });
 
     it("switches back to following the system when Sistema is pressed", async () => {
-      mockedUseSigaaLink.mockReturnValue({ status: "unlinked", jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+      mockedUseSigaaLink.mockReturnValue({
+        status: "unlinked",
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
 
-      const { getByTestId } = await render(<SyncFreshnessProvider><AjustesTab /></SyncFreshnessProvider>);
+      const { getByTestId } = await render(
+        <SyncFreshnessProvider>
+          <AjustesTab />
+        </SyncFreshnessProvider>
+      );
 
       await act(async () => {
         fireEvent.press(getByTestId("theme-system-trigger"));
@@ -1044,12 +1314,14 @@ describe("AjustesTab — versão do app", () => {
       release: RELEASE,
       temAtualizacao: false,
       dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora: jest.fn(),
     });
 
     const { getByTestId, getByText } = await render(
       <SyncFreshnessProvider>
         <AjustesTab />
-      </SyncFreshnessProvider>,
+      </SyncFreshnessProvider>
     );
 
     expect(getByTestId("app-version-item")).toBeTruthy();
@@ -1063,12 +1335,14 @@ describe("AjustesTab — versão do app", () => {
       release: RELEASE,
       temAtualizacao: true,
       dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora: jest.fn(),
     });
 
     const { getByText } = await render(
       <SyncFreshnessProvider>
         <AjustesTab />
-      </SyncFreshnessProvider>,
+      </SyncFreshnessProvider>
     );
 
     expect(getByText("Nova versão disponível: 1.1.0")).toBeTruthy();
@@ -1080,12 +1354,14 @@ describe("AjustesTab — versão do app", () => {
       release: null,
       temAtualizacao: false,
       dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora: jest.fn(),
     });
 
     const { getByText, queryByText, queryByTestId } = await render(
       <SyncFreshnessProvider>
         <AjustesTab />
-      </SyncFreshnessProvider>,
+      </SyncFreshnessProvider>
     );
 
     expect(getByText("1.0.0")).toBeTruthy();
@@ -1094,5 +1370,53 @@ describe("AjustesTab — versão do app", () => {
     // E a linha não pode reservar espaço para a descrição que não existe: uma
     // ItemDescription vazia ainda ocupa a linha e desalinha o título.
     expect(queryByTestId("app-version-description")).toBeNull();
+  });
+
+  it("verifica agora ao tocar no item, ignorando o intervalo de 1h", async () => {
+    const verificarAgora = jest.fn().mockResolvedValue(undefined);
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: null,
+      temAtualizacao: false,
+      dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora,
+    });
+
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
+
+    await act(async () => {
+      fireEvent.press(getByTestId("app-version-item"));
+    });
+
+    expect(verificarAgora).toHaveBeenCalledTimes(1);
+  });
+
+  it("baixa e instala direto ao tocar no item quando já há atualização", async () => {
+    jest.mocked(useAppUpdate).mockReturnValue({
+      versaoInstalada: "1.0.0",
+      release: RELEASE,
+      temAtualizacao: true,
+      dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora: jest.fn(),
+    });
+    jest.mocked(baixarEInstalar).mockResolvedValue(undefined);
+
+    const { getByTestId } = await render(
+      <SyncFreshnessProvider>
+        <AjustesTab />
+      </SyncFreshnessProvider>
+    );
+
+    await act(async () => {
+      fireEvent.press(getByTestId("app-version-item"));
+    });
+
+    expect(baixarEInstalar).toHaveBeenCalledWith(RELEASE.downloadUrl, RELEASE.latestVersion, expect.any(Function));
   });
 });

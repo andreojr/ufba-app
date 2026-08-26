@@ -28,16 +28,27 @@ export interface EstadoAtualizacao {
   /** Already discounts a dismissal of this exact version. */
   temAtualizacao: boolean;
   dispensar: () => void;
+  /** True enquanto uma checagem manual (verificarAgora) está em voo. */
+  verificando: boolean;
+  /**
+   * Mesma checagem, mas ignora o intervalo de 1h — o gesto explícito de quem
+   * foi em Perfil apertar "Verificar agora" é justamente o caso em que a
+   * espera passiva de uma hora não faz sentido. Ainda grava o instante da
+   * checagem, então a próxima automática (ao reabrir o app) volta a respeitar
+   * o intervalo normalmente a partir daqui.
+   */
+  verificarAgora: () => Promise<void>;
 }
 
 export function useAppUpdate(): EstadoAtualizacao {
   const [release, setRelease] = useState<AppRelease | null>(null);
   const [dispensada, setDispensada] = useState<string | null>(null);
+  const [verificando, setVerificando] = useState(false);
 
-  const checar = useCallback(async () => {
+  const checar = useCallback(async (ignorarIntervalo = false) => {
     const ultima = await getUltimaChecagem();
     const agora = Date.now();
-    if (ultima !== null && agora - ultima < INTERVALO_CHECAGEM_MS) {
+    if (!ignorarIntervalo && ultima !== null && agora - ultima < INTERVALO_CHECAGEM_MS) {
       return;
     }
     setDispensada(await getVersaoDispensada());
@@ -45,6 +56,15 @@ export function useAppUpdate(): EstadoAtualizacao {
     setRelease(publicado);
     await marcarChecagem(agora);
   }, []);
+
+  const verificarAgora = useCallback(async () => {
+    setVerificando(true);
+    try {
+      await checar(true);
+    } finally {
+      setVerificando(false);
+    }
+  }, [checar]);
 
   useEffect(() => {
     // Every failure path ends here: offline, timeout, 404 (nothing published),
@@ -81,5 +101,5 @@ export function useAppUpdate(): EstadoAtualizacao {
     haAtualizacao(VERSAO_INSTALADA, release.latestVersion) &&
     dispensada !== release.latestVersion;
 
-  return { versaoInstalada: VERSAO_INSTALADA, release, temAtualizacao, dispensar };
+  return { versaoInstalada: VERSAO_INSTALADA, release, temAtualizacao, dispensar, verificando, verificarAgora };
 }

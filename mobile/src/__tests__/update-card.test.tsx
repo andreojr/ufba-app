@@ -47,6 +47,8 @@ function comAtualizacao(overrides = {}) {
     release: RELEASE,
     temAtualizacao: true,
     dispensar: jest.fn(),
+    verificando: false,
+    verificarAgora: jest.fn(),
     ...overrides,
   });
 }
@@ -62,6 +64,8 @@ describe("UpdateCard", () => {
       release: null,
       temAtualizacao: false,
       dispensar: jest.fn(),
+      verificando: false,
+      verificarAgora: jest.fn(),
     });
 
     await render(<UpdateCard />);
@@ -89,8 +93,8 @@ describe("UpdateCard", () => {
       expect(baixarEInstalar).toHaveBeenCalledWith(
         RELEASE.downloadUrl,
         "1.1.0",
-        expect.any(Function),
-      ),
+        expect.any(Function)
+      )
     );
   });
 
