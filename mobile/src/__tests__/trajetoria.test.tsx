@@ -46,6 +46,59 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// A soltura de verdade (BEGAN→ACTIVE→END) sempre fecha num único
+// `fireGestureHandler`, síncrono — sem chance de o React comitar o
+// `arrasto` entre o começo e o fim do gesto (ver as notas nos testes de
+// arrasto mais abaixo). Isso deixa `moverComponente`/`erroAoMover`
+// inalcançáveis por gesto simulado. Este mock mantém o `SemestreDragGrid`
+// real (mesma geometria, mesmos testIDs) e só acrescenta dois Pressables
+// que chamam `iniciar`/`registrarQuadradinhos`/`finalizar` do contexto
+// direto — o mesmo padrão do `Sonda` em arrasto-semestre-context.test.tsx —
+// pra dar um jeito de testar o fio que só existe em TrajetoriaTab: o
+// `onMover` (moverComponente) de verdade ligado ao `onSoltar` do provider.
+jest.mock("@/components/SemestreDragGrid", () => {
+  const real = jest.requireActual("@/components/SemestreDragGrid");
+  const { useArrastoSemestre } = jest.requireActual("@/lib/arrasto-semestre-context");
+  const { Pressable, Text } = jest.requireActual("react-native");
+  function SemestreDragGridComGatilhoDeTeste(props: unknown) {
+    const { iniciar, registrarQuadradinhos, finalizar } = useArrastoSemestre();
+    return (
+      <>
+        <real.SemestreDragGrid {...(props as object)} />
+        <Pressable
+          testID="teste-iniciar-arrasto"
+          onPress={() =>
+            iniciar({
+              componente: {
+                codigo: "MATA60",
+                nome: "BANCO DE DADOS",
+                cargaHoraria: 68,
+                periodo: 4,
+                atrasada: false,
+                manual: false,
+                preRequisitoNaoVerificado: false,
+              },
+              semestreAtual: "2026.2",
+            })
+          }
+        >
+          <Text>iniciar arrasto (teste)</Text>
+        </Pressable>
+        <Pressable
+          testID="teste-soltar-arrasto"
+          onPress={() => {
+            registrarQuadradinhos([{ id: "2027.1", x: 0, y: 0, width: 100, height: 100 }]);
+            finalizar(50, 50);
+          }}
+        >
+          <Text>soltar arrasto (teste)</Text>
+        </Pressable>
+      </>
+    );
+  }
+  return { SemestreDragGrid: SemestreDragGridComGatilhoDeTeste };
+});
+
 jest.mock("@expo/vector-icons", () => {
   const { Text } = jest.requireActual("react-native");
   return { Ionicons: () => <Text /> };
@@ -733,18 +786,42 @@ describe("Trajetória", () => {
     expect(screen.getByTestId("card-projetado-MATA55")).toBeTruthy();
   });
 
-  // O teste "mostra o erro quando o salvamento falha" existia antes da Task 8
-  // e dependia do Menu antigo (mover-MATA60 → destino-MATA60-2027.1), dois
-  // toques comuns com commit do React entre eles. Não tem substituto
-  // equivalente por gesto simulado: como as notas acima explicam,
-  // `fireGestureHandler` sempre fecha BEGAN→ACTIVE→END numa única chamada
-  // síncrona, então o card nunca chega a soltar *dentro* de um quadradinho
-  // de verdade em teste — e sem isso, `putPlano` nunca é chamado, sucesso ou
-  // falha. O tratamento de erro em si (`erroAoMover`, o card
-  // `bg-danger-soft` condicional em ReadyTrajetoria) é JSX condicional
-  // simples o bastante pra não precisar de um teste de integração dedicado;
-  // recomendo, como acompanhamento fora desta task, um teste unitário de
-  // `moverComponente`/`erroAoMover` que não passe pelo gesto real.
+  /**
+   * O teste original ("mostra o erro quando o salvamento falha") dependia
+   * do Menu antigo — dois toques comuns, com commit do React entre eles.
+   * Não tem substituto por gesto simulado: `fireGestureHandler` sempre
+   * fecha BEGAN→ACTIVE→END numa única chamada síncrona, então o card nunca
+   * chega a soltar *dentro* de um quadradinho de verdade em teste (ver as
+   * notas nos testes de arrasto acima). Este teste chega em `moverComponente`
+   * por um caminho mais baixo, sem depender do gesto: os dois Pressables
+   * extras que o mock de `SemestreDragGrid` deste arquivo acrescenta chamam
+   * `iniciar`/`registrarQuadradinhos`/`finalizar` do contexto direto — dois
+   * toques comuns, com commit entre eles, exatamente como o teste original
+   * fazia com o Menu. O que continua real: o `TrajetoriaTab` inteiro
+   * renderizado, o `onMover` (moverComponente) de verdade ligado ao
+   * `onSoltar`, e o `putPlano` de verdade rejeitando.
+   */
+  it("mostra o erro quando o salvamento falha, sem perder a trajetória carregada", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(comBancoEm("2026.2"));
+    jest.mocked(putPlano).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    await screen.findByText("MATA60");
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("teste-iniciar-arrasto"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("teste-soltar-arrasto"));
+    });
+
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+    // The trajectory itself must still be there — a failed move is an inline
+    // warning, not a full-page error that throws away what was loaded.
+    expect(screen.getByText("MATA60")).toBeTruthy();
+    consoleWarn.mockRestore();
+  });
 
   it("shows the error card with a retry that reloads when the fetch fails", async () => {
     jest.mocked(getTrajetoria).mockRejectedValueOnce(new ApiError("Unauthorized", 401));

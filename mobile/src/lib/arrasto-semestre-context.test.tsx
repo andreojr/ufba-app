@@ -3,6 +3,7 @@ import { Pressable, Text } from "react-native";
 import type { JSX } from "react";
 
 import { ArrastoSemestreProvider, useArrastoSemestre } from "./arrasto-semestre-context";
+import { REMOVER_DO_PLANO } from "./drag-grid";
 import type { ComponenteProjetado } from "./types";
 
 const COMPONENTE: ComponenteProjetado = {
@@ -34,6 +35,14 @@ function Sonda(): JSX.Element {
         }
       >
         <Text>registrar</Text>
+      </Pressable>
+      <Pressable
+        testID="registrar-remover"
+        onPress={() =>
+          registrarQuadradinhos([{ id: REMOVER_DO_PLANO, x: 0, y: 0, width: 100, height: 100 }])
+        }
+      >
+        <Text>registrar remover</Text>
       </Pressable>
       <Pressable testID="soltar-dentro" onPress={() => finalizar(50, 50)}>
         <Text>soltar dentro</Text>
@@ -83,6 +92,22 @@ describe("ArrastoSemestreProvider", () => {
     await pressionar("soltar-fora");
 
     expect(onSoltar).not.toHaveBeenCalled();
+    expect(screen.getByTestId("estado")).toHaveTextContent("nenhum");
+  });
+
+  it("chama onSoltar com semestre null quando solta no quadradinho de tirar do plano", async () => {
+    const onSoltar = jest.fn();
+    await render(
+      <ArrastoSemestreProvider onSoltar={onSoltar}>
+        <Sonda />
+      </ArrastoSemestreProvider>,
+    );
+
+    await pressionar("iniciar");
+    await pressionar("registrar-remover");
+    await pressionar("soltar-dentro");
+
+    expect(onSoltar).toHaveBeenCalledWith(COMPONENTE, null);
     expect(screen.getByTestId("estado")).toHaveTextContent("nenhum");
   });
 
