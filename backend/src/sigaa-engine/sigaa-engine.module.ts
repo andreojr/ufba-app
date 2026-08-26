@@ -8,6 +8,7 @@ import {
   HISTORICO_REPOSITORY,
   SCHEDULE_REPOSITORY,
   SIGAA_LINK_REPOSITORY,
+  TURMA_VIRTUAL_REPOSITORY,
   USER_REPOSITORY,
 } from '../db/tokens';
 import type { UserRepository } from '../users/user.repository';
@@ -29,11 +30,19 @@ import {
 import { SigaaLinkRepository, SigaaLinkService } from './sigaa-link.service';
 import { SigaaController } from './sigaa.controller';
 import { TrajetoriaController } from './trajetoria.controller';
+import { TurmaVirtualController } from './turma-virtual.controller';
+import type { TurmaVirtualRepository } from './turma-virtual.repository';
+import { TurmaVirtualService } from './turma-virtual.service';
 import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
 
 @Module({
   imports: [ConfigModule, AuthModule, DatabaseModule, CurriculoModule],
-  controllers: [SigaaController, TrajetoriaController, ScheduleController],
+  controllers: [
+    SigaaController,
+    TrajetoriaController,
+    ScheduleController,
+    TurmaVirtualController,
+  ],
   providers: [
     {
       provide: SIGAA_SESSION_FACTORY,
@@ -88,6 +97,14 @@ import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
         userRepository: UserRepository,
         repository: ScheduleRepository,
       ) => new ScheduleService(engine, userRepository, repository),
+    },
+    {
+      provide: TurmaVirtualService,
+      inject: [SIGAA_SESSION_FACTORY, TURMA_VIRTUAL_REPOSITORY],
+      useFactory: (
+        sessionFactory: SigaaSessionFactory,
+        repository: TurmaVirtualRepository,
+      ) => new TurmaVirtualService(sessionFactory, repository),
     },
   ],
 })

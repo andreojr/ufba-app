@@ -8,6 +8,7 @@ import { PrismaScheduleRepository } from './prisma-schedule.repository';
 import { PrismaDocenteRepository } from './prisma-docente.repository';
 import { PrismaCurriculoRepository } from './prisma-curriculo.repository';
 import { PrismaPontoAtencaoRepository } from './prisma-ponto-atencao.repository';
+import { PrismaTurmaVirtualRepository } from './prisma-turma-virtual.repository';
 import {
   AUDIT_LOGGER,
   CURRICULO_REPOSITORY,
@@ -16,6 +17,7 @@ import {
   PONTO_ATENCAO_REPOSITORY,
   SCHEDULE_REPOSITORY,
   SIGAA_LINK_REPOSITORY,
+  TURMA_VIRTUAL_REPOSITORY,
   USER_REPOSITORY,
 } from './tokens';
 
@@ -68,6 +70,12 @@ import {
       useFactory: (prisma: PrismaService) =>
         new PrismaPontoAtencaoRepository(prisma),
     },
+    {
+      provide: TURMA_VIRTUAL_REPOSITORY,
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) =>
+        new PrismaTurmaVirtualRepository(prisma),
+    },
   ],
   exports: [
     PrismaService,
@@ -79,6 +87,7 @@ import {
     DOCENTE_REPOSITORY,
     CURRICULO_REPOSITORY,
     PONTO_ATENCAO_REPOSITORY,
+    TURMA_VIRTUAL_REPOSITORY,
   ],
 })
 export class DatabaseModule {}
