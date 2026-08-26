@@ -19,6 +19,10 @@ import {
   ComponenteDesconhecidoError,
   CursoDesconhecidoError,
 } from '../curriculo/curriculo.service';
+import {
+  FrontEndIdTurmaAusenteError,
+  SigaaTurmaVirtualIndisponivelError,
+} from './turma-virtual.service';
 
 const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   [SigaaInvalidCredentialsError.name]: HttpStatus.UNAUTHORIZED,
@@ -40,6 +44,12 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   // Same reasoning as CursoDesconhecidoError, one level down: the código
   // itself isn't in the course's active curriculum structure.
   [ComponenteDesconhecidoError.name]: HttpStatus.NOT_FOUND,
+  // A turma nunca sincronizou o token da Turma Virtual — pedir pro cliente
+  // sincronizar o horário primeiro, não é um erro de servidor.
+  [FrontEndIdTurmaAusenteError.name]: HttpStatus.UNPROCESSABLE_ENTITY,
+  // SIGAA respondeu algo que nenhum parser da turma virtual reconheceu —
+  // mesma família de SigaaScheduleIndisponivelError.
+  [SigaaTurmaVirtualIndisponivelError.name]: HttpStatus.SERVICE_UNAVAILABLE,
 };
 
 /**
@@ -64,6 +74,8 @@ const ERROR_CODE_BY_NAME: Record<string, string> = {
   SigaaCredentialsRequiredError,
   SigaaSessionExpiredError,
   SigaaRateLimitedError,
+  FrontEndIdTurmaAusenteError,
+  SigaaTurmaVirtualIndisponivelError,
   Error,
 )
 export class SigaaExceptionFilter implements ExceptionFilter {

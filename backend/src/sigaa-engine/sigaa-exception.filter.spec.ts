@@ -12,6 +12,10 @@ import {
   ComponenteDesconhecidoError,
   CursoDesconhecidoError,
 } from '../curriculo/curriculo.service';
+import {
+  FrontEndIdTurmaAusenteError,
+  SigaaTurmaVirtualIndisponivelError,
+} from './turma-virtual.service';
 
 function fakeHost() {
   const json = jest.fn();
@@ -138,5 +142,21 @@ describe('SigaaExceptionFilter', () => {
 
     expect(logSpy).toHaveBeenCalledWith(error.message, error.stack);
     logSpy.mockRestore();
+  });
+
+  it('maps FrontEndIdTurmaAusenteError to 422', () => {
+    const { host, status } = fakeHost();
+
+    filter.catch(new FrontEndIdTurmaAusenteError(), host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.UNPROCESSABLE_ENTITY);
+  });
+
+  it('maps SigaaTurmaVirtualIndisponivelError to 503', () => {
+    const { host, status } = fakeHost();
+
+    filter.catch(new SigaaTurmaVirtualIndisponivelError(), host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
   });
 });
