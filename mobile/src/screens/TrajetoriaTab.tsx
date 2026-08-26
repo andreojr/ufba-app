@@ -587,12 +587,14 @@ function CardProjetado({
   const arrastar = Gesture.Pan()
     .withTestId(`arrasto-${componente.codigo}`)
     .activateAfterLongPress(350)
-    .onStart(() => {
+    .onStart((event) => {
+      fingerX.set(event.absoluteX);
+      fingerY.set(event.absoluteY);
       runOnJS(iniciar)({ componente, semestreAtual });
     })
     .onUpdate((event) => {
-      fingerX.value = event.absoluteX;
-      fingerY.value = event.absoluteY;
+      fingerX.set(event.absoluteX);
+      fingerY.set(event.absoluteY);
     })
     .onEnd((event) => {
       runOnJS(finalizar)(event.absoluteX, event.absoluteY);
