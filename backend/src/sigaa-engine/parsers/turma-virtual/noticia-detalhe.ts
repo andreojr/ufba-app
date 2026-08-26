@@ -50,7 +50,15 @@ export function parseNoticiaDetalhe(html: string): NoticiaDetalhe {
     }
   });
 
-  const conteudoHtml = ($('td.conteudoNoticia').html() ?? '').trim();
+  // Extract conteudoHtml from the raw HTML before cheerio parses it.
+  // SIGAA nests `<td class="conteudoNoticia">` inside `<li>`, which is invalid HTML.
+  // cheerio's htmlparser2 strips the `<td>` tag but hoists its children.
+  // So we extract from the raw string using regex, preserving the rich HTML markup.
+  let conteudoHtml = '';
+  const tdMatch = html.match(/<td\s+class="conteudoNoticia"[^>]*>([\s\S]*?)<\/td>/);
+  if (tdMatch) {
+    conteudoHtml = tdMatch[1].trim();
+  }
 
   return { titulo, data, autor, conteudoHtml };
 }
