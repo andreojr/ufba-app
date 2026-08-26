@@ -14,10 +14,10 @@ describe("theme-preference", () => {
     jest.clearAllMocks();
   });
 
-  it("defaults to light when nothing is stored", async () => {
+  it("defaults to system when nothing is stored", async () => {
     mockedSecureStore.getItemAsync.mockResolvedValue(null);
 
-    await expect(getThemePreference()).resolves.toBe("light");
+    await expect(getThemePreference()).resolves.toBe("system");
   });
 
   it("returns the stored preference", async () => {
@@ -26,10 +26,10 @@ describe("theme-preference", () => {
     await expect(getThemePreference()).resolves.toBe("dark");
   });
 
-  it("defaults to light when the stored value is not a recognized preference", async () => {
+  it("defaults to system when the stored value is not a recognized preference", async () => {
     mockedSecureStore.getItemAsync.mockResolvedValue("not-a-theme");
 
-    await expect(getThemePreference()).resolves.toBe("light");
+    await expect(getThemePreference()).resolves.toBe("system");
   });
 
   it("persists the preference", async () => {

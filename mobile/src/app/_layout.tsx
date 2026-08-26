@@ -106,7 +106,7 @@ export default function RootLayout(): JSX.Element | null {
   }, []);
 
   // Uniwind starts up following the system color scheme; apply the saved
-  // preference (defaulting to "light") before the first paint the user sees.
+  // preference (defaulting to "system") before the first paint the user sees.
   // Guarded by `isMounted`: in dev, React can mount → unmount → remount this
   // component in quick succession, and this effect's promise can still be
   // in flight when that happens. Without the guard, it resolves against the

@@ -9,13 +9,12 @@ function isThemePreference(value: unknown): value is ThemePreference {
 }
 
 /**
- * Defaults to "light" — the app opens light by default (institutional look),
- * with dark/system available as an opt-in from Ajustes — rather than
- * following the device's color scheme like before the UFBA rebrand.
+ * Defaults to "system" — the app follows the device's color scheme by
+ * default, with light/dark available as an opt-in override from Ajustes.
  */
 export async function getThemePreference(): Promise<ThemePreference> {
   const raw = await SecureStore.getItemAsync(THEME_PREFERENCE_KEY);
-  return isThemePreference(raw) ? raw : "light";
+  return isThemePreference(raw) ? raw : "system";
 }
 
 export async function saveThemePreference(preference: ThemePreference): Promise<void> {
