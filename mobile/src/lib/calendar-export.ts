@@ -1,4 +1,8 @@
-import * as Calendar from "expo-calendar";
+// Entry point `legacy` de propósito, não a raiz do pacote: o expo-calendar 57
+// move a API `*Async` pra cá e deixa na raiz stubs homônimos que lançam na
+// primeira chamada (ver build/legacyWarnings.js). Importar da raiz fazia toda
+// exportação morrer em `ensureCalendarPermission`, a primeira linha da função.
+import * as Calendar from "expo-calendar/legacy";
 import { Platform } from "react-native";
 
 import { parseIsoDate } from "./periodo-letivo";
@@ -94,9 +98,7 @@ function utcInstant(localDay: Date, minutesOfDay: number): Date {
   const date = addDays(localDay, dayOffset);
   const hours = Math.floor(normalizedMinutes / 60);
   const minutes = normalizedMinutes % 60;
-  return new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes)
-  );
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes));
 }
 
 async function ensureCalendarPermission(): Promise<void> {

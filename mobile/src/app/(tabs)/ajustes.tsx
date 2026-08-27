@@ -260,9 +260,21 @@ export default function AjustesTab(): JSX.Element {
         toast.show(
           dangerToast({ label: "Permissão de calendário negada. Habilite o acesso nos ajustes do aparelho." })
         );
-      } else {
-        console.warn("Failed to export the schedule to the device calendar", error);
+      } else if (error instanceof ApiError) {
+        // `readSchedule` faz uma chamada de API de verdade dentro deste try,
+        // então uma ApiError aqui é mesmo sobre a rede.
         toast.show(dangerToast({ label: describeApiError(error) }));
+      } else {
+        // Qualquer outra coisa vem do expo-calendar, que é local e não toca a
+        // rede. `describeApiError` devolveria "Não foi possível conectar ao
+        // servidor." pra tudo que não é ApiError — foi essa mensagem que
+        // mandou procurar a falha no log do servidor, onde nunca houve nada.
+        console.warn("Failed to export the schedule to the device calendar", error);
+        toast.show(
+          dangerToast({
+            label: "Não foi possível exportar para o calendário do aparelho.",
+          }),
+        );
       }
     } finally {
       setIsExportingCalendar(false);

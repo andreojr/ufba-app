@@ -1,10 +1,14 @@
-import * as Calendar from "expo-calendar";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+
+import * as Calendar from "expo-calendar/legacy";
 import { Platform } from "react-native";
 
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "./calendar-export";
 import type { PeriodoLetivo, Turma } from "./types";
 
-jest.mock("expo-calendar", () => ({
+jest.mock("expo-calendar/legacy", () => ({
   requestCalendarPermissionsAsync: jest.fn(),
   getCalendarsAsync: jest.fn(),
   createCalendarAsync: jest.fn(),
@@ -16,6 +20,28 @@ jest.mock("expo-calendar", () => ({
   CalendarAccessLevel: { OWNER: "owner" },
   SourceType: { LOCAL: "local" },
 }));
+
+/**
+ * A quebra que este arquivo não consegue pegar de outra forma.
+ *
+ * O expo-calendar 57 moveu a API `*Async` pro entry point
+ * `expo-calendar/legacy`. Os nomes antigos continuam exportados da raiz do
+ * pacote, mas como stubs que lançam na primeira chamada
+ * (`node_modules/expo-calendar/build/legacyWarnings.js`). Em produção isso
+ * derrubava toda exportação de calendário na primeira linha, e o toast
+ * mostrava "Não foi possível conectar ao servidor." — a exportação nem chega
+ * a tocar a rede.
+ *
+ * Os testes abaixo não viram nada disso: eles substituem o módulo inteiro por
+ * fakes que funcionam, então o caminho de import é a única coisa que resta
+ * pra verificar. Daí esta asserção sobre o próprio código-fonte.
+ */
+it("importa a API do calendário do entry point legacy, não da raiz do pacote", () => {
+  const fonte = readFileSync(join(__dirname, "calendar-export.ts"), "utf-8");
+
+  expect(fonte).toContain('from "expo-calendar/legacy"');
+  expect(fonte).not.toMatch(/from "expo-calendar"/);
+});
 
 const mockedRequestPermissions = jest.mocked(Calendar.requestCalendarPermissionsAsync);
 const mockedGetCalendars = jest.mocked(Calendar.getCalendarsAsync);
