@@ -290,7 +290,7 @@ export default function DocumentosScreen(): JSX.Element {
       {/* Fixed footer, outside the ScrollView — same pattern as
           professor/[siape].tsx's "Fechar" button. */}
       <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
-        <Button variant="danger-soft" onPress={() => router.back()}>
+        <Button variant="tertiary" onPress={() => router.back()}>
           Fechar
         </Button>
       </View>

@@ -212,7 +212,7 @@ export default function VizinhosCurricularesScreen(): JSX.Element {
   return (
     <View className="flex-1 bg-background">
       {/* No onClose here — closing happens through the "Fechar" button pinned
-          at the bottom, the same danger-soft pattern as documentos.tsx and
+          at the bottom, the same `tertiary` pattern as documentos.tsx and
           professor/[siape].tsx. A matéria's name is long and variable, so it
           gets the smaller heading and the whole width. */}
       <AppBar title={nome ?? codigo} titleType="h5" />
@@ -286,7 +286,7 @@ export default function VizinhosCurricularesScreen(): JSX.Element {
       <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
         <Button
           testID="vizinhos-curriculares-fechar"
-          variant="danger-soft"
+          variant="tertiary"
           onPress={() => router.back()}
         >
           Fechar

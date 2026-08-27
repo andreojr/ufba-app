@@ -237,7 +237,7 @@ describe("VizinhosCurricularesScreen", () => {
     });
     expect(mockRouterPush).toHaveBeenCalledTimes(2);
   });
-  it("fecha pelo botão Fechar do rodapé — o mesmo padrão danger-soft das outras telas empilhadas, não um X no header", async () => {
+  it("fecha pelo botão Fechar do rodapé — o mesmo padrão das outras telas empilhadas, não um X no header", async () => {
     mockedGet.mockResolvedValue({
       atual: { codigo: "MATA03", nome: "Cálculo B", situacao: "emCurso" },
       preRequisitos: [],

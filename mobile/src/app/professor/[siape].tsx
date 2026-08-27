@@ -585,12 +585,14 @@ export default function ProfessorDetalhe(): JSX.Element {
         )}
       </ScrollView>
 
-      {/* Fixed footer, outside the ScrollView — same pattern as
-          link-account.tsx's "Desvincular conta": a `danger-soft` close
-          action stays reachable at the bottom of the screen instead of
-          scrolling away with the profile content. */}
+      {/* Fixed footer, outside the ScrollView — the close action stays
+          reachable at the bottom of the screen instead of scrolling away with
+          the profile content. `tertiary`, not `danger-soft`: fechar não destrói
+          nada, e o vermelho fica reservado pras ações que destroem (o
+          "Desvincular conta" de link-account.tsx, o apagar de
+          PontoAtencaoForm.tsx). */}
       <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
-        <Button variant="danger-soft" onPress={() => router.back()}>
+        <Button variant="tertiary" onPress={() => router.back()}>
           Fechar
         </Button>
       </View>

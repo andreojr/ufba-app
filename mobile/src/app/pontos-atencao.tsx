@@ -343,7 +343,7 @@ export default function PontosAtencaoScreen(): JSX.Element {
           era o gesto de voltar da plataforma, já que o stack raiz roda com
           headerShown: false. */}
       <View className="px-4 pt-3.5 bg-background" style={{ paddingBottom: insets.bottom + 16 }}>
-        <Button variant="danger-soft" onPress={() => router.back()}>
+        <Button variant="tertiary" onPress={() => router.back()}>
           Fechar
         </Button>
       </View>
