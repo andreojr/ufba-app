@@ -1,7 +1,10 @@
 import type { ArgumentMetadata } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { PIPES_METADATA } from '@nestjs/common/constants';
-import { TrajetoriaController } from './trajetoria.controller';
+import {
+  LIMITE_CURRICULO_MS,
+  TrajetoriaController,
+} from './trajetoria.controller';
 import type { HistoricoService } from './historico.service';
 import type { TrajetoriaSalva } from './historico.repository';
 import { SalvarPlanoDto } from './plano.dto';
@@ -181,6 +184,38 @@ describe('TrajetoriaController', () => {
     );
 
     expect(resposta).toMatchObject({ marcos: null });
+  });
+
+  it('não deixa um currículo lento estourar o orçamento de tempo da resposta', async () => {
+    // O caso de produção: num curso de cache frio, `resolverCurso` faz o
+    // scraping sequencial do detalhe de *todos* os componentes da estrutura e
+    // levou 37s, empurrando o /trajetoria/sync pra 44s contra os 45s de
+    // timeout do cliente. Marcos e projeção são extras best-effort — degradar
+    // pra null é o que este mesmo método já faz quando a estrutura falha, e
+    // vale muito mais que uma resposta que o app abandona no meio.
+    jest.useFakeTimers();
+    try {
+      const service = {
+        getTrajetoria: jest.fn(() => Promise.resolve(salvaFalsa())),
+        sync: jest.fn(),
+      } as unknown as HistoricoService;
+      const curriculo = {
+        // Nunca resolve, no horizonte do teste: é o scraping ainda rodando.
+        resolverPorNomeUsuario: jest.fn(() => new Promise<never>(() => {})),
+      } as unknown as CurriculoService;
+
+      const resposta = new TrajetoriaController(service, curriculo).get(
+        USUARIO,
+      );
+      await jest.advanceTimersByTimeAsync(LIMITE_CURRICULO_MS + 1);
+
+      await expect(resposta).resolves.toMatchObject({
+        marcos: null,
+        projecao: null,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('devolve a projeção junto dos marcos', async () => {
