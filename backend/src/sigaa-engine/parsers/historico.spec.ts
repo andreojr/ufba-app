@@ -157,6 +157,56 @@ describe('parseHistorico', () => {
     }
   });
 
+  /**
+   * O mesmo histórico com a tabela de pendentes transbordando pra uma quarta
+   * página — a forma que a fixture não tem, porque os 20 pendentes dela cabem
+   * folgados na página 3, entre o título (y 562) e as Equivalências (y 291).
+   *
+   * Fiel à ordem do documento: Equivalências e Observações vêm *depois* da
+   * tabela, então descem pra página 4 junto com as linhas que transbordaram.
+   * A página nova recebe o bloco de cabeçalho que toda página repete e um
+   * rodapé próprio, que é o que delimita a seção por cima e por baixo.
+   */
+  function comPendentesEmDuasPaginas(): ItemTexto[] {
+    const CORTE_Y = 380;
+    const DESLOCAMENTO_Y = 320;
+
+    const cabecalho = itens.filter(
+      (i) => i.pagina === 3 && Math.abs(i.y - 715.23) <= 0.5,
+    );
+    const rodape = itens.filter((i) => i.pagina === 3 && i.y < 60);
+    expect(cabecalho.length).toBeGreaterThan(0);
+    expect(rodape.length).toBeGreaterThan(0);
+
+    const transbordou = (i: ItemTexto) =>
+      i.pagina === 3 && i.y > 60 && i.y <= CORTE_Y;
+
+    return [
+      ...itens.filter((i) => !transbordou(i)),
+      ...itens
+        .filter(transbordou)
+        .map((i) => ({ ...i, pagina: 4, y: i.y + DESLOCAMENTO_Y })),
+      ...cabecalho.map((i) => ({ ...i, pagina: 4 })),
+      ...rodape.map((i) => ({ ...i, pagina: 4 })),
+    ];
+  }
+
+  it('reads a pendentes table that spills onto the next page', () => {
+    // Sem isto o parser lê só a página do título e para: 13 das 20 linhas, e a
+    // invariante de contagem derruba o histórico inteiro. Foi o segundo erro
+    // que o histórico de outro aluno produziu em produção, com 34 declarados.
+    const emDuasPaginas = comPendentesEmDuasPaginas();
+
+    const { pendentesObrigatorios } = parseHistorico(emDuasPaginas);
+
+    expect(pendentesObrigatorios).toHaveLength(20);
+    // A última linha da tabela original é ENADE, e ela está entre as que
+    // desceram — prova de que a continuação foi lida, não só a primeira página.
+    expect(
+      pendentesObrigatorios.filter((p) => p.codigo === 'ENADE'),
+    ).toHaveLength(2);
+  });
+
   it('parses every pending obligatory component', () => {
     const { pendentesObrigatorios } = parseHistorico(itens);
 

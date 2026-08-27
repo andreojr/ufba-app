@@ -286,6 +286,18 @@ function notaOuNula(bruto: string, codigo: string): number | null {
 const RODAPE_PATTERN = /^Para verificar sua autenticidade/;
 
 /**
+ * O bloco de cabeçalho que toda página repete, cuja última linha é a do
+ * "Nome:"/"Matrícula:". É o que limita por cima uma página de *continuação* da
+ * tabela de pendentes, onde não existe título de seção pra fazer esse papel:
+ * sem ele o bloco de endereço da UFBA e a linha "Histórico Escolar - Emitido
+ * em" caem dentro da tabela.
+ *
+ * Nunca um y fixo, pelo mesmo motivo do RODAPE_PATTERN: a linha fica em
+ * ~712pt na página 1 do documento real e em ~715pt nas páginas 2 e 3.
+ */
+const CABECALHO_PAGINA_PATTERN = /^Nome:/;
+
+/**
  * The lower boundary shared by all three page-scoped, free-form lookups
  * below: the thing's own specific closing marker if this page carries it,
  * else the page's footer line. Neither present means an unread page
@@ -444,6 +456,40 @@ function exigirHoras(bruto: string, contexto: string): number {
   return valor;
 }
 
+/**
+ * O limite superior da seção nesta página: o próprio título, na página onde
+ * ele está, e o cabeçalho repetido da página, nas de continuação.
+ */
+function limiteSuperiorPendentes(
+  daPagina: ItemTexto[],
+  titulo: ItemTexto,
+  pagina: number,
+): number {
+  if (pagina === titulo.pagina) {
+    return titulo.y - 5;
+  }
+  const cabecalho = daPagina.find((i) =>
+    CABECALHO_PAGINA_PATTERN.test(i.texto),
+  );
+  if (!cabecalho) {
+    throw new Error(
+      'Histórico não reconhecido: a tabela de pendentes continua na página ' +
+        `${pagina}, mas não achei o cabeçalho que delimita a seção por cima. ` +
+        'O layout do documento pode ter mudado.',
+    );
+  }
+  return cabecalho.y - 5;
+}
+
+/**
+ * Percorre as páginas a partir da do título, e não só ela: com pendentes
+ * suficientes a tabela transborda pra página seguinte, e ler uma página só
+ * devolve as linhas que couberam. Isso derrubava o histórico inteiro pela
+ * invariante de contagem — "li 13 componentes pendentes, mas o título declara
+ * 34" —, e era uma assimetria com `parseCursados`, que sempre percorreu todas
+ * as páginas. Na fixture nunca apareceu porque os 20 pendentes dela cabem
+ * folgados entre o título e as Equivalências, na mesma página.
+ */
 function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
   const titulo = itens.find((i) => TITULO_PENDENTES_PATTERN.test(i.texto));
   if (!titulo) {
@@ -456,39 +502,63 @@ function parsePendentes(itens: ItemTexto[]): ComponentePendente[] {
     );
   }
 
-  const daPagina = itens.filter((i) => i.pagina === titulo.pagina);
-  const proximaSecao = daPagina
-    .filter((i) => i.y < titulo.y && /^(Equival[êe]ncias|Observa[çc][õo]es)/.test(i.texto))
-    .sort((a, b) => b.y - a.y)[0];
-
-  const naSecao = daPagina.filter(
-    (i) =>
-      i.y < titulo.y - 5 &&
-      i.y > limiteInferior(daPagina, proximaSecao, 'da seção de componentes pendentes'),
-  );
-
-  // One row per distinct baseline. Grouping by y is enough here: unlike the
-  // cursados table there is no second line per row.
-  const linhas = [...new Set(naSecao.map((i) => Math.round(i.y * 2) / 2))].sort(
-    (a, b) => b - a,
-  );
-
   const pendentes: ComponentePendente[] = [];
-  for (const y of linhas) {
-    const codigo = celula(naSecao, COLUNAS_PENDENTES.codigo, y);
-    const nome = celula(naSecao, COLUNAS_PENDENTES.nome, y);
-    if (!codigo || !nome || /^C[óo]digo$/i.test(codigo)) {
-      continue; // header row, or a stray footer line
-    }
-    pendentes.push({
-      codigo,
-      nome,
-      cargaHoraria: exigirHoras(
-        celula(naSecao, COLUNAS_PENDENTES.cargaHoraria, y),
+  const paginas = [...new Set(itens.map((i) => i.pagina))]
+    .filter((pagina) => pagina >= titulo.pagina)
+    .sort((a, b) => a - b);
+
+  for (const pagina of paginas) {
+    const daPagina = itens.filter((i) => i.pagina === pagina);
+    const topo = limiteSuperiorPendentes(daPagina, titulo, pagina);
+    const proximaSecao = daPagina
+      .filter(
+        (i) =>
+          i.y < topo && /^(Equival[êe]ncias|Observa[çc][õo]es)/.test(i.texto),
+      )
+      .sort((a, b) => b.y - a.y)[0];
+
+    const naSecao = daPagina.filter(
+      (i) =>
+        i.y < topo &&
+        i.y >
+          limiteInferior(
+            daPagina,
+            proximaSecao,
+            'da seção de componentes pendentes',
+          ),
+    );
+
+    // One row per distinct baseline. Grouping by y is enough here: unlike the
+    // cursados table there is no second line per row. Por página, porque os
+    // mesmos y se repetem na página de continuação.
+    const linhas = [
+      ...new Set(naSecao.map((i) => Math.round(i.y * 2) / 2)),
+    ].sort((a, b) => b - a);
+
+    for (const y of linhas) {
+      const codigo = celula(naSecao, COLUNAS_PENDENTES.codigo, y);
+      const nome = celula(naSecao, COLUNAS_PENDENTES.nome, y);
+      if (!codigo || !nome || /^C[óo]digo$/i.test(codigo)) {
+        continue; // header row, or a stray footer line
+      }
+      pendentes.push({
         codigo,
-      ),
-      matriculado: /matriculado/i.test(celula(naSecao, COLUNAS_PENDENTES.anotacao, y)),
-    });
+        nome,
+        cargaHoraria: exigirHoras(
+          celula(naSecao, COLUNAS_PENDENTES.cargaHoraria, y),
+          codigo,
+        ),
+        matriculado: /matriculado/i.test(
+          celula(naSecao, COLUNAS_PENDENTES.anotacao, y),
+        ),
+      });
+    }
+
+    // As Equivalências/Observações vêm depois da tabela no documento, então a
+    // página que as carrega é a última em que a tabela pode aparecer.
+    if (proximaSecao) {
+      break;
+    }
   }
 
   return pendentes;
