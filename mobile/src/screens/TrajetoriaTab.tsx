@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Button, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { LinearTransition, runOnJS } from "react-native-reanimated";
 
@@ -72,6 +72,7 @@ export default function TrajetoriaTab(): JSX.Element {
   const { setHistoricoFetchedAt } = useSyncFreshness();
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
   // Kept separate from `state` on purpose: a failed move must not blow away
   // the loaded trajectory — the student would lose open years and scroll
@@ -109,11 +110,13 @@ export default function TrajetoriaTab(): JSX.Element {
   // now only happens from Perfil, which re-scrapes both the horário and the
   // histórico in one press instead of each tab doing its own.
   const carregar = useCallback(
-    async () => {
+    async (silent = false) => {
       if (!accessToken) {
         return;
       }
-      setState({ status: "loading" });
+      if (!silent) {
+        setState({ status: "loading" });
+      }
       try {
         aplicar(await getTrajetoria(accessToken));
       } catch (error) {
@@ -147,6 +150,16 @@ export default function TrajetoriaTab(): JSX.Element {
     }
     await carregar();
   }, [accessToken, carregar]);
+
+  // Puxar pra atualizar só relê o banco (o mesmo caminho de leitura de
+  // `carregar`) — nunca sincroniza de verdade com o SIGAA. Isso continua
+  // reservado ao primeiro login e à ação explícita do aluno (Perfil ou
+  // "tentar de novo").
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await carregar(true);
+    setRefreshing(false);
+  }, [carregar]);
 
   /**
    * Moving is a pure override: save the position and apply whatever
@@ -191,6 +204,7 @@ export default function TrajetoriaTab(): JSX.Element {
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
       >
         {state.status === "loading" ? (
           <View className="rounded-3xl bg-surface-secondary p-8 items-center">

@@ -350,4 +350,21 @@ describe("Insights", () => {
     expect(screen.queryByText("Credenciais inválidas")).toBeNull();
     consoleWarn.mockRestore();
   });
+
+  it("pull-to-refresh re-reads the cached trajetória without syncing the SIGAA", async () => {
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ indices: { cr: 7, iap: null } }));
+
+    await render(<InsightsTab />);
+    await screen.findByText("Coeficiente de Rendimento");
+
+    jest.mocked(getTrajetoria).mockClear();
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ indices: { cr: 8, iap: null } }));
+
+    await act(async () => {
+      await screen.getByTestId("insights-scroll").props.refreshControl.props.onRefresh();
+    });
+
+    expect(getTrajetoria).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("8,00")).toBeTruthy();
+  });
 });

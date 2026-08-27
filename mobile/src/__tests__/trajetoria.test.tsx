@@ -1108,4 +1108,22 @@ describe("Trajetória", () => {
     expect(await screen.findByText("Em curso")).toBeTruthy();
     expect(screen.queryByText(/O semestre acabou/i)).toBeNull();
   });
+
+  describe("pull-to-refresh", () => {
+    it("re-reads the cached trajetória without syncing the SIGAA", async () => {
+      jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+
+      await render(<TrajetoriaTab />);
+      await screen.findByText(/linha de chegada/i);
+
+      jest.mocked(getTrajetoria).mockClear();
+      jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+
+      await act(async () => {
+        await screen.getByTestId("trajetoria-scroll").props.refreshControl.props.onRefresh();
+      });
+
+      expect(getTrajetoria).toHaveBeenCalledTimes(1);
+    });
+  });
 });

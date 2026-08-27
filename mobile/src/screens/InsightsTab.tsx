@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { Button, Tabs, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import {
+  RefreshControl,
   ScrollView,
   View,
   type LayoutChangeEvent,
@@ -81,6 +82,7 @@ export default function InsightsTab(): JSX.Element {
   const { setHistoricoFetchedAt } = useSyncFreshness();
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
   const [fimDoPeriodo, setFimDoPeriodo] = useState<string | null>(null);
   // Carga Horária first — the CR breakdown (item 12 do roadmap) só aparece
   // quando a pessoa arrasta o card, não é mais o que ela vê de cara.
@@ -221,11 +223,13 @@ export default function InsightsTab(): JSX.Element {
   );
 
   const carregar = useCallback(
-    async () => {
+    async (silent = false) => {
       if (!accessToken) {
         return;
       }
-      setState({ status: "loading" });
+      if (!silent) {
+        setState({ status: "loading" });
+      }
       try {
         aplicar(await getTrajetoria(accessToken));
       } catch (error) {
@@ -260,6 +264,16 @@ export default function InsightsTab(): JSX.Element {
     await carregar();
   }, [accessToken, carregar]);
 
+  // Puxar pra atualizar só relê o banco (o mesmo caminho de leitura de
+  // `carregar`) — nunca sincroniza de verdade com o SIGAA. Isso continua
+  // reservado ao primeiro login e à ação explícita do aluno (Perfil ou
+  // "tentar de novo").
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await carregar(true);
+    setRefreshing(false);
+  }, [carregar]);
+
   return (
     <View className="flex-1 bg-background">
       {/* No GestureDetector wrapping this ScrollView anymore — swipeInsight is
@@ -272,6 +286,7 @@ export default function InsightsTab(): JSX.Element {
         className="flex-1 px-6"
         contentContainerClassName="gap-5 pb-8"
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
       >
         {state.status === "loading" ? (
           <View className="rounded-3xl bg-surface-secondary p-8 items-center">

@@ -276,4 +276,50 @@ describe("Professores screen", () => {
     await render(<ProfessoresScreen />);
     expect(await screen.findByText("Tentar de novo")).toBeTruthy();
   });
+
+  it("pull-to-refresh re-reads the cached schedule instead of syncing the SIGAA", async () => {
+    mockedPost.mockResolvedValue([
+      resumo("FULANO DE TAL", {
+        siape: "1815041",
+        nome: "FULANO DE TAL",
+        departamento: "DCC",
+        unidade: null,
+        selos: {
+          contato: true, formacao: false, areasInteresse: false,
+          lattes: false, orientacoes: false, semestresLecionando: 3,
+        },
+      }),
+    ]);
+    await render(<ProfessoresScreen />);
+    await screen.findByText("FULANO DE TAL");
+
+    mockedSchedule.mockClear();
+    mockedPost.mockClear();
+    mockedSchedule.mockResolvedValue({
+      turmas: [turma("MATA65", "CG", "FULANO DE TAL")],
+      periodoLetivo: null,
+      fetchedAt: "2026-08-19T12:00:00.000Z",
+    });
+    mockedPost.mockResolvedValue([
+      resumo("FULANO DE TAL", {
+        siape: "1815041",
+        nome: "FULANO DE TAL",
+        departamento: "DCC",
+        unidade: null,
+        selos: {
+          contato: true, formacao: false, areasInteresse: false,
+          lattes: false, orientacoes: false, semestresLecionando: 3,
+        },
+      }),
+    ]);
+
+    await act(async () => {
+      await screen.getByTestId("professores-scroll").props.refreshControl.props.onRefresh();
+    });
+
+    // Re-reads the schedule cache (GET) and re-resolves docentes off it — the
+    // same reading path `carregar` always takes, never `syncAll`.
+    expect(mockedSchedule).toHaveBeenCalledTimes(1);
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+  });
 });

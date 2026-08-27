@@ -988,13 +988,8 @@ describe("AjustesTab", () => {
         expect(mockedPostScheduleSync).not.toHaveBeenCalled();
       });
 
-      it("syncs once before exporting when nothing is cached yet", async () => {
+      it("asks the user to sync in Perfil instead of scraping SIGAA when nothing is cached yet", async () => {
         mockedGetSchedule.mockResolvedValue({ sincronizado: false });
-        mockedPostScheduleSync.mockResolvedValue({
-          turmas: [turma()],
-          periodoLetivo: PERIODO_LETIVO,
-          fetchedAt: new Date().toISOString(),
-        });
 
         const { getByTestId } = await render(
           <SyncFreshnessProvider>
@@ -1006,12 +1001,12 @@ describe("AjustesTab", () => {
           fireEvent.press(getByTestId("export-calendar-item"));
         });
 
-        await waitFor(() =>
-          expect(mockedExportScheduleToDeviceCalendar).toHaveBeenCalledWith(
-            [turma()],
-            PERIODO_LETIVO
-          )
+        await waitFor(() => expect(mockToastShow).toHaveBeenCalled());
+        expect(await lastDangerToastText()).toBe(
+          "Sincronize seu horário em Perfil antes de exportar."
         );
+        expect(mockedPostScheduleSync).not.toHaveBeenCalled();
+        expect(mockedExportScheduleToDeviceCalendar).not.toHaveBeenCalled();
       });
 
       it("shows a toast instead of exporting when the term isn't known yet", async () => {

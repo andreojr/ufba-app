@@ -22,7 +22,7 @@ import { ClassroomIcon } from "@/components/ClassroomIcon";
 import { MoodleIcon } from "@/components/MoodleIcon";
 import { countSemestresNaUfba, formatCursoNome, formatTempoNaUfba } from "@/lib/academic-profile";
 import { baixarEInstalar, InstalacaoIndisponivelError } from "@/lib/app-update-install";
-import { ApiError, deleteAccount, getSchedule, getTrajetoria, postScheduleSync } from "@/lib/api";
+import { ApiError, deleteAccount, getSchedule, getTrajetoria } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import { CalendarPermissionDeniedError, exportScheduleToDeviceCalendar } from "@/lib/calendar-export";
@@ -212,32 +212,17 @@ export default function AjustesTab(): JSX.Element {
       });
   }, [accessToken]);
 
-  // Reads the cache first — this is the one place that must never bypass it
-  // for a routine export — and falls back to a live sync only the first time,
-  // when the user has never synced at all.
-  const readOrSyncSchedule = useCallback(async (): Promise<
+  // Reads the cache only — exportar calendário nunca deve bater no SIGAA por
+  // conta própria. Sem dado no banco ainda, apontamos o usuário para
+  // sincronizar em Perfil em vez de disparar scraping aqui.
+  const readSchedule = useCallback(async (): Promise<
     Extract<ScheduleResponse, { turmas: unknown }> | null
   > => {
     if (!accessToken) {
       return null;
     }
     const cached = await getSchedule(accessToken);
-    if ("turmas" in cached) {
-      return cached;
-    }
-    const credentials = await getSigaaCredentials();
-    if (!credentials) {
-      return null;
-    }
-    const synced = await postScheduleSync(accessToken, {
-      login: credentials.login,
-      senha: credentials.senha,
-    });
-    if ("turmas" in synced) {
-      setScheduleFetchedAt(new Date(synced.fetchedAt));
-      return synced;
-    }
-    return null;
+    return "turmas" in cached ? cached : null;
   }, [accessToken]);
 
   const handleExportCalendar = useCallback(async () => {
@@ -247,7 +232,7 @@ export default function AjustesTab(): JSX.Element {
 
     setIsExportingCalendar(true);
     try {
-      const schedule = await readOrSyncSchedule();
+      const schedule = await readSchedule();
       if (!schedule) {
         // No cache to export from. Which fix to point at depends on why:
         // an unlinked student has to link first, a linked one just never synced.
@@ -282,7 +267,7 @@ export default function AjustesTab(): JSX.Element {
     } finally {
       setIsExportingCalendar(false);
     }
-  }, [isSigaaLinked, accessToken, readOrSyncSchedule, toast]);
+  }, [isSigaaLinked, accessToken, readSchedule, toast]);
 
   // The one explicit "sincronizar agora" gesture left in the app — Insights
   // and Trajetória used to each carry their own, but re-scraping the same

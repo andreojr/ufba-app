@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor, useToast } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { AppIcon } from "@/components/AppIcon";
 import { DocenteCard } from "@/components/DocenteCard";
@@ -42,6 +42,7 @@ export default function ProfessoresScreen(): JSX.Element {
   const accessToken = auth.status === "signedIn" ? auth.accessToken : null;
   const { toast } = useToast();
   const [estado, setEstado] = useState<Estado>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
   const [avisoLento, setAvisoLento] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const montadoRef = useRef(true);
@@ -56,8 +57,10 @@ export default function ProfessoresScreen(): JSX.Element {
     [],
   );
 
-  const carregar = useCallback(async () => {
-    setEstado({ status: "loading" });
+  const carregar = useCallback(async (silent = false) => {
+    if (!silent) {
+      setEstado({ status: "loading" });
+    }
     setAvisoLento(false);
 
     try {
@@ -125,6 +128,16 @@ export default function ProfessoresScreen(): JSX.Element {
     await carregar();
   }, [accessToken, carregar]);
 
+  // Puxar pra atualizar só relê o banco (o mesmo caminho de leitura de
+  // `carregar`) — nunca sincroniza de verdade com o SIGAA. Isso continua
+  // reservado ao primeiro login e à ação explícita do aluno (Perfil ou
+  // "tentar de novo").
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await carregar(true);
+    setRefreshing(false);
+  }, [carregar]);
+
   useEffect(() => {
     // O analisador não enxerga através da fronteira assíncrona: `carregar` só
     // chama setState depois de um await, então nada atualiza no mesmo tick deste
@@ -135,7 +148,11 @@ export default function ProfessoresScreen(): JSX.Element {
 
   return (
     <View className="flex-1">
-      <ScrollView contentContainerClassName="px-4 pb-8 pt-2">
+      <ScrollView
+        testID="professores-scroll"
+        contentContainerClassName="px-4 pb-8 pt-2"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
+      >
         {/* All four non-ready states use the same card the other three tabs
             use (see HomeTab/TrajetoriaTab/InsightsTab) — same radius, same
             paddings, same button labels. This screen used to render bare
