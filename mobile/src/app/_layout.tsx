@@ -63,6 +63,7 @@ function RootNavigator(): JSX.Element | null {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="link-account" options={{ presentation: "modal" }} />
           <Stack.Screen name="avatar-picker" options={{ presentation: "modal" }} />
+          <Stack.Screen name="contador-faltas" options={{ presentation: "modal" }} />
           <Stack.Screen name="documentos" />
           <Stack.Screen name="arvore-dependencias" />
           <Stack.Screen name="pontos-atencao" />

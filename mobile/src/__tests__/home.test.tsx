@@ -300,6 +300,26 @@ describe("HomeTab", () => {
     );
   });
 
+  // O card de destaque sempre exibiu o IconCaretRight prometendo destino, mas
+  // era uma View — o toque não fazia nada.
+  it("navigates to /turma/[id] when the next-class card is pressed", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+    const { getByTestId, getAllByText } = await render(<HomeTab />);
+
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    fireEvent.press(getByTestId("next-class-card"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pathname: "/turma/[id]",
+        params: expect.objectContaining({ id: "turma-1" }),
+      }),
+    );
+  });
+
   it("navigates to /turma/[id] when a day-list item is pressed", async () => {
     mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
     mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
@@ -620,4 +640,34 @@ describe("HomeTab", () => {
     });
   });
 
+  describe("pull-to-refresh", () => {
+    beforeEach(() => {
+      mockedUseSigaaLink.mockReturnValue({
+        status: "linked",
+        syncMode: "device",
+        senhaDesatualizada: false,
+        jaVinculou: true,
+        link: jest.fn(),
+        unlink: jest.fn(),
+      });
+      mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
+    });
+
+    it("re-reads the cached schedule without touching SIGAA", async () => {
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+      const { getByTestId, getAllByText } = await render(<HomeTab />);
+      await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+
+      mockedGetSchedule.mockClear();
+      mockedGetSchedule.mockResolvedValue(scheduleResponse());
+
+      await act(async () => {
+        await getByTestId("home-schedule-scroll").props.refreshControl.props.onRefresh();
+      });
+
+      expect(mockedGetSchedule).toHaveBeenCalledTimes(1);
+      expect(mockedPostScheduleSync).not.toHaveBeenCalled();
+    });
+  });
 });

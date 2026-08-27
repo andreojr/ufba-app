@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { Button, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 
 import { AppIcon } from "@/components/AppIcon";
 import { LocationBadge } from "@/components/LocationBadge";
@@ -93,6 +93,7 @@ export default function HomeTab(): JSX.Element {
   const [selectedDay, setSelectedDay] = useState(todayIndex === -1 ? 0 : todayIndex);
 
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [refreshing, setRefreshing] = useState(false);
   const [gridWidth, setGridWidth] = useState(0);
   const mutedColor = useThemeColor("muted");
 
@@ -192,6 +193,15 @@ export default function HomeTab(): JSX.Element {
     }
     await loadSchedule();
   }, [accessToken, loadSchedule]);
+
+  // Puxar pra atualizar só relê o banco (o mesmo caminho de loadSchedule) —
+  // nunca sincroniza de verdade com o SIGAA. Isso continua reservado ao
+  // primeiro login e à ação explícita do aluno (Perfil ou "tentar de novo").
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadSchedule(true);
+    setRefreshing(false);
+  }, [loadSchedule]);
 
   const [pontos, setPontos] = useState<PontoAtencao[]>([]);
 
@@ -334,6 +344,7 @@ export default function HomeTab(): JSX.Element {
         className="flex-1 px-6"
         contentContainerClassName="gap-4 pb-6"
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
       >
         {/* O aviso de versão nova vem antes dos prazos por ser transitório e
             raro: quando aparece, é a única coisa na tela que o aluno não vai
@@ -419,7 +430,31 @@ export default function HomeTab(): JSX.Element {
                 schedule-shaped cards it relates to instead of floating above
                 them on its own. */}
             <View className="gap-0.5">
-              <View className="rounded-t-3xl rounded-b-md bg-accent p-4 gap-3">
+              {/*
+                O card sempre teve o IconCaretRight sugerindo destino, mas era
+                uma View seca — tocar nele não fazia nada. Vai pra mesma rota
+                que um bloco da grade abre, com os mesmos params.
+                Pressable só quando há aula: sem nextClass não há pra onde ir.
+              */}
+              <Pressable
+                testID="next-class-card"
+                disabled={!nextClass}
+                onPress={() => {
+                  if (!nextClass) {
+                    return;
+                  }
+                  router.push({
+                    pathname: "/turma/[id]",
+                    params: {
+                      id: nextClass.block.turmaId,
+                      nome: nextClass.block.nome,
+                      codigo: nextClass.block.codigo ?? "",
+                      docente: nextClass.block.docente ?? "",
+                    },
+                  });
+                }}
+                className="rounded-t-3xl rounded-b-md bg-accent p-4 gap-3"
+              >
                 {nextClass ? (
                   <>
                     <View className="flex-row items-center gap-2">
@@ -459,7 +494,7 @@ export default function HomeTab(): JSX.Element {
                     Nenhuma aula agendada essa semana.
                   </Typography.Paragraph>
                 )}
-              </View>
+              </Pressable>
 
               {state.periodoLetivo && (
                 <View className="rounded-md bg-surface-secondary p-4">

@@ -101,21 +101,21 @@ export interface NoticiaResumo {
   data: string;
 }
 
-export interface Avaliacao {
-  descricao: string;
-  data: string;
-}
-
 export interface Topico {
   titulo: string;
   periodo: string;
   conteudoHtml: string | null;
 }
 
-/** What POST /turmas/:turmaId/turma-virtual answers with — the SIGAA AVA mirror feed. */
+/**
+ * What POST /turmas/:turmaId/turma-virtual answers with — the SIGAA AVA mirror
+ * feed. Sem `avaliacoes`: o backend as omite de propósito (ver o
+ * `Omit<TurmaVirtualFeed, 'avaliacoes'>` do TurmaVirtualController) porque elas
+ * viram Pontos de Atenção do tipo PROVA, e repeti-las aqui duplicaria a fonte
+ * de verdade.
+ */
 export interface TurmaVirtualFeed {
   noticias: NoticiaResumo[];
-  avaliacoes: Avaliacao[];
   topicos: Topico[];
 }
 

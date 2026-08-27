@@ -1,12 +1,13 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Button, Spinner, Typography } from "heroui-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Button, Skeleton, Spinner, Typography, useThemeColor } from "heroui-native";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import RenderHtml from "react-native-render-html";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppBar } from "@/components/AppBar";
-import { postNoticiaDetalhe, postTurmaVirtual } from "@/lib/api";
+import { AppIcon } from "@/components/AppIcon";
+import { getFaltas, postNoticiaDetalhe, postTurmaVirtual } from "@/lib/api";
 import { describeApiError } from "@/lib/api-errors";
 import { useAuth } from "@/lib/auth-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
@@ -32,6 +33,7 @@ export default function TurmaVirtualScreen(): JSX.Element {
   // é só pra satisfazer o tipo, como professor/[siape].tsx já faz.
   const accessToken = auth.status === "signedIn" ? auth.accessToken : "";
   const insets = useSafeAreaInsets();
+  const mutedColor = useThemeColor("muted");
   // RenderHtml precisa da largura em pixels pra dimensionar imagens e tabelas
   // do HTML rico do professor — a da janela, menos o padding do card.
   const { width: larguraJanela } = useWindowDimensions();
@@ -40,6 +42,9 @@ export default function TurmaVirtualScreen(): JSX.Element {
   const [noticiaAberta, setNoticiaAberta] = useState<NoticiaDetalhe | null>(null);
   const [noticiaCarregando, setNoticiaCarregando] = useState(false);
   const [noticiaErro, setNoticiaErro] = useState<string | null>(null);
+  // `null` enquanto o número não chegou — o badge só aparece com um valor real,
+  // pra não piscar "0 faltas" e depois corrigir pro total verdadeiro.
+  const [faltas, setFaltas] = useState<number | null>(null);
   const montadoRef = useRef(true);
 
   useEffect(
@@ -114,40 +119,37 @@ export default function TurmaVirtualScreen(): JSX.Element {
     setNoticiaErro(null);
   }, []);
 
+  // Recarregado a cada foco (e não só na montagem) porque é assim que a tela
+  // fica sabendo do número novo ao voltar do contador — ele salva e dá
+  // router.back(), sem contexto global pra avisar ninguém. Leitura barata no
+  // banco, sem SIGAA envolvido.
+  const carregarFaltas = useCallback(async () => {
+    try {
+      const total = await getFaltas(accessToken, id);
+      if (montadoRef.current) {
+        setFaltas(total);
+      }
+    } catch (error) {
+      // O contador é acessório: se falhar, a turma continua utilizável e o
+      // badge simplesmente não aparece — melhor que um erro na tela inteira.
+      console.warn("Failed to load faltas", error);
+    }
+  }, [accessToken, id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void carregarFaltas();
+    }, [carregarFaltas]),
+  );
+
   // `headerShown: false` é global no _layout, então cada tela empilhada
   // desenha a própria AppBar — sem ela um iPhone só tem o edge-swipe pra
   // voltar. Mesmo padrão de professor/[siape].tsx.
   const barra = <AppBar title={nome} titleType="h5" onBack={() => router.back()} />;
 
-  if (estado.status === "loading") {
-    return (
-      <View className="flex-1">
-        {barra}
-        <View className="mt-10 items-center">
-          <Spinner />
-        </View>
-      </View>
-    );
-  }
-
-  if (estado.status === "error") {
-    return (
-      <View className="flex-1">
-        {barra}
-        <View className="mt-10 items-center gap-4 px-8">
-          <Typography.Paragraph>{estado.message}</Typography.Paragraph>
-          <Button variant="outline" size="sm" onPress={() => void carregar()}>
-            Tentar novamente
-          </Button>
-        </View>
-      </View>
-    );
-  }
-
-  const { feed } = estado;
-  const vazio =
-    feed.noticias.length === 0 && feed.avaliacoes.length === 0 && feed.topicos.length === 0;
   const subtitulo = [codigo, docente].filter(Boolean).join(" · ");
+  const feed = estado.status === "ready" ? estado.feed : null;
+  const vazio = feed !== null && feed.noticias.length === 0 && feed.topicos.length === 0;
 
   return (
     <View className="flex-1">
@@ -165,13 +167,38 @@ export default function TurmaVirtualScreen(): JSX.Element {
           </View>
         ) : null}
 
+        {/*
+          Só o miolo do feed troca entre skeleton, erro e conteúdo: a AppBar e o
+          badge de faltas ficam de pé o tempo todo. Quem abriu a turma só pra
+          marcar uma falta não espera o scraping do SIGAA — que encadeia 3+
+          requisições e é de longe a parte mais lenta da tela.
+        */}
+        {estado.status === "loading" ? (
+          <View testID="turma-skeleton" className="gap-2 px-6 pb-6">
+            <Skeleton className="h-7 w-40 rounded-lg" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="mt-4 h-7 w-44 rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+          </View>
+        ) : null}
+
+        {estado.status === "error" ? (
+          <View className="mt-6 items-center gap-4 px-8">
+            <Typography.Paragraph>{estado.message}</Typography.Paragraph>
+            <Button variant="outline" size="sm" onPress={() => void carregar()}>
+              Tentar novamente
+            </Button>
+          </View>
+        ) : null}
+
         {vazio ? (
           <View className="items-center p-8">
             <Typography.Paragraph>Nada por aqui ainda.</Typography.Paragraph>
           </View>
         ) : null}
 
-        {feed.noticias.length > 0 ? (
+        {feed !== null && feed.noticias.length > 0 ? (
           <View className="gap-2 px-6 pb-6">
             <Typography.Heading>Notícias</Typography.Heading>
             {feed.noticias.map((noticia) => (
@@ -187,22 +214,11 @@ export default function TurmaVirtualScreen(): JSX.Element {
           </View>
         ) : null}
 
-        {feed.avaliacoes.length > 0 ? (
-          <View className="gap-2 px-6 pb-6">
-            <Typography.Heading>Avaliações</Typography.Heading>
-            {feed.avaliacoes.map((avaliacao, index) => (
-              <View
-                key={`${avaliacao.descricao}-${index}`}
-                className="rounded-2xl bg-surface-secondary p-4"
-              >
-                <Typography.Paragraph>{avaliacao.descricao}</Typography.Paragraph>
-                <Typography.Paragraph>{avaliacao.data}</Typography.Paragraph>
-              </View>
-            ))}
-          </View>
-        ) : null}
-
-        {feed.topicos.length > 0 ? (
+        {/*
+          Avaliações não aparecem aqui de propósito: o backend as omite do feed
+          e as converte em Pontos de Atenção do tipo PROVA, que a Home já mostra.
+        */}
+        {feed !== null && feed.topicos.length > 0 ? (
           <View className="gap-2 px-6 pb-6">
             <Typography.Heading>Tópicos de aula</Typography.Heading>
             {feed.topicos.map((topico, index) => (
@@ -223,6 +239,29 @@ export default function TurmaVirtualScreen(): JSX.Element {
           </View>
         ) : null}
       </ScrollView>
+
+      {faltas !== null ? (
+        <View
+          className="px-6 pt-3.5 bg-background"
+          style={{ paddingBottom: insets.bottom + 16 }}
+        >
+          <Pressable
+            testID="turma-faltas-badge"
+            onPress={() =>
+              router.push({
+                pathname: "/contador-faltas",
+                params: { id, faltas: String(faltas) },
+              })
+            }
+            className="flex-row items-center justify-center gap-2 rounded-full bg-surface-secondary px-4 py-3"
+          >
+            <AppIcon name="IconCalendarBlank" size={18} color={mutedColor} />
+            <Typography.Paragraph weight="medium">
+              {faltas === 1 ? "1 falta" : `${faltas} faltas`}
+            </Typography.Paragraph>
+          </Pressable>
+        </View>
+      ) : null}
 
       {noticiaCarregando ? (
         <View

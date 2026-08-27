@@ -211,6 +211,37 @@ export async function postScheduleSync(
 }
 
 /**
+ * Reads the student's own manual absence counter for one turma. Cheap DB read —
+ * nothing to do with SIGAA, which never exposes partial frequency — so it takes
+ * the default timeout and carries no stored password.
+ */
+export async function getFaltas(accessToken: string, turmaId: string): Promise<number> {
+  const { faltas } = await request<{ faltas: number }>(`/turmas/${turmaId}/faltas`, {
+    method: "GET",
+    accessToken,
+  });
+  return faltas;
+}
+
+/**
+ * Saves the absolute total (not a delta) — resending the same value is
+ * idempotent, and two devices of the same student converge on the last saved
+ * number instead of double-counting. See DefinirFaltasDto no backend.
+ */
+export async function putFaltas(
+  accessToken: string,
+  turmaId: string,
+  faltas: number,
+): Promise<number> {
+  const salvo = await request<{ faltas: number }>(`/turmas/${turmaId}/faltas`, {
+    method: "PUT",
+    accessToken,
+    body: { faltas },
+  });
+  return salvo.faltas;
+}
+
+/**
  * Re-scrapes the turma virtual feed (notícias, avaliações, tópicos) for one
  * turma off SIGAA's AVA mirror. Same cost profile as postScheduleSync — the
  * scrape chains 3+ sequential server-side requests — hence the same long

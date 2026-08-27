@@ -421,7 +421,7 @@ describe("postTurmaVirtual", () => {
   });
 
   it("posts credentials to /turmas/:id/turma-virtual", async () => {
-    const feed = { noticias: [], avaliacoes: [], topicos: [] };
+    const feed = { noticias: [], topicos: [] };
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       status: 200,

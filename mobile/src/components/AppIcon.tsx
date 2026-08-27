@@ -58,6 +58,8 @@ const ICON_MAP = {
   IconBook: "book-outline",
   IconTrayFull: "file-tray-full-outline",
   IconPlus: "add",
+  // Par do IconPlus, usado no contador de faltas.
+  IconMinus: "remove",
   IconGithubLogo: "logo-github",
   IconLibrary: "library-outline",
 } as const satisfies Record<string, IoniconName>;
