@@ -1,6 +1,10 @@
 node_modules/
 .env
 .env.*
+# Exceção: valores de produção, públicos por natureza (EXPO_PUBLIC_* vão
+# embutidos no bundle) e já duplicados no eas.json. Versionado porque sem ele
+# o build local de release herda o .env de dev e o APK sai com o localhost.
+!mobile/.env.production
 dist/
 build/
 .expo/
