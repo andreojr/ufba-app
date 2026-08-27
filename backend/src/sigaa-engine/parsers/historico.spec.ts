@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseHistorico, SITUACOES } from './historico';
+
+/** O marcador do documento pra "sem valor registrado" — descartado nos cursados. */
+const SEM_RESULTADO = '--';
 import type { ItemTexto } from './historico-texto';
 
 const FIXTURE_PATH = join(__dirname, '__fixtures__', 'historico-itens.json');
@@ -213,6 +216,25 @@ describe('parseHistorico', () => {
     expect(observacoes.length).toBeGreaterThanOrEqual(3);
     // Pins the leading-dash strip: the document prints each line as "- Semestre...".
     expect(observacoes[0]).toMatch(/^Semestre 2024\.1/);
+  });
+
+  it('drops a row whose situação is "--" — no result recorded yet', () => {
+    // Real shape, caught in production on another student's transcript: an
+    // ENADE row sits in the cursados table with "--" in the situação column.
+    // Mutating a TRANC row keeps both invariantes still — it is already outside
+    // the integralizada sum and already carries no nota.
+    const alvo = itens.find(
+      (item) => item.texto === 'TRANC' && item.x >= 532 && item.x < 580,
+    );
+    expect(alvo).toBeDefined();
+    const adulterado = itens.map((item) =>
+      item === alvo ? { ...item, texto: SEM_RESULTADO } : item,
+    );
+
+    const { cursados } = parseHistorico(adulterado);
+
+    expect(cursados).toHaveLength(parseHistorico(itens).cursados.length - 1);
+    expect(cursados.every((c) => SITUACOES.includes(c.situacao))).toBe(true);
   });
 
   it('throws when a component carries a situação not in the legend', () => {

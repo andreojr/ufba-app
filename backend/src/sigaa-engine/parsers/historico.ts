@@ -37,6 +37,13 @@ const SITUACOES: readonly string[] = [
 
 const NATUREZAS: readonly string[] = ['OB', 'OP', 'EB', 'EP', 'LV', 'EC'];
 
+/**
+ * The document's own marker for "no value recorded yet", in any column.
+ * `notaOuNula` reads it one column to the left; `parseCursados` uses it to drop
+ * a row outright — see the skip there.
+ */
+const SEM_RESULTADO = '--';
+
 export interface ComponenteCursado {
   semestre: string;
   /** Null on trancamento rows: the column emits no item at all, it is not "-". */
@@ -365,6 +372,25 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
       const natureza = celula(naSecao, COLUNAS.natureza, ancora.y);
       const codigo = celula(naSecao, COLUNAS.codigo, ancora.y);
       const nota = celula(naSecao, COLUNAS.nota, ancora.y);
+      const situacao = celula(naSecao, COLUNAS.situacao, ancora.y);
+
+      // "--" na coluna de situação: a linha está no histórico mas não tem
+      // resultado registrado. Descartada aqui, e não carregada como uma
+      // situação nula, porque não há um único consumidor que queira enxergá-la:
+      // não integraliza carga horária, não entra no CR, não é abandono e não é
+      // matéria em curso (essa o documento marca como MATR). Encontrado em
+      // produção no histórico de outro aluno, numa linha de ENADE — e o par
+      // ENADE ingressante/concluinte no mesmo semestre violaria de todo jeito o
+      // @@unique([historicoId, semestre, codigo]) da tabela.
+      //
+      // O risco assumido é o simétrico: se algum dia um componente de verdade
+      // imprimir "--", ele desaparece da tela em silêncio. Aceitável porque as
+      // invariantes de carga horária e de CR continuam por cima — uma banda de
+      // coluna deslocada faz a situação inteira virar "--", o que zeraria os
+      // cursados e derrubaria as duas.
+      if (situacao === SEM_RESULTADO) {
+        continue;
+      }
 
       cursados.push({
         semestre: ancora.texto,
@@ -376,7 +402,7 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
           codigo,
         ),
         nota: notaOuNula(nota, codigo),
-        situacao: exigirSituacao(celula(naSecao, COLUNAS.situacao, ancora.y), codigo),
+        situacao: exigirSituacao(situacao, codigo),
         docente: ehDocente ? textoAbaixo : null,
       });
     }
