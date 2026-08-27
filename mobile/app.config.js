@@ -4,7 +4,7 @@ module.exports = {
   expo: {
     name: IS_DEV ? "UFBA (Dev)" : "UFBA",
     slug: "ufba",
-    version: "1.0.2",
+    version: "1.0.3",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "ufba-app",
@@ -23,7 +23,7 @@ module.exports = {
       },
       backgroundColor: "#FFFFFF",
       predictiveBackGestureEnabled: false,
-      versionCode: 3,
+      versionCode: 4,
       permissions: ["REQUEST_INSTALL_PACKAGES"],
     },
     plugins: [
