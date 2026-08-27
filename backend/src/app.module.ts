@@ -7,6 +7,7 @@ import { SigaaEngineModule } from './sigaa-engine/sigaa-engine.module';
 import { UsersModule } from './users/users.module';
 import { CurriculoModule } from './curriculo/curriculo.module';
 import { PontosAtencaoModule } from './pontos-atencao/pontos-atencao.module';
+import { FaltasModule } from './faltas/faltas.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PontosAtencaoModule } from './pontos-atencao/pontos-atencao.module';
     UsersModule,
     CurriculoModule,
     PontosAtencaoModule,
+    FaltasModule,
   ],
   controllers: [],
   providers: [],

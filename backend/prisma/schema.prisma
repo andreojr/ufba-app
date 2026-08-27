@@ -142,6 +142,11 @@ model Matricula {
   // A posição em que o SIGAA lista a turma para ESTE aluno — por aluno, não
   // da turma, por isso mora aqui e não em Turma.
   ordem   Int
+  // Faltas que o aluno contou à mão nesta turma. Por aluno, como `ordem` — e
+  // nunca vem do SIGAA: é um contador pessoal, o SIGAA não expõe frequência
+  // parcial. Default 0 pra toda matrícula já existente valer como "nenhuma
+  // falta registrada" sem backfill.
+  faltas  Int    @default(0)
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   turma Turma @relation(fields: [turmaId], references: [id], onDelete: Cascade)
