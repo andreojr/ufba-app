@@ -370,6 +370,60 @@ describe('parseHistorico', () => {
     expect(() => parseHistorico(adulterado)).toThrow(/natureza/i);
   });
 
+  /**
+   * O quadro real de quem quebrou em produção: 2040h obrigatórias, 0 optativas,
+   * 144h complementares, 2184h no total. As complementares (ACC) são um bolo de
+   * horas concedido sem componente — não existe linha na tabela pra elas — então
+   * a soma das linhas bate com obrigatórias + optativas, nunca com o total.
+   * A fixture de origem tem os dois baldes zerados, e é por isso que a
+   * invariante passava nela por coincidência.
+   */
+  function comComplementares(
+    valores: readonly ItemTexto[],
+    complementares: string,
+    total: string,
+  ): ItemTexto[] {
+    const label = valores.find(
+      (i) => i.texto === 'Integralizado' || i.texto === 'Integralizado:',
+    );
+    if (!label) throw new Error('fixture sem a linha Integralizado');
+    const naLinha = valores
+      .filter(
+        (i) =>
+          i.pagina === label.pagina &&
+          Math.abs(i.y - label.y) <= 1.5 &&
+          i.x > label.x &&
+          /\d+\s*h/i.test(i.texto),
+      )
+      .sort((a, b) => a.x - b.x);
+    const [, , celulaCompl, celulaTotal] = naLinha;
+
+    return valores.map((item) => {
+      if (item === celulaCompl) return { ...item, texto: complementares };
+      if (item === celulaTotal) return { ...item, texto: total };
+      return item;
+    });
+  }
+
+  it('accepts integralised complementares that have no component rows', () => {
+    const comAcc = comComplementares(itens, '144 h', '2244 h');
+
+    const historico = parseHistorico(comAcc);
+
+    expect(historico.cargaHoraria.complementares.integralizada).toBe(144);
+    expect(historico.cargaHoraria.total.integralizada).toBe(2244);
+  });
+
+  it('throws when the quadro total is not its own columns summed', () => {
+    // A aritmética que o documento afirma sobre si mesmo. Sem ela, sair da
+    // comparação com o total deixaria de checar o total inteiramente.
+    const totalTorto = comComplementares(itens, '144 h', '9999 h');
+
+    expect(() => parseHistorico(totalTorto)).toThrow(
+      /total integralizado do quadro/i,
+    );
+  });
+
   it('throws when the pendentes section anchor is entirely absent', () => {
     // This is the whole rationale for parsePendentes throwing instead of
     // returning []: an unread section must never masquerade as an empty one.

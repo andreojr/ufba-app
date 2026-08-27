@@ -783,11 +783,45 @@ function validarInvariantes(historico: Historico, totalPendentesDeclarado: numbe
     .filter((c) => SITUACOES_INTEGRALIZADAS.includes(c.situacao))
     .reduce((soma, c) => soma + c.cargaHoraria, 0);
 
-  if (integralizadaSomada !== historico.cargaHoraria.total.integralizada) {
+  // Contra obrigatórias + optativas, não contra o total: as complementares
+  // (ACC — monitoria, estágio, eventos) são um bolo de horas concedido sem
+  // componente, e não têm linha na tabela de onde a soma pudesse tirá-las.
+  // Medido no histórico de quem quebrou em produção: obrigatórias 2040h,
+  // optativas 0, complementares 144h, total 2184h — e as linhas somando
+  // exatamente 2040h. Comparar com o total acusava um desencontro de 144h que
+  // era a própria ACC, num documento que estava correto.
+  //
+  // A fixture não podia revelar isso: nela optativas e complementares são as
+  // duas zero, então `total === obrigatórias` e a comparação passava por
+  // coincidência do caso, não por construção.
+  const comLinha =
+    historico.cargaHoraria.obrigatorias.integralizada +
+    historico.cargaHoraria.optativas.integralizada;
+
+  if (integralizadaSomada !== comLinha) {
     throw new Error(
       'Histórico inconsistente: a carga horária somada dos componentes ' +
-        `concluídos (${integralizadaSomada}h) não bate com a integralizada do ` +
-        `quadro (${historico.cargaHoraria.total.integralizada}h).`,
+        `concluídos (${integralizadaSomada}h) não bate com a integralizada em ` +
+        `obrigatórias e optativas (${comLinha}h).`,
+    );
+  }
+
+  // O total sai da comparação acima, então passa a ser checado aqui: é a
+  // aritmética que o documento afirma sobre si mesmo, e sem esta linha ele
+  // deixaria de ser verificado por completo. Também é o que impede a mudança
+  // acima de virar uma saída silenciosa — uma diferença que não seja ACC
+  // continua estourando, agora com o quadro decomposto na mensagem.
+  const somaDasColunas =
+    comLinha + historico.cargaHoraria.complementares.integralizada;
+
+  if (somaDasColunas !== historico.cargaHoraria.total.integralizada) {
+    throw new Error(
+      'Histórico inconsistente: o total integralizado do quadro ' +
+        `(${historico.cargaHoraria.total.integralizada}h) não é a soma das suas ` +
+        `colunas (obrigatórias ${historico.cargaHoraria.obrigatorias.integralizada}h ` +
+        `+ optativas ${historico.cargaHoraria.optativas.integralizada}h ` +
+        `+ complementares ${historico.cargaHoraria.complementares.integralizada}h ` +
+        `= ${somaDasColunas}h).`,
     );
   }
 
