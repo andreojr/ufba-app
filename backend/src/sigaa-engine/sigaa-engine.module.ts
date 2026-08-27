@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { CurriculoModule } from '../curriculo/curriculo.module';
 import { DatabaseModule } from '../db/database.module';
+import { PontosAtencaoModule } from '../pontos-atencao/pontos-atencao.module';
 import {
   AUDIT_LOGGER,
   HISTORICO_REPOSITORY,
@@ -36,7 +37,13 @@ import { TurmaVirtualService } from './turma-virtual.service';
 import { CREDENTIAL_VAULT, SIGAA_SESSION_FACTORY } from './tokens';
 
 @Module({
-  imports: [ConfigModule, AuthModule, DatabaseModule, CurriculoModule],
+  imports: [
+    ConfigModule,
+    AuthModule,
+    DatabaseModule,
+    CurriculoModule,
+    PontosAtencaoModule,
+  ],
   controllers: [
     SigaaController,
     TrajetoriaController,

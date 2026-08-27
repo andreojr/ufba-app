@@ -53,4 +53,14 @@ export interface PontoAtencaoRepository {
     valor: 'CONFIRMA' | 'CONTESTA',
   ): Promise<void>;
   removerVoto(pontoId: string, userId: string): Promise<void>;
+  /**
+   * Cria os itens que ainda não existem pra essa turma (mesmo tipo, título e
+   * data) — chamado toda vez que a Turma Virtual é aberta, então precisa ser
+   * idempotente: reabrir a tela não pode duplicar a prova.
+   */
+  sincronizarAvaliacoes(
+    turmaId: string,
+    responsavelId: string,
+    avaliacoes: DadosPonto[],
+  ): Promise<void>;
 }

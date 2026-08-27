@@ -37,6 +37,7 @@ function repositorioFalso(
     apagar: jest.fn(() => Promise.resolve(undefined)),
     votar: jest.fn(() => Promise.resolve(undefined)),
     removerVoto: jest.fn(() => Promise.resolve(undefined)),
+    sincronizarAvaliacoes: jest.fn(() => Promise.resolve(undefined)),
     ...overrides,
   } as jest.Mocked<PontoAtencaoRepository>;
 }
@@ -274,5 +275,89 @@ describe('PontoAtencaoService', () => {
     await expect(
       new PontoAtencaoService(repo).apagar('user-1', 'ponto-1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('sincronizarDaTurmaVirtual', () => {
+    it('converte cada avaliação (descrição/data/hora BR) em ponto do tipo PROVA', async () => {
+      const repo = repositorioFalso();
+
+      await new PontoAtencaoService(repo).sincronizarDaTurmaVirtual(
+        'user-1',
+        'turma-1',
+        [
+          { descricao: 'Prova 1', data: '06/10/2026', hora: '16:40' },
+          { descricao: 'Prova 2', data: '17/11/2026', hora: null },
+        ],
+      );
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+      expect(repo.sincronizarAvaliacoes).toHaveBeenCalledWith(
+        'turma-1',
+        'user-1',
+        [
+          {
+            tipo: 'PROVA',
+            titulo: 'Prova 1',
+            data: new Date('2026-10-06T00:00:00Z'),
+            hora: '16:40',
+            observacao: null,
+          },
+          {
+            tipo: 'PROVA',
+            titulo: 'Prova 2',
+            data: new Date('2026-11-17T00:00:00Z'),
+            hora: null,
+            observacao: null,
+          },
+        ],
+      );
+    });
+
+    // O RangeError que isto evita era engolido pelo try/catch do controller:
+    // uma única data ilegível derrubava a sincronização inteira da turma.
+    it('descarta a avaliação cuja data o SIGAA escreveu num formato ilegível, preservando as demais', async () => {
+      const repo = repositorioFalso();
+
+      await new PontoAtencaoService(repo).sincronizarDaTurmaVirtual(
+        'user-1',
+        'turma-1',
+        [
+          { descricao: 'Prova 1', data: '06/10/2026', hora: '16:40' },
+          { descricao: 'Prova bugada', data: '16h40', hora: null },
+        ],
+      );
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+      expect(repo.sincronizarAvaliacoes).toHaveBeenCalledWith(
+        'turma-1',
+        'user-1',
+        [
+          {
+            tipo: 'PROVA',
+            titulo: 'Prova 1',
+            data: new Date('2026-10-06T00:00:00Z'),
+            hora: '16:40',
+            observacao: null,
+          },
+        ],
+      );
+    });
+
+    it('repassa lista vazia sem quebrar (o repositório é quem decide não bater no banco)', async () => {
+      const repo = repositorioFalso();
+
+      await new PontoAtencaoService(repo).sincronizarDaTurmaVirtual(
+        'user-1',
+        'turma-1',
+        [],
+      );
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- jest.Mock, não um método de instância
+      expect(repo.sincronizarAvaliacoes).toHaveBeenCalledWith(
+        'turma-1',
+        'user-1',
+        [],
+      );
+    });
   });
 });

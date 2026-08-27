@@ -1,8 +1,15 @@
 <form id="formMenu" action="/sigaa/ava/index.jsf"><input type="hidden" name="formMenu" value="formMenu" /></form>
+<!--
+  Markup real de DataAvaliacao/listar.jsf, capturado contra sigaa.ufba.br em
+  27/08/2026 (turma ENGG67). A ordem das colunas é Data, Hora, Descrição — não
+  "Descrição, Data" como esta fixture supunha antes, o que fazia o parser
+  devolver a data como descrição e a hora como data (Invalid Date adiante).
+  A última coluna é a de ações, sempre vazia pro aluno.
+-->
 <table class="listing">
-  <thead><tr><th>Descrição</th><th>Data</th></tr></thead>
+  <thead><tr><th>Data</th><th>Hora</th><th>Descrição</th><th></th></tr></thead>
   <tbody>
-    <tr><td>Prova 1</td><td>06/10/2026</td></tr>
-    <tr><td>Prova 2</td><td>17/11/2026</td></tr>
+    <tr><td>06/10/2026</td><td>16h40</td><td>Prova 1</td><td></td></tr>
+    <tr><td>17/11/2026</td><td>08h00</td><td>Prova 2</td><td></td></tr>
   </tbody>
 </table>

@@ -10,12 +10,12 @@ export class PrismaTurmaVirtualRepository implements TurmaVirtualRepository {
   async buscarToken(turmaId: string): Promise<TurmaVirtualTokenSalvo | null> {
     const turma = await this.prisma.turma.findUnique({
       where: { id: turmaId },
-      // `codigo` vem junto porque é por ele que o serviço reencontra o token
+      // `nome` vem junto porque é por ele que o serviço reencontra o token
       // atual na home do portal — o guardado é só fallback.
-      select: { frontEndIdTurma: true, codigo: true },
+      select: { frontEndIdTurma: true, nome: true },
     });
     return turma
-      ? { frontEndIdTurma: turma.frontEndIdTurma, codigo: turma.codigo }
+      ? { frontEndIdTurma: turma.frontEndIdTurma, nome: turma.nome }
       : null;
   }
 }

@@ -2,14 +2,14 @@ import { PrismaTurmaVirtualRepository } from './prisma-turma-virtual.repository'
 import { PrismaService } from './prisma.service';
 
 describe('PrismaTurmaVirtualRepository', () => {
-  // O `codigo` vem junto porque é por ele que o serviço reencontra o token
+  // O `nome` vem junto porque é por ele que o serviço reencontra o token
   // atual na home do portal — o guardado é só fallback.
-  it('returns the stored frontEndIdTurma and the codigo for a turma', async () => {
+  it('returns the stored frontEndIdTurma and the nome for a turma', async () => {
     const prisma = {
       turma: {
         findUnique: jest.fn().mockResolvedValue({
           frontEndIdTurma: 'token-123',
-          codigo: 'MATA58',
+          nome: 'SISTEMAS OPERACIONAIS',
         }),
       },
     } as unknown as PrismaService;
@@ -19,11 +19,11 @@ describe('PrismaTurmaVirtualRepository', () => {
 
     expect(registro).toEqual({
       frontEndIdTurma: 'token-123',
-      codigo: 'MATA58',
+      nome: 'SISTEMAS OPERACIONAIS',
     });
     expect(prisma.turma.findUnique).toHaveBeenCalledWith({
       where: { id: 'turma-uuid' },
-      select: { frontEndIdTurma: true, codigo: true },
+      select: { frontEndIdTurma: true, nome: true },
     });
   });
 

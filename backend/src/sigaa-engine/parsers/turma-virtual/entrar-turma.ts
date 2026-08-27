@@ -4,6 +4,14 @@ export interface PostbackAcessarTurma {
   fields: Record<string, string>;
 }
 
+// Every key:value pair inside the "acessar Turma Virtual" link's onclick
+// jsfcljs({...}) object literal — same generic capture as
+// turma-virtual-tokens.ts's JSF_PARAM_PATTERN and estrutura-resumo.ts's. Real
+// SIGAA markup carries frontEndIdTurma (and the form's own partial-submit
+// trigger key) only here, never as an <input> — a real browser submits both
+// the form's hidden inputs AND these params together.
+const JSF_PARAM_PATTERN = /'([^']+)':'([^']+)'/g;
+
 /**
  * Monta os campos de POST pra entrar na Turma Virtual daquela turma, a partir
  * da home do portal recém-lida. O nome dos campos hidden (`j_id_jsp_*`) varia
@@ -22,10 +30,6 @@ export function parsePostbackAcessarTurma(
       return;
     }
     const $form = $(form);
-    const value = $form.find('input[name="frontEndIdTurma"]').attr('value');
-    if (value !== frontEndIdTurma) {
-      return;
-    }
     const fields: Record<string, string> = {};
     $form.find('input[type="hidden"]').each((_, input) => {
       const $input = $(input);
@@ -35,6 +39,14 @@ export function parsePostbackAcessarTurma(
         fields[name] = inputValue;
       }
     });
+    const onclick = $form.find('a').first().attr('onclick') ?? '';
+    for (const match of onclick.matchAll(JSF_PARAM_PATTERN)) {
+      fields[match[1]] = match[2];
+    }
+
+    if (fields['frontEndIdTurma'] !== frontEndIdTurma) {
+      return;
+    }
     found = fields;
   });
 

@@ -27,24 +27,26 @@ function fakeSession(responses: Record<string, string>): SigaaSession {
   } as unknown as SigaaSession;
 }
 
-/** Uma home do portal com dois forms, pra provar que o casamento é por código. */
+/**
+ * Uma home do portal com dois forms, pra provar que o casamento é por nome —
+ * o link real do SIGAA não carrega o código do componente, só o nome
+ * (confirmado contra sigaa.ufba.br).
+ */
 function portalHtml(): string {
   return [
     '<form id="form_acessarTurmaVirtual">',
-    '<a>MATA58 - SISTEMAS OPERACIONAIS</a>',
-    '<input type="hidden" name="form_acessarTurmaVirtual" value="form_acessarTurmaVirtual" />',
-    '<input type="hidden" name="frontEndIdTurma" value="token-fresco-mata58" />',
+    "<a onclick=\"jsfcljs(x,{'frontEndIdTurma':'token-fresco-sistemas-operacionais'},'')\">SISTEMAS OPERACIONAIS</a>",
     '</form>',
     '<form id="form_acessarTurmaVirtualj_id_1">',
-    '<a>MATA59 - REDES DE COMPUTADORES I</a>',
-    '<input type="hidden" name="frontEndIdTurma" value="token-fresco-mata59" />',
+    "<a onclick=\"jsfcljs(x,{'frontEndIdTurma':'token-fresco-redes'},'')\">REDES DE COMPUTADORES I</a>",
     '</form>',
   ].join('');
 }
 
 describe('TurmaVirtualService', () => {
   const NOTICIAS_HTML = `${MENU}<table class="listing"><tbody><tr><td>Início</td><td>18/08/2026</td><td class="icon"><a onclick="jsfcljs(x,{'id':'1'},'')"></a></td></tr></tbody></table>`;
-  const AVALIACOES_HTML = `${MENU}<table class="listing"><tbody><tr><td>Prova 1</td><td>06/10/2026</td></tr></tbody></table>`;
+  // Ordem real das colunas do SIGAA: Data, Hora, Descrição (ver avaliacoes.ts).
+  const AVALIACOES_HTML = `${MENU}<table class="listing"><tbody><tr><td>06/10/2026</td><td>16h40</td><td>Prova 1</td></tr></tbody></table>`;
   const TOPICOS_HTML = `${MENU}<div class="topico-aula"><div class="titulo">Aula 1 (20/08/2026 - 20/08/2026)</div><div class="conteudotopico"></div></div>`;
 
   const FEED_RESPONSES = {
@@ -57,7 +59,7 @@ describe('TurmaVirtualService', () => {
 
   function servicoCom(
     session: SigaaSession,
-    registro: { frontEndIdTurma: string | null; codigo: string | null } | null,
+    registro: { frontEndIdTurma: string | null; nome: string } | null,
   ): TurmaVirtualService {
     const createSession: SigaaSessionFactory = () => session;
     const repository: TurmaVirtualRepository = {
@@ -70,7 +72,7 @@ describe('TurmaVirtualService', () => {
     const session = fakeSession(FEED_RESPONSES);
     const service = servicoCom(session, {
       frontEndIdTurma: 'token-guardado',
-      codigo: 'MATA58',
+      nome: 'SISTEMAS OPERACIONAIS',
     });
 
     const feed = await service.getFeed('turma-uuid', {
@@ -80,7 +82,7 @@ describe('TurmaVirtualService', () => {
 
     expect(feed).toEqual({
       noticias: [{ id: '1', titulo: 'Início', data: '18/08/2026' }],
-      avaliacoes: [{ descricao: 'Prova 1', data: '06/10/2026' }],
+      avaliacoes: [{ descricao: 'Prova 1', data: '06/10/2026', hora: '16:40' }],
       topicos: [
         {
           titulo: 'Aula 1',
@@ -93,40 +95,42 @@ describe('TurmaVirtualService', () => {
 
   // O token guardado é de uma sessão anterior e da linha Turma compartilhada
   // entre alunos — a home recém-lida deste aluno é a fonte de verdade.
-  it('prefers the fresh token matched by código over the stored one', async () => {
+  it('prefers the fresh token matched by nome over the stored one', async () => {
     const session = fakeSession(FEED_RESPONSES);
     const service = servicoCom(session, {
       frontEndIdTurma: 'token-guardado-velho',
-      codigo: 'MATA59',
+      nome: 'REDES DE COMPUTADORES I',
     });
 
     await service.getFeed('turma-uuid', { login: 'a', senha: 'b' });
 
     expect(session.postback).toHaveBeenCalledWith(
       '/sigaa/portais/discente/discente.jsf',
-      expect.objectContaining({ frontEndIdTurma: 'token-fresco-mata59' }),
+      expect.objectContaining({ frontEndIdTurma: 'token-fresco-redes' }),
     );
   });
 
-  it('falls back to the stored token when no form on the fresh page matches the código', async () => {
+  it('falls back to the stored token when no form on the fresh page matches the nome', async () => {
     const session = fakeSession(FEED_RESPONSES);
     const service = servicoCom(session, {
-      frontEndIdTurma: 'token-fresco-mata58',
-      codigo: 'ENGG54',
+      frontEndIdTurma: 'token-fresco-sistemas-operacionais',
+      nome: 'LABORATÓRIO INTEGRADO III-A',
     });
 
     await service.getFeed('turma-uuid', { login: 'a', senha: 'b' });
 
     expect(session.postback).toHaveBeenCalledWith(
       '/sigaa/portais/discente/discente.jsf',
-      expect.objectContaining({ frontEndIdTurma: 'token-fresco-mata58' }),
+      expect.objectContaining({
+        frontEndIdTurma: 'token-fresco-sistemas-operacionais',
+      }),
     );
   });
 
   it('throws FrontEndIdTurmaAusenteError when there is neither a stored token nor a fresh match', async () => {
     const service = servicoCom(fakeSession({}), {
       frontEndIdTurma: null,
-      codigo: 'ENGG54',
+      nome: 'LABORATÓRIO INTEGRADO III-A',
     });
 
     await expect(
@@ -150,7 +154,7 @@ describe('TurmaVirtualService', () => {
     });
     const service = servicoCom(session, {
       frontEndIdTurma: null,
-      codigo: 'MATA58',
+      nome: 'SISTEMAS OPERACIONAIS',
     });
 
     await expect(
@@ -167,7 +171,7 @@ describe('TurmaVirtualService', () => {
     const session = fakeSession(FEED_RESPONSES);
     const service = servicoCom(session, {
       frontEndIdTurma: null,
-      codigo: 'MATA58',
+      nome: 'SISTEMAS OPERACIONAIS',
     });
 
     await service.getFeed('turma-uuid', { login: 'a', senha: 'b' });
@@ -193,7 +197,7 @@ describe('TurmaVirtualService', () => {
       (session.login as jest.Mock).mockRejectedValue(erro);
       const service = servicoCom(session, {
         frontEndIdTurma: 'x',
-        codigo: 'MATA58',
+        nome: 'SISTEMAS OPERACIONAIS',
       });
 
       await expect(
@@ -206,7 +210,7 @@ describe('TurmaVirtualService', () => {
       (session.login as jest.Mock).mockRejectedValue(erro);
       const service = servicoCom(session, {
         frontEndIdTurma: 'x',
-        codigo: 'MATA58',
+        nome: 'SISTEMAS OPERACIONAIS',
       });
 
       await expect(

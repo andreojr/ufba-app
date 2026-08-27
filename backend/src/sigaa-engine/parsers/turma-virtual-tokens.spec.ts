@@ -11,19 +11,19 @@ const FIXTURE_PATH = join(
 describe('parseTurmaVirtualTokens', () => {
   const html = readFileSync(FIXTURE_PATH, 'utf-8');
 
-  it('captures frontEndIdTurma and idTurmaSigaa keyed by codigo', () => {
+  it('captures frontEndIdTurma keyed by nome (the real SIGAA link has no código, only the course name)', () => {
     const tokens = parseTurmaVirtualTokens(html);
 
     expect(tokens).toEqual([
       {
-        codigo: 'MATA58',
+        nome: 'SISTEMAS OPERACIONAIS',
         frontEndIdTurma: 'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
-        idTurmaSigaa: '393380',
+        idTurmaSigaa: null,
       },
       {
-        codigo: 'ENGG64',
+        nome: 'VISÃO COMPUTACIONAL',
         frontEndIdTurma: 'FFFF6666GGGG7777HHHH8888IIII9999JJJJ0000',
-        idTurmaSigaa: '393381',
+        idTurmaSigaa: null,
       },
     ]);
   });
@@ -31,6 +31,8 @@ describe('parseTurmaVirtualTokens', () => {
   it('skips rows with no Turma Virtual link, without throwing', () => {
     const tokens = parseTurmaVirtualTokens(html);
 
-    expect(tokens.find((t) => t.codigo === 'ENGG54')).toBeUndefined();
+    expect(
+      tokens.find((t) => t.nome === 'LABORATÓRIO INTEGRADO III-A'),
+    ).toBeUndefined();
   });
 });

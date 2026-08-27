@@ -134,4 +134,30 @@ export class PrismaPontoAtencaoRepository implements PontoAtencaoRepository {
       where: { pontoId, userId },
     });
   }
+
+  async sincronizarAvaliacoes(
+    turmaId: string,
+    responsavelId: string,
+    avaliacoes: DadosPonto[],
+  ): Promise<void> {
+    if (avaliacoes.length === 0) {
+      return;
+    }
+    // "Mesma avaliação" é tipo+título+data — a chave que reabrir a Turma
+    // Virtual não pode duplicar (ver comentário na interface).
+    const existentes = await this.prisma.pontoAtencao.findMany({
+      where: { turmaId, tipo: { in: avaliacoes.map((a) => a.tipo) } },
+      select: { tipo: true, titulo: true, data: true },
+    });
+    const chave = (item: { tipo: string; titulo: string; data: Date }) =>
+      `${item.tipo}::${item.titulo}::${item.data.toISOString()}`;
+    const jaExistem = new Set(existentes.map(chave));
+    const novos = avaliacoes.filter((a) => !jaExistem.has(chave(a)));
+    if (novos.length === 0) {
+      return;
+    }
+    await this.prisma.pontoAtencao.createMany({
+      data: novos.map((dados) => ({ turmaId, responsavelId, ...dados })),
+    });
+  }
 }

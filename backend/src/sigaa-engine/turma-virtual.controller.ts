@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Logger,
   Param,
   Post,
   UseGuards,
@@ -12,9 +13,17 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { RequestUser } from '../auth/jwt.strategy';
 import { PrismaService } from '../db/prisma.service';
+import { PontoAtencaoService } from '../pontos-atencao/ponto-atencao.service';
 import { SigaaCredentialsDto } from './sigaa-credentials.dto';
 import { TurmaVirtualFeed, TurmaVirtualService } from './turma-virtual.service';
 import type { NoticiaDetalhe } from './parsers/turma-virtual/noticia-detalhe';
+
+/**
+ * Avaliações são oficiais (o professor marcou no SIGAA) — o app converte pra
+ * Ponto de Atenção e não repete a mesma informação aqui, pra não duplicar a
+ * fonte de verdade. Ver PontoAtencaoService.sincronizarDaTurmaVirtual.
+ */
+export type TurmaVirtualFeedResposta = Omit<TurmaVirtualFeed, 'avaliacoes'>;
 
 /**
  * Mesma checagem de posse que PontoAtencaoService.exigirMatricula: consultar
@@ -41,9 +50,12 @@ async function exigirMatricula(
 @UseGuards(JwtAuthGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class TurmaVirtualController {
+  private readonly logger = new Logger(TurmaVirtualController.name);
+
   constructor(
     private readonly service: TurmaVirtualService,
     private readonly prisma: PrismaService,
+    private readonly pontoAtencaoService: PontoAtencaoService,
   ) {}
 
   // Credenciais no corpo, mesma convenção de /schedule/sync: aqui também é
@@ -53,9 +65,28 @@ export class TurmaVirtualController {
     @CurrentUser() user: RequestUser,
     @Param('turmaId') turmaId: string,
     @Body() dto: SigaaCredentialsDto,
-  ): Promise<TurmaVirtualFeed> {
+  ): Promise<TurmaVirtualFeedResposta> {
     await exigirMatricula(this.prisma, user.userId, turmaId);
-    return this.service.getFeed(turmaId, { login: dto.login, senha: dto.senha });
+    const { avaliacoes, ...resto } = await this.service.getFeed(turmaId, {
+      login: dto.login,
+      senha: dto.senha,
+    });
+    // Best-effort: a Turma Virtual em si já leu com sucesso — um formato de
+    // data inesperado nas avaliações não pode derrubar noticias/tópicos, que
+    // já estão prontos pra responder.
+    try {
+      await this.pontoAtencaoService.sincronizarDaTurmaVirtual(
+        user.userId,
+        turmaId,
+        avaliacoes,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao sincronizar avaliações da turma ${turmaId} em Pontos de Atenção`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+    return resto;
   }
 
   @Post('noticias/:noticiaId')

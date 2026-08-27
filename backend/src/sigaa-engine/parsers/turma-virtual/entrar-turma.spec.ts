@@ -22,7 +22,7 @@ describe('parsePostbackAcessarTurma', () => {
       'form_acessarTurmaVirtual:j_id_jsp_315194548_378':
         'form_acessarTurmaVirtual:j_id_jsp_315194548_378',
       frontEndIdTurma: 'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
-      'javax.faces.ViewState': '-4021288371482838266:-8988807078783990073',
+      'javax.faces.ViewState': 'j_id2',
     });
   });
 

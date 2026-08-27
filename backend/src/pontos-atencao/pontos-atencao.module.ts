@@ -17,5 +17,8 @@ import { PontoAtencaoService } from './ponto-atencao.service';
         new PontoAtencaoService(repository),
     },
   ],
+  // TurmaVirtualController converte avaliações da Turma Virtual em Ponto de
+  // Atenção — ver sincronizarDaTurmaVirtual.
+  exports: [PontoAtencaoService],
 })
 export class PontosAtencaoModule {}

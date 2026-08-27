@@ -85,4 +85,70 @@ describe('PrismaPontoAtencaoRepository', () => {
       where: { pontoId: 'ponto-1' },
     });
   });
+
+  describe('sincronizarAvaliacoes', () => {
+    const prova1 = {
+      tipo: 'PROVA' as const,
+      titulo: 'Prova 1',
+      data: new Date('2026-10-06T00:00:00Z'),
+      hora: null,
+      observacao: null,
+    };
+    const prova2 = {
+      tipo: 'PROVA' as const,
+      titulo: 'Prova 2',
+      data: new Date('2026-11-17T00:00:00Z'),
+      hora: null,
+      observacao: null,
+    };
+
+    it('cria só as avaliações que ainda não existem pra turma (mesmo tipo, título e data)', async () => {
+      const prisma = {
+        pontoAtencao: {
+          findMany: jest.fn(async () => [
+            {
+              tipo: 'PROVA',
+              titulo: 'Prova 1',
+              data: new Date('2026-10-06T00:00:00Z'),
+            },
+          ]),
+          createMany: jest.fn(async () => ({ count: 1 })),
+        },
+      } as unknown as PrismaService;
+
+      await new PrismaPontoAtencaoRepository(prisma).sincronizarAvaliacoes(
+        'turma-1',
+        'user-1',
+        [prova1, prova2],
+      );
+
+      expect(prisma.pontoAtencao.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            turmaId: 'turma-1',
+            responsavelId: 'user-1',
+            ...prova2,
+          },
+        ],
+      });
+    });
+
+    it('não bate no banco quando não há nada novo pra sincronizar', async () => {
+      const prisma = {
+        pontoAtencao: {
+          findMany: jest.fn(async () => []),
+          createMany: jest.fn(async () => ({ count: 0 })),
+        },
+      } as unknown as PrismaService;
+
+      await new PrismaPontoAtencaoRepository(prisma).sincronizarAvaliacoes(
+        'turma-1',
+        'user-1',
+        [],
+      );
+
+      expect(prisma.pontoAtencao.findMany).not.toHaveBeenCalled();
+      expect(prisma.pontoAtencao.createMany).not.toHaveBeenCalled();
+    });
+  });
 });

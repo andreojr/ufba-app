@@ -214,7 +214,9 @@ describe('SigaaEngineService.fetchSchedule', () => {
     expect(mata58?.frontEndIdTurma).toBe(
       'AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555',
     );
-    expect(mata58?.idTurmaSigaa).toBe('393380');
+    // Real SIGAA markup never carries idTurma for a form_acessarTurmaVirtual
+    // link (só frontEndIdTurma) — ver TURMA_VIRTUAL_INVESTIGATION.md.
+    expect(mata58?.idTurmaSigaa).toBeNull();
 
     // A turma do atestado sem correspondente na home não quebra:
     const semToken = turmas.find((t) => t.frontEndIdTurma === null);

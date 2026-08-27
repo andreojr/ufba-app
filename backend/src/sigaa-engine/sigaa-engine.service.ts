@@ -92,14 +92,17 @@ export class SigaaEngineService {
       });
       const { turmas, periodoLetivo } = parseAtestadoTurmas(atestadoHtml);
       // portalHtml já foi lido acima (linha 82) pra pegar o perfil — o token
-      // da Turma Virtual mora no mesmo documento, sem request extra.
-      const tokensPorCodigo = new Map(
-        parseTurmaVirtualTokens(portalHtml)
-          .filter((token) => token.codigo)
-          .map((token) => [token.codigo, token]),
+      // da Turma Virtual mora no mesmo documento, sem request extra. A chave
+      // de junção é o nome, não o código: o link real da home não traz o
+      // código do componente, só o nome (confirmado contra sigaa.ufba.br).
+      const tokensPorNome = new Map(
+        parseTurmaVirtualTokens(portalHtml).map((token) => [
+          token.nome,
+          token,
+        ]),
       );
       const turmasComToken = turmas.map((turma) => {
-        const token = turma.codigo ? tokensPorCodigo.get(turma.codigo) : undefined;
+        const token = tokensPorNome.get(turma.nome.trim());
         return {
           ...turma,
           frontEndIdTurma: token?.frontEndIdTurma ?? null,

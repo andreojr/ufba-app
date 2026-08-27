@@ -39,6 +39,20 @@ function paraDados(entrada: EntradaPonto): DadosPonto {
   };
 }
 
+/** "06/10/2026" (formato do SIGAA) -> Date, mesma convenção de atestado-turmas.ts. */
+function paraDataBr(data: string): Date {
+  const [dia, mes, ano] = data.split('/');
+  return paraData(`${ano}-${mes}-${dia}`);
+}
+
+/** O que a Turma Virtual devolve pra cada avaliação — ver parsers/turma-virtual/avaliacoes.ts. */
+export interface AvaliacaoSigaa {
+  descricao: string;
+  data: string;
+  /** HH:MM, ou null quando o professor não marcou horário na avaliação. */
+  hora: string | null;
+}
+
 export class PontoAtencaoService {
   constructor(private readonly repository: PontoAtencaoRepository) {}
 
@@ -161,5 +175,35 @@ export class PontoAtencaoService {
     await this.exigirPonto(userId, id);
     await this.repository.removerVoto(id, userId);
     return this.exigirPonto(userId, id);
+  }
+
+  /**
+   * Uma avaliação da Turma Virtual já é oficial (o professor marcou a data
+   * no SIGAA) — nasce como ponto de atenção comum (tipo PROVA), sem
+   * fast-track de confirmação porque não existe um: um ponto novo já é
+   * NORMAL até ser contestado (ver estadoDoPonto). `userId` fica como
+   * responsável só porque `criar`/`sincronizarAvaliacoes` exige um dono; a
+   * sincronização em si é idempotente e não duplica em reaberturas.
+   */
+  async sincronizarDaTurmaVirtual(
+    userId: string,
+    turmaId: string,
+    avaliacoes: AvaliacaoSigaa[],
+  ): Promise<void> {
+    const dados: DadosPonto[] = avaliacoes
+      .map((avaliacao) => ({
+        tipo: 'PROVA' as const,
+        titulo: avaliacao.descricao,
+        data: paraDataBr(avaliacao.data),
+        hora: avaliacao.hora,
+        observacao: null,
+      }))
+      // Uma data que o SIGAA escreveu num formato que `paraDataBr` não
+      // reconhece vira Invalid Date, e o `toISOString()` da deduplicação no
+      // repositório estoura RangeError — que o try/catch do controller engole,
+      // derrubando *todas* as avaliações da turma por causa de uma só. Descartar
+      // a linha ruim aqui mantém as outras.
+      .filter((ponto) => !Number.isNaN(ponto.data.getTime()));
+    await this.repository.sincronizarAvaliacoes(turmaId, userId, dados);
   }
 }

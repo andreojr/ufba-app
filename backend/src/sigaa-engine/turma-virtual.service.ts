@@ -69,15 +69,16 @@ export class TurmaVirtualService {
    *
    * Ordem de preferência do token, deliberada:
    *
-   * 1. O `frontEndIdTurma` do form cujo **código** bate com o da turma na home
-   *    do portal recém-lida — mesmo casamento por código que o `fetchSchedule`
-   *    já faz na sincronização. É a fonte de verdade porque (a) a estabilidade
-   *    do token entre sessões nunca foi testada (item 3 de "Aberto" na
-   *    investigação) e (b) `Turma` é linha compartilhada entre todos os alunos
-   *    daquela turma, então o token guardado pode ter vindo do render de
-   *    *outro* aluno e não casar com o deste.
-   * 2. O token guardado, quando a turma não tem código ou nenhum form da home
-   *    casa com ele.
+   * 1. O `frontEndIdTurma` do form cujo **nome** bate com o da turma na home
+   *    do portal recém-lida — mesmo casamento por nome que o `fetchSchedule`
+   *    já faz na sincronização (o link real não carrega o código do
+   *    componente, só o nome — confirmado contra sigaa.ufba.br). É a fonte
+   *    de verdade porque (a) a estabilidade do token entre sessões nunca foi
+   *    testada (item 3 de "Aberto" na investigação) e (b) `Turma` é linha
+   *    compartilhada entre todos os alunos daquela turma, então o token
+   *    guardado pode ter vindo do render de *outro* aluno e não casar com o
+   *    deste.
+   * 2. O token guardado, quando nenhum form da home casa com o nome.
    *
    * Só quando as duas falham é que a turma realmente não tem por onde entrar.
    */
@@ -90,11 +91,9 @@ export class TurmaVirtualService {
       throw new FrontEndIdTurmaAusenteError();
     }
     const portalHtml = await session.get(PORTAL_HOME_PATH);
-    const fresco = registro.codigo
-      ? parseTurmaVirtualTokens(portalHtml).find(
-          (token) => token.codigo === registro.codigo,
-        )
-      : undefined;
+    const fresco = parseTurmaVirtualTokens(portalHtml).find(
+      (token) => token.nome === registro.nome.trim(),
+    );
     const frontEndIdTurma = fresco?.frontEndIdTurma ?? registro.frontEndIdTurma;
     if (!frontEndIdTurma) {
       throw new FrontEndIdTurmaAusenteError();
