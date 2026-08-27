@@ -111,6 +111,36 @@ describe('parseHistorico', () => {
     });
   });
 
+  it('reads a código wide enough to start inside the natureza column', () => {
+    // Encontrado em produção: um currículo de engenharia imprime "GENG0032",
+    // oito caracteres. A célula não é alinhada à esquerda — dois códigos de
+    // seis caracteres já começam em x diferentes na fixture ("FISD36" em
+    // 94.14, "MATA01" em 92.38) — então um código mais largo começa mais à
+    // esquerda, e este cruza pra dentro da faixa que era a da natureza. As
+    // duas colunas se identificam pelo conteúdo, não pela posição.
+    const adulterado = itens.map((item) =>
+      item.texto === 'FISD36' && Math.abs(item.y - 330.08) < 0.1
+        ? { ...item, texto: 'GENG0032', x: 81 }
+        : item,
+    );
+
+    const { cursados } = parseHistorico(adulterado);
+    const componente = cursados.find((c) => c.codigo === 'GENG0032');
+
+    expect(componente).toMatchObject({ natureza: 'OB', codigo: 'GENG0032' });
+  });
+
+  it('throws when a cursado row carries a natureza but no código', () => {
+    // Uma natureza sozinha na banda é leitura quebrada, não linha sem código:
+    // sem isso o código sai "" e viaja como identificador vazio até a
+    // reconciliação do plano.
+    const semCodigo = itens.filter(
+      (item) => !(item.texto === 'FISD36' && Math.abs(item.y - 330.08) < 0.1),
+    );
+
+    expect(() => parseHistorico(semCodigo)).toThrow(/sem código/i);
+  });
+
   it('reports a null natureza when the column emits no item at all', () => {
     const { cursados } = parseHistorico(itens);
     const trancados = cursados.filter((c) => c.situacao === 'TRANC');

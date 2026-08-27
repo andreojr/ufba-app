@@ -181,10 +181,23 @@ const DOCENTE_SUFFIX_PATTERN = /\(\s*\d+\s*h\s*\)\s*$/i;
 /**
  * Column x-bands of the component table, in points. Ranges rather than exact
  * positions because columns drift ~3pt between pages.
+ *
+ * Natureza e código compartilham uma banda só, `identificacao`, porque a
+ * fronteira entre as duas não é posicional: a célula do código não é alinhada à
+ * esquerda (dois códigos de seis caracteres já começam em x diferentes — 94.14
+ * e 92.38 — porque os glifos têm larguras diferentes), então um código mais
+ * largo começa mais à esquerda. `GENG0032`, de oito caracteres, começa em ~81 e
+ * cruzava pra dentro da antiga banda [65, 90) da natureza: a natureza lia
+ * "OB GENG0032" e o código lia "". Quem separa as duas é `identificarComponente`,
+ * pelo conteúdo.
+ *
+ * O limite inferior é 60, e não 65, porque o filtro usa o x *inicial* do item:
+ * o semestre começa em 41.3 e "2023.1" tem ~25pt, encostando em 66. Em 60 o
+ * semestre fica de fora com folga e ainda sobra espaço pra um código mais largo
+ * que GENG0032 deslizar pra esquerda sem sair da banda.
  */
 const COLUNAS = {
-  natureza: [65, 90],
-  codigo: [90, 125],
+  identificacao: [60, 125],
   nome: [125, 480],
   cargaHoraria: [480, 500],
   nota: [500, 532],
@@ -201,6 +214,53 @@ function celula(itens: ItemTexto[], banda: readonly [number, number], y: number)
     .sort((a, b) => a.x - b.x)
     .map((i) => i.texto)
     .join(' ');
+}
+
+/**
+ * Separa as duas primeiras células da linha — natureza e código — pelo conteúdo,
+ * porque a fronteira entre elas não é posicional (ver `COLUNAS.identificacao`).
+ *
+ * O discriminador é a largura em caracteres, não o valor: a coluna de natureza
+ * tem um vocabulário fechado de seis valores de duas letras, e nenhum código do
+ * documento tem dois caracteres. Deliberadamente não é `NATUREZAS.includes`, que
+ * classificaria uma natureza corrompida ("ZZ") como parte do código e a
+ * transformaria num código torto silencioso — exatamente o que `exigirNatureza`,
+ * logo abaixo, existe pra recusar. Aqui só se decide *qual célula é qual*; quem
+ * valida o conteúdo continua sendo ela.
+ *
+ * O código junta seus itens sem separador porque um código nunca tem espaço e o
+ * PDF às vezes parte um texto em dois itens (é o caso que `notaOuNula` descreve).
+ * Com espaço, "GENG 0032" não estouraria em lugar nenhum e persistiria errado,
+ * quebrando a reconciliação do plano por código.
+ */
+function identificarComponente(
+  itens: ItemTexto[],
+  y: number,
+): { natureza: string; codigo: string } {
+  const naLinha = itens
+    .filter(
+      (i) =>
+        i.x >= COLUNAS.identificacao[0] &&
+        i.x < COLUNAS.identificacao[1] &&
+        Math.abs(i.y - y) <= 1.5,
+    )
+    .sort((a, b) => a.x - b.x);
+
+  const temNatureza = naLinha.length > 0 && naLinha[0].texto.length === 2;
+  const itensCodigo = temNatureza ? naLinha.slice(1) : naLinha;
+
+  if (itensCodigo.length === 0) {
+    throw new Error(
+      'Histórico não reconhecido: linha de componente cursado sem código ' +
+        `(natureza lida: "${temNatureza ? naLinha[0].texto : ''}"). ` +
+        'O layout do documento pode ter mudado.',
+    );
+  }
+
+  return {
+    natureza: temNatureza ? naLinha[0].texto : '',
+    codigo: itensCodigo.map((i) => i.texto).join(''),
+  };
 }
 
 function exigirSituacao(bruta: string, codigo: string): SituacaoComponente {
@@ -381,8 +441,7 @@ function parseCursados(itens: ItemTexto[]): ComponenteCursado[] {
         .join(' ')
         .trim();
 
-      const natureza = celula(naSecao, COLUNAS.natureza, ancora.y);
-      const codigo = celula(naSecao, COLUNAS.codigo, ancora.y);
+      const { natureza, codigo } = identificarComponente(naSecao, ancora.y);
       const nota = celula(naSecao, COLUNAS.nota, ancora.y);
       const situacao = celula(naSecao, COLUNAS.situacao, ancora.y);
 
