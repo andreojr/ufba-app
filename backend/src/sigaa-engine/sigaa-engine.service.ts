@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   SigaaCredentialsRequiredError,
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaSessionExpiredError,
   SigaaCredentials,
   SigaaSession,
@@ -128,6 +129,7 @@ export class SigaaEngineService {
         error instanceof SigaaScheduleIndisponivelError ||
         error instanceof SigaaRateLimitedError ||
         error instanceof SigaaSessionExpiredError ||
+        error instanceof SigaaLoginIndisponivelError ||
         error instanceof SigaaInvalidCredentialsError ||
         error instanceof SigaaCredentialsRequiredError
       ) {

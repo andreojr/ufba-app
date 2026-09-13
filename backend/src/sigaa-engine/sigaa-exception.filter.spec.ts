@@ -4,6 +4,7 @@ import { SigaaExceptionFilter } from './sigaa-exception.filter';
 import {
   SigaaCredentialsRequiredError,
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
@@ -43,6 +44,17 @@ describe('SigaaExceptionFilter', () => {
       message: error.message,
       code: 'SIGAA_INVALID_CREDENTIALS',
     });
+  });
+
+  it('mapeia SigaaLoginIndisponivelError pra 503 sem a tag de senha rejeitada', () => {
+    const { host, status, json } = fakeHost();
+
+    filter.catch(new SigaaLoginIndisponivelError('status 200'), host);
+
+    // 401 + tag faria o app pedir pro aluno trocar uma senha que está certa.
+    expect(status).toHaveBeenCalledWith(HttpStatus.SERVICE_UNAVAILABLE);
+    const [body] = json.mock.calls[0] as [Record<string, unknown>];
+    expect(body).not.toHaveProperty('code');
   });
 
   it('maps SigaaCredentialsRequiredError to 401 without the rejected-password tag', () => {

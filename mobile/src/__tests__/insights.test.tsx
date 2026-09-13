@@ -6,12 +6,16 @@ import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { syncAll } from "@/lib/sync-all";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { Historico, MarcosSemestralizacao, TrajetoriaResponse } from "@/lib/types";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
+// "Tentar de novo" só deve chegar ao SIGAA quando não há histórico salvo pra
+// reler — mockado pra poder afirmar isso.
+jest.mock("@/lib/sync-all", () => ({ syncAll: jest.fn() }));
 jest.mock("@/lib/sync-freshness-context", () => ({
   ...jest.requireActual("@/lib/sync-freshness-context"),
   useSyncFreshness: jest.fn(),
@@ -348,6 +352,25 @@ describe("Insights", () => {
 
     expect(await screen.findByText("7,00")).toBeTruthy();
     expect(screen.queryByText("Credenciais inválidas")).toBeNull();
+    // O dado veio do nosso banco: sincronizar só jogaria trabalho num SIGAA
+    // que pode ser justamente o que está fora do ar.
+    expect(jest.mocked(syncAll)).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
+  it("sincroniza no 'tentar de novo' quando a releitura não traz histórico", async () => {
+    jest.mocked(getSigaaCredentials).mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+    jest.mocked(getTrajetoria).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<InsightsTab />);
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar de novo"));
+    });
+
+    expect(jest.mocked(syncAll)).toHaveBeenCalledTimes(1);
     consoleWarn.mockRestore();
   });
 

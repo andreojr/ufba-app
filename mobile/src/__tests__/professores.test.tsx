@@ -4,10 +4,19 @@ import ProfessoresScreen from "@/screens/ProfessoresScreen";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSchedule, postDocentesSemestre } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { syncAll } from "@/lib/sync-all";
 import type { DocenteResumo, Turma } from "@/lib/types";
 
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
+// "Tentar de novo" só deve chegar ao SIGAA quando não há horário salvo pra
+// reler — mockados pra poder afirmar isso.
+jest.mock("@/lib/sync-all", () => ({ syncAll: jest.fn() }));
+jest.mock("@/lib/sigaa-storage", () => ({
+  ...jest.requireActual("@/lib/sigaa-storage"),
+  getSigaaCredentials: jest.fn(),
+}));
 jest.mock("@/lib/api", () => ({
   ...jest.requireActual("@/lib/api"),
   getSchedule: jest.fn(),
@@ -275,6 +284,32 @@ describe("Professores screen", () => {
     mockedPost.mockRejectedValue(new Error("boom"));
     await render(<ProfessoresScreen />);
     expect(await screen.findByText("Tentar de novo")).toBeTruthy();
+  });
+
+  it("não vai ao SIGAA no 'tentar de novo' quando o horário salvo volta", async () => {
+    jest.mocked(getSigaaCredentials).mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+    mockedPost.mockRejectedValueOnce(new Error("boom"));
+    await render(<ProfessoresScreen />);
+    expect(await screen.findByText("Tentar de novo")).toBeTruthy();
+
+    mockedPost.mockResolvedValue([
+      resumo("FULANO DE TAL", {
+        siape: "1815041",
+        nome: "FULANO DE TAL",
+        departamento: "DCC",
+        unidade: null,
+        selos: {
+          contato: true, formacao: false, areasInteresse: false,
+          lattes: false, orientacoes: false, semestresLecionando: 3,
+        },
+      }),
+    ]);
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar de novo"));
+    });
+
+    await screen.findByText("FULANO DE TAL");
+    expect(jest.mocked(syncAll)).not.toHaveBeenCalled();
   });
 
   it("pull-to-refresh re-reads the cached schedule instead of syncing the SIGAA", async () => {
