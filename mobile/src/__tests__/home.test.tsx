@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { savePeriodoCache } from "@/lib/periodo-cache";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { syncAll } from "@/lib/sync-all";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type { PeriodoLetivo, Turma } from "@/lib/types";
 
@@ -13,6 +14,9 @@ import HomeTab from "@/screens/HomeTab";
 jest.mock("@/lib/auth-context");
 jest.mock("@/lib/sigaa-link-context");
 jest.mock("@/lib/sigaa-storage");
+// "Tentar de novo" só deve chegar ao SIGAA quando não há horário salvo pra
+// reler — mockado pra poder afirmar isso.
+jest.mock("@/lib/sync-all", () => ({ syncAll: jest.fn() }));
 jest.mock("@/lib/sync-freshness-context", () => ({
   ...jest.requireActual("@/lib/sync-freshness-context"),
   useSyncFreshness: jest.fn(),
@@ -590,6 +594,26 @@ describe("HomeTab", () => {
 
       expect(mockedSavePeriodoCache).not.toHaveBeenCalled();
     });
+  });
+
+  it("não vai ao SIGAA no 'tentar de novo' quando o horário salvo volta", async () => {
+    mockedUseSigaaLink.mockReturnValue({ status: "linked", syncMode: "device", senhaDesatualizada: false, jaVinculou: true, link: jest.fn(), unlink: jest.fn() });
+    mockedGetSigaaCredentials.mockResolvedValue({ login: "123", senha: "segredo", syncMode: "device" });
+    mockedGetSchedule.mockRejectedValueOnce(new ApiError("Credenciais inválidas", 401));
+
+    const { getByText, getAllByText } = await render(<HomeTab />);
+    await waitFor(() => expect(getByText("Tentar de novo")).toBeTruthy());
+
+    mockedGetSchedule.mockResolvedValue(scheduleResponse());
+    await act(async () => {
+      fireEvent.press(getByText("Tentar de novo"));
+    });
+
+    await waitFor(() => expect(getAllByText("SISTEMAS OPERACIONAIS").length).toBeGreaterThan(0));
+    // O horário estava no nosso banco: sincronizar só jogaria trabalho num
+    // SIGAA que pode ser justamente o que está fora do ar.
+    expect(jest.mocked(syncAll)).not.toHaveBeenCalled();
+    expect(mockedPostScheduleSync).not.toHaveBeenCalled();
   });
 
   it("shows an error message with a retry button when the fetch fails", async () => {

@@ -152,10 +152,11 @@ export default function HomeTab(): JSX.Element {
   // Cheap read from our own database. Falls back to a live sync exactly once
   // — the first time a user opens the app after linking, before anything has
   // ever been cached for them.
+  /** Devolve `true` quando a leitura terminou com horário na tela. */
   const loadSchedule = useCallback(
-    async (silent = false) => {
+    async (silent = false): Promise<boolean> => {
       if (!accessToken) {
-        return;
+        return false;
       }
       if (!silent) {
         setState({ status: "loading" });
@@ -168,30 +169,39 @@ export default function HomeTab(): JSX.Element {
           const credentials = await getSigaaCredentials();
           if (!credentials) {
             setState({ status: "unsynced" });
-            return;
+            return false;
           }
           await syncSchedule(credentials, silent);
-          return;
+          return false;
         }
         applySchedule(cached.turmas, cached.periodoLetivo, new Date(cached.fetchedAt));
+        return true;
       } catch (error) {
         console.warn("Failed to load SIGAA schedule", error);
         setState({ status: "error", message: describeApiError(error) });
+        return false;
       }
     },
     [accessToken, applySchedule, syncSchedule]
   );
 
-  // "Tentar de novo" costumava só reler o cache — se o servidor tivesse
-  // caído, o aluno precisava repetir esse toque em Início, Trajetória,
-  // Insights e Professores, um de cada vez. Agora sincroniza tudo de uma
-  // vez (ver sync-all.ts) antes de recarregar esta tela.
+  // "Tentar de novo" relê o banco ANTES de pensar em SIGAA. O que está salvo
+  // no nosso servidor não precisa do SIGAA pra voltar, e quando a falha foi de
+  // leitura (token vencido, rede, servidor fora) sincronizar não conserta nada
+  // — só joga trabalho em cima de um SIGAA que pode estar justamente com
+  // problema. Só quando não há nada salvo é que vale ir buscar lá (ver
+  // sync-all.ts), que é o mesmo toque que resolve as quatro telas de uma vez.
+  // (Sem nada salvo, `loadSchedule` já dispara o sync do horário sozinho; o
+  // syncAll aqui é o que traz junto histórico e docentes.)
   const retryTudo = useCallback(async () => {
+    if (await loadSchedule()) {
+      return;
+    }
     const credentials = accessToken ? await getSigaaCredentials() : null;
     if (accessToken && credentials) {
       await syncAll(accessToken, credentials);
+      await loadSchedule();
     }
-    await loadSchedule();
   }, [accessToken, loadSchedule]);
 
   // Puxar pra atualizar só relê o banco (o mesmo caminho de loadSchedule) —

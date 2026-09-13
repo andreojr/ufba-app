@@ -57,7 +57,8 @@ export default function ProfessoresScreen(): JSX.Element {
     [],
   );
 
-  const carregar = useCallback(async (silent = false) => {
+  /** Devolve `true` quando a leitura terminou com docentes na tela. */
+  const carregar = useCallback(async (silent = false): Promise<boolean> => {
     if (!silent) {
       setEstado({ status: "loading" });
     }
@@ -69,11 +70,13 @@ export default function ProfessoresScreen(): JSX.Element {
       const horario = await getSchedule(accessToken ?? "");
       if (!("turmas" in horario)) {
         setEstado({ status: "unsynced" });
-        return;
+        return false;
       }
       if (horario.turmas.length === 0) {
+        // Semestre sem turma é uma resposta legítima do banco, não falta de
+        // dado: sincronizar não traria nada que já não esteja aqui.
         setEstado({ status: "empty" });
-        return;
+        return true;
       }
 
       // A turma whose atestado named no docente is a different empty state from
@@ -103,12 +106,14 @@ export default function ProfessoresScreen(): JSX.Element {
       clearTimeout(timer);
       timerRef.current = null;
       setEstado({ status: "ready", docentes, semDocente, periodoLetivo: horario.periodoLetivo });
+      return true;
     } catch (error) {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
       setEstado({ status: "error", message: describeApiError(error) });
+      return false;
     }
     // `toast` deliberately left out: useToast() hands back a fresh wrapper
     // object every render, so including it re-creates `carregar` on every
@@ -116,16 +121,21 @@ export default function ProfessoresScreen(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  // "Tentar de novo" costumava só refazer a própria leitura (horário do
-  // cache + docentes). Agora sincroniza horário, histórico e docentes de
-  // uma vez (ver sync-all.ts) antes de recarregar esta tela — o mesmo botão
-  // que resolve Início, Trajetória e Insights resolve esta também.
+  // "Tentar de novo" relê o banco ANTES de pensar em SIGAA. O que está salvo
+  // no nosso servidor não precisa do SIGAA pra voltar, e quando a falha foi de
+  // leitura (token vencido, rede, servidor fora) sincronizar não conserta nada
+  // — só joga trabalho em cima de um SIGAA que pode estar justamente com
+  // problema. Só quando não há nada salvo é que vale ir buscar lá (ver
+  // sync-all.ts), que é o mesmo toque que resolve as quatro telas de uma vez.
   const retryTudo = useCallback(async () => {
+    if (await carregar()) {
+      return;
+    }
     const credentials = accessToken ? await getSigaaCredentials() : null;
     if (accessToken && credentials) {
       await syncAll(accessToken, credentials);
+      await carregar();
     }
-    await carregar();
   }, [accessToken, carregar]);
 
   // Puxar pra atualizar só relê o banco (o mesmo caminho de leitura de

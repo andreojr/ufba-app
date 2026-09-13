@@ -222,19 +222,23 @@ export default function InsightsTab(): JSX.Element {
     [setHistoricoFetchedAt],
   );
 
+  /** Devolve `true` quando a leitura terminou com histórico na tela. */
   const carregar = useCallback(
-    async (silent = false) => {
+    async (silent = false): Promise<boolean> => {
       if (!accessToken) {
-        return;
+        return false;
       }
       if (!silent) {
         setState({ status: "loading" });
       }
       try {
-        aplicar(await getTrajetoria(accessToken));
+        const resposta = await getTrajetoria(accessToken);
+        aplicar(resposta);
+        return "historico" in resposta;
       } catch (error) {
         console.warn("Failed to load trajetória", error);
         setState({ status: "error", message: describeApiError(error) });
+        return false;
       }
     },
     [accessToken, aplicar],
@@ -252,16 +256,21 @@ export default function InsightsTab(): JSX.Element {
     }
   }, [sigaaLink.status, accessToken, carregar]);
 
-  // "Tentar de novo" costumava só reler o cache — se o servidor tivesse
-  // caído, o aluno precisava repetir esse toque em Início, Trajetória,
-  // Insights e Professores, um de cada vez. Agora sincroniza tudo de uma
-  // vez (ver sync-all.ts) antes de recarregar esta tela.
+  // "Tentar de novo" relê o banco ANTES de pensar em SIGAA. O que está salvo
+  // no nosso servidor não precisa do SIGAA pra voltar, e quando a falha foi de
+  // leitura (token vencido, rede, servidor fora) sincronizar não conserta nada
+  // — só joga trabalho em cima de um SIGAA que pode estar justamente com
+  // problema. Só quando não há nada salvo é que vale ir buscar lá (ver
+  // sync-all.ts), que é o mesmo toque que resolve as quatro telas de uma vez.
   const retryTudo = useCallback(async () => {
+    if (await carregar()) {
+      return;
+    }
     const credentials = accessToken ? await getSigaaCredentials() : null;
     if (accessToken && credentials) {
       await syncAll(accessToken, credentials);
+      await carregar();
     }
-    await carregar();
   }, [accessToken, carregar]);
 
   // Puxar pra atualizar só relê o banco (o mesmo caminho de leitura de

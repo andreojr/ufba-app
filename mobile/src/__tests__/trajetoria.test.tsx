@@ -7,6 +7,8 @@ import { quadradinhosDoGrid } from "@/lib/drag-grid";
 import { ApiError, getTrajetoria, putPlano } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { getPeriodoCache } from "@/lib/periodo-cache";
+import { getSigaaCredentials } from "@/lib/sigaa-storage";
+import { syncAll } from "@/lib/sync-all";
 import { useSigaaLink } from "@/lib/sigaa-link-context";
 import { useSyncFreshness } from "@/lib/sync-freshness-context";
 import type {
@@ -31,6 +33,13 @@ jest.mock("@/lib/api", () => ({
 }));
 // Mocked rather than left to SecureStore: the term's end date is what decides
 // whether the staleness nudge fires, so every test has to state it.
+// Mockados juntos: "tentar de novo" só deve chegar ao SIGAA quando não há
+// histórico salvo pra reler, e é isso que estes dois permitem afirmar.
+jest.mock("@/lib/sync-all", () => ({ syncAll: jest.fn() }));
+jest.mock("@/lib/sigaa-storage", () => ({
+  ...jest.requireActual("@/lib/sigaa-storage"),
+  getSigaaCredentials: jest.fn(),
+}));
 jest.mock("@/lib/periodo-cache", () => ({
   getPeriodoCache: jest.fn(),
   savePeriodoCache: jest.fn(),
@@ -870,6 +879,43 @@ describe("Trajetória", () => {
 
     expect(screen.getByText("Em curso")).toBeTruthy();
     expect(screen.queryByText("Credenciais inválidas")).toBeNull();
+    consoleWarn.mockRestore();
+  });
+
+  it("não vai ao SIGAA no 'tentar de novo' quando o histórico salvo volta", async () => {
+    jest.mocked(getSigaaCredentials).mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+    jest.mocked(getTrajetoria).mockRejectedValueOnce(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+
+    jest.mocked(getTrajetoria).mockResolvedValue(trajetoria({ cursados: [MATRICULADO] }));
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar de novo"));
+    });
+
+    expect(screen.getByText("Em curso")).toBeTruthy();
+    // O dado estava no nosso banco o tempo todo: sincronizar só jogaria
+    // trabalho num SIGAA que pode ser justamente o que está fora do ar.
+    expect(jest.mocked(syncAll)).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
+  it("sincroniza no 'tentar de novo' quando a releitura não traz histórico", async () => {
+    jest.mocked(getSigaaCredentials).mockResolvedValue({ login: "123", senha: "s", syncMode: "device" });
+    jest.mocked(getTrajetoria).mockRejectedValue(new ApiError("Unauthorized", 401));
+    const consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    await render(<TrajetoriaTab />);
+    expect(await screen.findByText("Credenciais inválidas")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Tentar de novo"));
+    });
+
+    // Nada voltou do banco — aí sim vale ir buscar no SIGAA.
+    expect(jest.mocked(syncAll)).toHaveBeenCalledTimes(1);
     consoleWarn.mockRestore();
   });
 
