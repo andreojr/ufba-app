@@ -3,6 +3,7 @@ import type { SigaaSession } from './session';
 import {
   SigaaCredentialsRequiredError,
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
@@ -118,6 +119,7 @@ export class TurmaVirtualService {
       error instanceof FrontEndIdTurmaAusenteError ||
       error instanceof SigaaRateLimitedError ||
       error instanceof SigaaSessionExpiredError ||
+      error instanceof SigaaLoginIndisponivelError ||
       error instanceof SigaaInvalidCredentialsError ||
       error instanceof SigaaCredentialsRequiredError
     );

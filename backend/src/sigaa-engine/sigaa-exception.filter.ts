@@ -10,6 +10,7 @@ import type { Response } from 'express';
 import {
   SigaaCredentialsRequiredError,
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaSessionExpiredError,
 } from './session';
 import { SigaaRateLimitedError } from './http-client';
@@ -28,6 +29,11 @@ const STATUS_BY_ERROR_NAME: Record<string, HttpStatus> = {
   [SigaaInvalidCredentialsError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaCredentialsRequiredError.name]: HttpStatus.UNAUTHORIZED,
   [SigaaSessionExpiredError.name]: HttpStatus.UNAUTHORIZED,
+  // O login não passou, mas o SIGAA não disse que a credencial estava errada
+  // (formulário de volta calado, redirect inesperado, bloqueio de borda). Não é
+  // 401: o aluno não tem nada pra corrigir, e mandar ele trocar uma senha certa
+  // é pior que dizer que o SIGAA está fora do ar — que é o que 503 já diz.
+  [SigaaLoginIndisponivelError.name]: HttpStatus.SERVICE_UNAVAILABLE,
   [SigaaRateLimitedError.name]: HttpStatus.TOO_MANY_REQUESTS,
   // SIGAA answered (login worked) but gave back a degraded/empty schedule —
   // distinct from a 500: the client needs to say "your data is safe, try
@@ -71,6 +77,7 @@ const ERROR_CODE_BY_NAME: Record<string, string> = {
  */
 @Catch(
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaCredentialsRequiredError,
   SigaaSessionExpiredError,
   SigaaRateLimitedError,
@@ -100,6 +107,13 @@ export class SigaaExceptionFilter implements ExceptionFilter {
     // server-side to debug from. Log the stack for exactly that case.
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(exception.message, exception.stack);
+    }
+
+    // A impressão digital da resposta do SIGAA é a única pista de *o que* mudou
+    // do lado deles — sem ela, "login indisponível" vira um 503 mudo e a única
+    // forma de diagnosticar é pedir a senha de alguém.
+    if (exception instanceof SigaaLoginIndisponivelError) {
+      this.logger.warn(exception.message);
     }
 
     const code = ERROR_CODE_BY_NAME[exception.name];

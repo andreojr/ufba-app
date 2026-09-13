@@ -3,6 +3,13 @@ export interface SigaaHttpRequest {
   path: string;
   body?: Record<string, string>;
   cookie?: string;
+  /**
+   * A página de onde este POST partiu, pro cabeçalho Referer. Só importa em
+   * POST: um formulário enviado sem Referer do próprio site é o que uma regra
+   * de borda descarta primeiro. Ausente, o cliente usa o próprio `path` (que é
+   * o que um postback JSF faria de qualquer jeito).
+   */
+  referer?: string;
 }
 
 export interface SigaaHttpResponse {
@@ -38,6 +45,23 @@ export class SigaaInvalidCredentialsError extends Error {
   }
 }
 
+/**
+ * O login não passou, mas o SIGAA *não* disse que usuário/senha estavam errados:
+ * voltou o formulário de login mudo, um redirect pra outro lugar, um bloqueio de
+ * WAF, uma página de manutenção. Antes tudo isso virava
+ * SigaaInvalidCredentialsError (401 + SIGAA_INVALID_CREDENTIALS), o que fazia o
+ * app acusar a senha do aluno — e marcar a senha guardada como rejeitada —
+ * quando o problema era do outro lado. A mensagem carrega uma impressão digital
+ * da resposta (status, location, título) justamente pra dar pra diagnosticar
+ * pelo log sem precisar de credencial de ninguém.
+ */
+export class SigaaLoginIndisponivelError extends Error {
+  constructor(fingerprint: string) {
+    super(`SIGAA did not complete the login: ${fingerprint}`);
+    this.name = 'SigaaLoginIndisponivelError';
+  }
+}
+
 export class SigaaCredentialsRequiredError extends Error {
   constructor() {
     super(
@@ -60,6 +84,21 @@ const LOGIN_FORM_MARKER = '<form name="loginForm"';
 const INVALID_CREDENTIALS_MARKER = 'Usuário e/ou senha inválidos';
 const VIEW_STATE_PATTERN = /name="javax\.faces\.ViewState"[^>]*value="([^"]*)"/;
 const JSESSIONID_PATTERN = /JSESSIONID=[^;]+/;
+const LOGIN_FORM_BLOCK_PATTERN = /<form[^>]*name="loginForm"[\s\S]*?<\/form>/i;
+const FORM_ACTION_PATTERN = /<form[^>]*name="loginForm"[^>]*action="([^"]*)"/i;
+const INPUT_PATTERN = /<input\b[^>]*>/gi;
+const INPUT_ATTR_PATTERN = (attr: string) =>
+  new RegExp(`\\b${attr}\\s*=\\s*"([^"]*)"`, 'i');
+
+/**
+ * Os textos com que o SIGAA diz que o problema é de fato a credencial. Só eles
+ * autorizam acusar a senha do aluno — o formulário de login voltando calado não.
+ */
+const CREDENTIAL_REJECTION_MARKERS = [
+  'senha inválidos',
+  'senha inválida',
+  'usuário e/ou senha',
+];
 
 function isLoginFormResponse(response: SigaaHttpResponse): boolean {
   return (
@@ -67,6 +106,76 @@ function isLoginFormResponse(response: SigaaHttpResponse): boolean {
     (response.body.includes(LOGIN_FORM_MARKER) ||
       response.body.includes(INVALID_CREDENTIALS_MARKER))
   );
+}
+
+function saysCredentialsAreWrong(body: string): boolean {
+  const lowered = body.toLowerCase();
+  return CREDENTIAL_REJECTION_MARKERS.some((marker) =>
+    lowered.includes(marker),
+  );
+}
+
+/**
+ * Os campos ocultos do formulário de login, lidos da própria página em vez de
+ * chutados. O SIGAA é JSF: a lista de hidden inputs do formulário muda quando a
+ * instalação é atualizada (um token novo, um campo renomeado), e um POST que não
+ * carrega todos eles é descartado — a resposta é o formulário de login de volta,
+ * indistinguível de uma senha errada. Postar o que a página pediu é o que faz
+ * esse acoplamento parar de quebrar sozinho.
+ */
+export function hiddenLoginFormFields(html: string): Record<string, string> {
+  const form = LOGIN_FORM_BLOCK_PATTERN.exec(html)?.[0];
+  if (!form) return {};
+
+  const fields: Record<string, string> = {};
+  for (const input of form.match(INPUT_PATTERN) ?? []) {
+    const name = INPUT_ATTR_PATTERN('name').exec(input)?.[1];
+    if (!name) continue;
+    const type = (
+      INPUT_ATTR_PATTERN('type').exec(input)?.[1] ?? ''
+    ).toLowerCase();
+    // Os campos visíveis (o próprio usuário/senha) e os botões nós preenchemos
+    // ou descartamos por conta própria — aqui só interessa o que é estado.
+    if (type && type !== 'hidden') continue;
+    fields[name] = INPUT_ATTR_PATTERN('value').exec(input)?.[1] ?? '';
+  }
+  return fields;
+}
+
+/**
+ * O `action` do formulário, quando é um caminho da própria instalação. Mesmo
+ * motivo dos campos ocultos: se o SIGAA mudar o endpoint de autenticação, o
+ * caminho certo está escrito na página que acabamos de buscar.
+ */
+export function loginFormAction(html: string): string | undefined {
+  const action = FORM_ACTION_PATTERN.exec(html)?.[1];
+  if (!action) return undefined;
+  if (action.startsWith('/')) return action;
+  try {
+    const url = new URL(action);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Um resumo da resposta que dá pra logar sem vazar nada do aluno. */
+function fingerprint(response: SigaaHttpResponse): string {
+  const title = /<title>([\s\S]{0,120}?)<\/title>/i
+    .exec(response.body)?.[1]
+    ?.trim()
+    .replace(/\s+/g, ' ');
+  const parts = [
+    `status ${response.status}`,
+    response.headers.location
+      ? `location ${response.headers.location}`
+      : undefined,
+    title ? `title "${title}"` : undefined,
+    response.body.includes(LOGIN_FORM_MARKER)
+      ? 'login form returned'
+      : `body ${response.body.length} bytes`,
+  ];
+  return parts.filter(Boolean).join(', ');
 }
 
 export class SigaaSession {
@@ -99,8 +208,9 @@ export class SigaaSession {
 
     const response = await this.http.request({
       method: 'POST',
-      path: '/sigaa/logar.do?dispatch=logOn',
+      path: loginFormAction(initial.body) ?? '/sigaa/logar.do?dispatch=logOn',
       cookie: this.jsessionId,
+      referer: '/sigaa/verTelaLogin.do',
       body: {
         width: '1920',
         height: '1080',
@@ -108,6 +218,10 @@ export class SigaaSession {
         subsistemaRedirect: '',
         acao: '',
         acessibilidade: '',
+        // Qualquer campo oculto que a página de login tenha passado a exigir
+        // (um token novo, um campo renomeado) entra aqui por cima dos valores
+        // fixos acima, e o usuário/senha entram por cima de tudo.
+        ...hiddenLoginFormFields(initial.body),
         'user.login': credentials.login,
         'user.senha': credentials.senha,
       },
@@ -136,13 +250,16 @@ export class SigaaSession {
       return;
     }
 
-    if (isLoginFormResponse(response)) {
+    // Só o SIGAA dizendo, com todas as letras, que usuário/senha não prestam é
+    // credencial inválida. O formulário voltando calado, um redirect pra outro
+    // lugar, um bloqueio de borda: nada disso é culpa da senha do aluno, e
+    // tratar como se fosse era o que fazia o app pedir pra ele trocar uma senha
+    // que estava certa (e marcar a guardada como rejeitada).
+    if (saysCredentialsAreWrong(response.body)) {
       throw new SigaaInvalidCredentialsError();
     }
 
-    throw new Error(
-      `Unexpected SIGAA login response: status ${response.status}`,
-    );
+    throw new SigaaLoginIndisponivelError(fingerprint(response));
   }
 
   /**

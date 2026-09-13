@@ -4,6 +4,7 @@ import {
   SigaaHttpRequest,
   SigaaHttpResponse,
   SigaaInvalidCredentialsError,
+  SigaaLoginIndisponivelError,
   SigaaCredentialsRequiredError,
   SigaaSessionExpiredError,
 } from './session';
@@ -12,6 +13,27 @@ const LOGIN_FORM_HTML = `
   <form name="loginForm" method="post" action="/sigaa/logar.do?dispatch=logOn">
     <center style="color: #922; font-weight: bold;">Usuário e/ou senha inválidos</center>
   </form>
+`;
+
+/**
+ * A página de login servida *antes* do POST — a de verdade traz campos ocultos
+ * que o formulário precisa devolver. O `token` aqui faz o papel de qualquer
+ * campo que o SIGAA passe a exigir numa atualização.
+ */
+const LOGIN_PAGE_HTML = `
+  <form name="loginForm" method="post" action="/sigaa/logar.do?dispatch=logOn">
+    <input type="hidden" name="urlRedirect" value="" />
+    <input type="hidden" name="token" value="tk-42" />
+    <input type="text" name="user.login" value="" />
+    <input type="password" name="user.senha" />
+    <input type="submit" name="entrar" value="Entrar" />
+  </form>
+`;
+
+/** O formulário de login de volta, mas sem dizer que a credencial é inválida. */
+const SILENT_LOGIN_FORM_HTML = `
+  <html><head><title>SIGAA - Acesso negado</title></head>
+  <body><form name="loginForm" method="post" action="/sigaa/logar.do?dispatch=logOn"></form></body></html>
 `;
 
 const PORTAL_HTML = `
@@ -133,6 +155,84 @@ describe('SigaaSession login', () => {
     await expect(
       session.login({ login: 'user', senha: 'wrong' }),
     ).rejects.toThrow(SigaaInvalidCredentialsError);
+  });
+
+  it('devolve os campos ocultos que a página de login pediu', async () => {
+    const http = new FakeHttpClient([
+      ok(''),
+      ok(LOGIN_PAGE_HTML, 'JSESSIONID=abc123; Path=/; Secure'),
+      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
+      ok(''),
+    ]);
+    const session = new SigaaSession(http);
+
+    await session.login({ login: 'joaosilva', senha: 'segredo' });
+
+    // O campo novo vai junto; os visíveis continuam vindo de quem logou, não
+    // do value em branco que estava na página.
+    expect(http.requests[2].body).toMatchObject({
+      token: 'tk-42',
+      urlRedirect: '',
+      'user.login': 'joaosilva',
+      'user.senha': 'segredo',
+    });
+    expect(http.requests[2].body).not.toHaveProperty('entrar');
+    expect(http.requests[2].referer).toBe('/sigaa/verTelaLogin.do');
+  });
+
+  it('posta no action que a própria página de login declara', async () => {
+    const http = new FakeHttpClient([
+      ok(''),
+      ok(
+        LOGIN_PAGE_HTML.replace(
+          'action="/sigaa/logar.do?dispatch=logOn"',
+          'action="/sigaa/autenticar.do?dispatch=logOn"',
+        ),
+        'JSESSIONID=abc123; Path=/; Secure',
+      ),
+      redirect('https://sigaa.ufba.br/sigaa/paginaInicial.do'),
+      ok(''),
+    ]);
+    const session = new SigaaSession(http);
+
+    await session.login({ login: 'user', senha: 'pass' });
+
+    expect(http.requests[2].path).toBe('/sigaa/autenticar.do?dispatch=logOn');
+  });
+
+  it('não acusa a senha do aluno quando o SIGAA devolve o login calado', async () => {
+    const http = new FakeHttpClient([
+      ok(''),
+      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
+      ok(SILENT_LOGIN_FORM_HTML),
+    ]);
+    const session = new SigaaSession(http);
+
+    const erro: unknown = await session
+      .login({ login: 'user', senha: 'pass' })
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(SigaaLoginIndisponivelError);
+    expect(erro).not.toBeInstanceOf(SigaaInvalidCredentialsError);
+    // A impressão digital é o que dá pra diagnosticar pelo log.
+    expect((erro as Error).message).toContain('SIGAA - Acesso negado');
+    expect((erro as Error).message).toContain('login form returned');
+  });
+
+  it('trata um redirect pra lugar inesperado como SIGAA indisponível', async () => {
+    const http = new FakeHttpClient([
+      ok(''),
+      ok('', 'JSESSIONID=abc123; Path=/; Secure'),
+      redirect('https://sigaa.ufba.br/sigaa/telaAvisoLogon.jsf'),
+    ]);
+    const session = new SigaaSession(http);
+
+    const erro: unknown = await session
+      .login({ login: 'user', senha: 'pass' })
+      .catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(SigaaLoginIndisponivelError);
+    expect((erro as Error).message).toContain('telaAvisoLogon.jsf');
   });
 
   it('throws a generic error on an unexpected response shape', async () => {

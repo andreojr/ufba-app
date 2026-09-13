@@ -51,4 +51,81 @@ describe('createSigaaHttpClient request', () => {
 
     expect(response.headers['content-type']).toBe('image/gif');
   });
+
+  /** Os headers com que o cliente chamou o fetch, já tipados. */
+  function headersOf(fetchMock: jest.Mock): Record<string, string> {
+    const [, init] = fetchMock.mock.calls[0] as [
+      unknown,
+      { headers: Record<string, string> },
+    ];
+    return init.headers;
+  }
+
+  function fetchStub(): jest.Mock {
+    return jest.fn().mockResolvedValue({
+      status: 200,
+      headers: { get: () => null },
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+  }
+
+  it('se anuncia como navegador em vez do User-Agent padrão do Node', async () => {
+    const fetchMock = fetchStub();
+    global.fetch = fetchMock;
+
+    const client = createSigaaHttpClient('https://sigaa.example');
+    await client.request({ method: 'GET', path: '/sigaa/verTelaLogin.do' });
+
+    const headers = headersOf(fetchMock);
+    expect(headers['User-Agent']).toMatch(/Mozilla/);
+    expect(headers['Accept-Language']).toContain('pt-BR');
+  });
+
+  it('manda Origin e Referer do próprio site nos POSTs de formulário', async () => {
+    const fetchMock = fetchStub();
+    global.fetch = fetchMock;
+
+    const client = createSigaaHttpClient('https://sigaa.example');
+    await client.request({
+      method: 'POST',
+      path: '/sigaa/logar.do?dispatch=logOn',
+      body: { 'user.login': 'joao' },
+      referer: '/sigaa/verTelaLogin.do',
+    });
+
+    const headers = headersOf(fetchMock);
+    expect(headers['Origin']).toBe('https://sigaa.example');
+    expect(headers['Referer']).toBe(
+      'https://sigaa.example/sigaa/verTelaLogin.do',
+    );
+  });
+
+  it('sem referer explícito, usa o próprio caminho do POST', async () => {
+    const fetchMock = fetchStub();
+    global.fetch = fetchMock;
+
+    const client = createSigaaHttpClient('https://sigaa.example');
+    await client.request({
+      method: 'POST',
+      path: '/sigaa/portais/discente/discente.jsf',
+      body: { a: 'b' },
+    });
+
+    const headers = headersOf(fetchMock);
+    expect(headers['Referer']).toBe(
+      'https://sigaa.example/sigaa/portais/discente/discente.jsf',
+    );
+  });
+
+  it('não manda Origin/Referer num GET', async () => {
+    const fetchMock = fetchStub();
+    global.fetch = fetchMock;
+
+    const client = createSigaaHttpClient('https://sigaa.example');
+    await client.request({ method: 'GET', path: '/sigaa/paginaInicial.do' });
+
+    const headers = headersOf(fetchMock);
+    expect(headers['Origin']).toBeUndefined();
+    expect(headers['Referer']).toBeUndefined();
+  });
 });
